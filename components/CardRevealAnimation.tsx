@@ -9,13 +9,17 @@ const CARDS_COUNT = 10;
 const SELECT_COUNT = 5;
 
 // Stage layout + safety envelope. The collect/shuffle/reveal animations
-// translate cards up to ~±220px sideways and ~-280px above the card tray, so
-// the stage reserves that room and `fit` scales against the envelope — the
-// whole animation stays fully visible and centered, never clipped at the edge.
-const STAGE_W = 380;
-const STAGE_H = 1040; /* 280 entry headroom + 760 content */
-const ENV_W = 440; /* covers the widest sideways fan-out */
-const ENTRY_PAD = 280;
+// translate cards up to ~±240px sideways and ~-300px above the card tray, so
+// the machine stage reserves that room and `fit` scales against the envelope —
+// the whole animation stays fully visible and centered, never clipped at the
+// edge. The selection grid gets its own (shorter) height budget so the cards
+// can be as large as the screen allows instead of being shrunk to fit room the
+// selection view never uses.
+const STAGE_W = 620;
+const GRID_H = 660;
+const MACHINE_H = 1060; /* 300 entry headroom + 760 content */
+const ENV_W = 480; /* covers the widest sideways fan-out */
+const ENTRY_PAD = 300;
 
 type Phase = "grid" | "collect" | "revealSelection" | "shuffle" | "suspense" | "reveal" | "done";
 
@@ -106,17 +110,23 @@ function CardFront({ item, compact = false }: { item: BoxItem; compact?: boolean
       }}
     >
       <div className="absolute inset-x-3 top-0 h-px" style={{ background: `linear-gradient(90deg, transparent, ${rarity.color}, transparent)` }} />
-      <div className="flex h-full flex-col items-center justify-between px-1.5 py-1.5">
-        <span className="rounded-full px-2 py-px text-[8px] font-bold" style={{ background: rarity.bg, color: rarity.color, border: `1px solid ${rarity.border}` }}>
+      <div className="flex h-full flex-col items-center justify-between px-2 py-2">
+        <span className="rounded-full px-2.5 py-px text-[10px] font-bold" style={{ background: rarity.bg, color: rarity.color, border: `1px solid ${rarity.border}` }}>
           {item.chance}
         </span>
         <div
-          className={`flex items-center justify-center rounded-full border ${compact ? "h-9 w-9" : "h-12 w-12"}`}
-          style={{ borderColor: rarity.color, background: "radial-gradient(circle at 35% 28%, rgba(255,255,255,0.1), rgba(15,17,24,0.97) 78%)", boxShadow: `0 0 22px ${rarity.glow}` }}
+          className={`flex items-center justify-center rounded-full border ${compact ? "h-11 w-11" : "h-20 w-20"}`}
+          style={{ borderColor: rarity.color, background: "radial-gradient(circle at 35% 28%, rgba(255,255,255,0.1), rgba(15,17,24,0.97) 78%)", boxShadow: `0 0 26px ${rarity.glow}` }}
         >
-          <ItemIcon icon={item.icon} size={compact ? 20 : 26} className="text-amber-300" />
+          <span
+            className="leading-none drop-shadow-[0_0_10px_rgba(255,214,102,0.35)]"
+            style={{ fontSize: compact ? 22 : 38 }}
+            aria-hidden="true"
+          >
+            {item.emoji}
+          </span>
         </div>
-        <div className={`line-clamp-2 font-extrabold leading-tight ${compact ? "text-[8px]" : "text-[9px]"}`} style={{ color: rarity.color, textShadow: `0 0 12px ${rarity.glow}` }}>
+        <div className={`line-clamp-2 font-extrabold leading-tight ${compact ? "text-[10px]" : "text-[13px]"}`} style={{ color: rarity.color, textShadow: `0 0 12px ${rarity.glow}` }}>
           {item.name}
         </div>
       </div>
@@ -168,13 +178,15 @@ export function CardRevealAnimation({ onFinished, onCancel, prize }: CardRevealP
   const winnerCard = cards.find((c) => c.id === winnerId) ?? null;
   const isComplete = selectedCount === SELECT_COUNT;
 
-  // Scale the whole game to fit the viewport — never scrolls, shrinks neatly on small screens.
+  // Scale the whole game to fit the viewport — never scrolls, never clipped, and
+  // the selection grid only pays for the height it actually uses.
   const [fit, setFit] = useState(1);
   useEffect(() => {
     const compute = () => {
       const vw = window.innerWidth;
       const vh = window.innerHeight;
-      const scale = Math.min(1, (vh - 70) / STAGE_H, (vw - 16) / ENV_W);
+      const needed = phase === "grid" ? GRID_H : MACHINE_H;
+      const scale = Math.min(1, (vh - 96) / needed, (vw - 16) / Math.max(STAGE_W, ENV_W));
       setFit(Math.max(0.3, scale));
     };
     compute();
@@ -188,7 +200,7 @@ export function CardRevealAnimation({ onFinished, onCancel, prize }: CardRevealP
       window.removeEventListener("resize", onResize);
       clearTimeout(timer);
     };
-  }, []);
+  }, [phase]);
 
   // Rule 1 — Selection Lock: once a card is selected it can never be unselected.
   const toggle = (id: number) => {
@@ -262,7 +274,7 @@ export function CardRevealAnimation({ onFinished, onCancel, prize }: CardRevealP
       <div className="relative z-10 flex min-h-0 flex-1 items-center justify-center overflow-visible px-3">
         <div
           className="flex flex-col items-center justify-center"
-          style={{ width: STAGE_W, height: STAGE_H, transform: `scale(${fit})`, transformOrigin: "center center" }}
+          style={{ width: STAGE_W, height: phase === "grid" ? GRID_H : MACHINE_H, transform: `scale(${fit})`, transformOrigin: "center center" }}
         >
         <AnimatePresence mode="wait">
           {phase === "grid" ? (
@@ -272,28 +284,28 @@ export function CardRevealAnimation({ onFinished, onCancel, prize }: CardRevealP
               exit={{ opacity: 0, y: 24 }}
               transition={{ duration: 0.3 }}
             >
-              <p className="mb-4 max-w-md text-center text-sm text-slate-400">
+              <p className="mb-4 max-w-lg text-center text-[15px] leading-relaxed text-slate-300">
                 <span className="font-bold text-amber-300">10 קלפים</span> לפניכם — כל אחד מסתיר פרס אמיתי. בחרו בדיוק{" "}
                 <span className="font-bold text-amber-300">{SELECT_COUNT}</span> והמכונה תערבב אותם כדי לחשוף את המזל.
               </p>
-              <p className="mb-5 flex items-center gap-1.5 rounded-full border border-amber-400/20 bg-amber-400/[0.06] px-3 py-1 text-[11px] font-semibold text-amber-300/90">
-                <Lock size={11} />
+              <p className="mb-5 flex items-center gap-1.5 rounded-full border border-amber-400/20 bg-amber-400/[0.06] px-3.5 py-1.5 text-xs font-semibold text-amber-300/90">
+                <Lock size={12} />
                 בחירה נעולה — קלף שנבחר לא ניתן לביטול
               </p>
 
-              <div className="mb-6 flex items-center gap-3">
+              <div className="mb-7 flex items-center gap-3.5">
                 <span
-                  className={`rounded-full border px-3 py-1 text-xs font-bold transition ${
+                  className={`rounded-full border px-4 py-1.5 text-sm font-bold transition ${
                     isComplete ? "border-amber-400/40 bg-amber-400/10 text-amber-300" : "border-white/10 bg-white/[0.04] text-slate-300"
                   }`}
                 >
                   {isComplete ? "הבחירה הושלמה" : `נבחרו ${selectedCount}/${SELECT_COUNT}`}
                 </span>
-                <div className="flex gap-1.5">
+                <div className="flex gap-2">
                   {Array.from({ length: SELECT_COUNT }).map((_, i) => (
                     <span
                       key={i}
-                      className={`h-2 w-6 rounded-full transition ${
+                      className={`h-2.5 w-7 rounded-full transition ${
                         i < selectedCount ? "bg-gradient-to-r from-amber-300 to-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.6)]" : "bg-white/10"
                       }`}
                     />
@@ -301,17 +313,17 @@ export function CardRevealAnimation({ onFinished, onCancel, prize }: CardRevealP
                 </div>
               </div>
 
-              <div className="grid w-full max-w-[380px] grid-cols-5 place-items-center gap-2 sm:gap-2.5">
+              <div className="grid w-full max-w-[620px] grid-cols-5 place-items-center gap-2.5 sm:gap-3.5">
                 {cards.map((c) => {
                   const picked = c.selected;
                   return (
                     <motion.div
                       key={c.id}
                       onClick={() => toggle(c.id)}
-                      whileHover={picked ? undefined : { y: -7, scale: 1.05 }}
+                      whileHover={picked ? undefined : { y: -9, scale: 1.05 }}
                       whileTap={picked ? undefined : { scale: 0.97 }}
                       transition={{ type: "spring", stiffness: 400, damping: 22 }}
-                      className={`relative h-24 w-16 select-none [perspective:600px] sm:h-[100px] sm:w-[66px] ${picked ? "cursor-default" : "cursor-pointer"}`}
+                      className={`relative aspect-[5/7] w-full select-none [perspective:600px] ${picked ? "cursor-default" : "cursor-pointer"}`}
                       role="button"
                       aria-pressed={picked}
                     >
@@ -343,7 +355,7 @@ export function CardRevealAnimation({ onFinished, onCancel, prize }: CardRevealP
               <button
                 onClick={startMachine}
                 disabled={!isComplete}
-                className={`group relative mt-8 mb-4 flex w-full max-w-sm items-center justify-center gap-2.5 rounded-xl py-3.5 text-base font-black transition outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#05060a] ${
+                className={`group relative mt-9 mb-4 flex w-full max-w-md items-center justify-center gap-3 rounded-2xl py-4 text-lg font-black transition outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#05060a] ${
                   isComplete
                     ? "bg-gradient-to-br from-amber-300 via-amber-400 to-amber-500 text-slate-950 shadow-[0_0_35px_rgba(245,158,11,0.35)] hover:brightness-110 active:scale-[0.99]"
                     : "cursor-not-allowed border border-white/10 bg-white/[0.03] text-slate-500"
@@ -369,7 +381,7 @@ export function CardRevealAnimation({ onFinished, onCancel, prize }: CardRevealP
               transition={{ duration: 0.4 }}
             >
               {/* drop machine */}
-              <div className="relative h-[430px] w-[min(86vw,330px)]">
+              <div className="relative h-[470px] w-[min(90vw,360px)]">
                 {/* ambient glow */}
                 <motion.div
                   className="pointer-events-none absolute -inset-4 rounded-[40px]"
@@ -452,15 +464,15 @@ export function CardRevealAnimation({ onFinished, onCancel, prize }: CardRevealP
                 )}
 
                 {/* the chosen cards inside the machine */}
-                <div className="absolute left-1/2 top-10 z-[10] flex h-48 w-64 -translate-x-1/2 items-center justify-center">
+                <div className="absolute left-1/2 top-12 z-[10] flex h-56 w-72 -translate-x-1/2 items-center justify-center">
                   {selectedCards.map((c, i) => {
                     const isWinner = c.id === winnerId;
-                    const tossX = (i % 2 === 0 ? -1 : 1) * (96 + i * 13);
-                    const tossY = -168 - (i % 3) * 22;
+                    const tossX = (i % 2 === 0 ? -1 : 1) * (110 + i * 15);
+                    const tossY = -196 - (i % 3) * 24;
                     const tossRot = (i % 2 === 0 ? -1 : 1) * (16 + i * 4);
                     const delay = i * 0.13;
                     return (
-                      <motion.div key={c.id} className="absolute left-1/2 top-1/2 h-32 w-24 -ml-12 -mt-16 [transform-style:preserve-3d]" style={{ zIndex: isWinner ? 40 : 5, willChange: "transform" }}>
+                      <motion.div key={c.id} className="absolute left-1/2 top-1/2 h-[150px] w-[112px] -ml-14 -mt-[75px] [transform-style:preserve-3d]" style={{ zIndex: isWinner ? 40 : 5, willChange: "transform" }}>
                         <motion.div
                           className="relative h-full w-full [transform-style:preserve-3d]"
                           initial={
@@ -478,8 +490,8 @@ export function CardRevealAnimation({ onFinished, onCancel, prize }: CardRevealP
                                   scale: 1,
                                   opacity: [0, 1, 1],
                                 }
-                              : phase === "revealSelection"
-                                ? { x: (i - 2) * 44, y: -6, rotateZ: (i - 2) * 13, rotateY: 180, scale: 1.2, opacity: 1 }
+                                : phase === "revealSelection"
+                                  ? { x: (i - 2) * 50, y: -6, rotateZ: (i - 2) * 13, rotateY: 180, scale: 1.2, opacity: 1 }
                                 : phase === "shuffle"
                                   ? { x: shuffleX(i), y: shuffleY(i), rotateZ: shuffleZ(i), rotateY: 0, scale: shuffleScale(), opacity: 1 }
                                   : phase === "suspense"
@@ -543,12 +555,12 @@ export function CardRevealAnimation({ onFinished, onCancel, prize }: CardRevealP
               </div>
 
               {/* status */}
-              <div className="flex min-h-[22px] items-center gap-2">
-                <span className="relative flex h-1.5 w-1.5">
+              <div className="flex min-h-[26px] items-center gap-2.5">
+                <span className="relative flex h-2 w-2">
                   <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-70" />
-                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-amber-300" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-300" />
                 </span>
-                <p className="text-sm text-slate-400">
+                <p className="text-center text-[15px] text-slate-300">
                   {phase === "collect"
                     ? "5 הקלפים שנבחרו ממהרים לתוך המכונה..."
                     : phase === "revealSelection"

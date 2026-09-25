@@ -11,7 +11,7 @@ import {
 
 export type RarityName = "common" | "uncommon" | "rare" | "classified" | "covert" | "special";
 export type ItemCategory = "bonus" | "cash";
-export type ItemIconName = "crest" | "ball" | "chip" | "card" | "stack" | "king";
+export type ItemIconName = "crest" | "ball" | "chip" | "card" | "stack" | "gem" | "fire" | "king";
 
 // Emoji glyphs shown on the card-reveal front faces
 export const ITEM_EMOJI: Record<ItemIconName, string> = {
@@ -20,8 +20,33 @@ export const ITEM_EMOJI: Record<ItemIconName, string> = {
   chip: "🪙",
   card: "🃏",
   stack: "💵",
+  gem: "💎",
+  fire: "🔥",
   king: "🤴",
 };
+
+// Money tiers — the glyph a cash prize wears is derived from its amount, so the
+// card always looks richer as the amount climbs: notes -> cash bag -> gem -> fire.
+const MONEY_TIERS: { min: number; emoji: string; icon: ItemIconName }[] = [
+  { min: 500, emoji: "🔥", icon: "fire" },
+  { min: 200, emoji: "💎", icon: "gem" },
+  { min: 50, emoji: "💰", icon: "stack" },
+  { min: 0, emoji: "💵", icon: "chip" },
+];
+
+export function moneyEmojiFor(amount: number | string): string {
+  const n =
+    typeof amount === "number" ? amount : Number(String(amount).replace(/[^\d.]/g, ""));
+  if (!Number.isFinite(n)) return MONEY_TIERS[MONEY_TIERS.length - 1].emoji;
+  return (MONEY_TIERS.find((tier) => n >= tier.min) ?? MONEY_TIERS[MONEY_TIERS.length - 1]).emoji;
+}
+
+export function moneyIconFor(amount: number | string): ItemIconName {
+  const n =
+    typeof amount === "number" ? amount : Number(String(amount).replace(/[^\d.]/g, ""));
+  if (!Number.isFinite(n)) return "chip";
+  return (MONEY_TIERS.find((tier) => n >= tier.min) ?? MONEY_TIERS[MONEY_TIERS.length - 1]).icon;
+}
 
 export interface RarityStyle {
   label: string;
@@ -82,6 +107,9 @@ export interface BoxItem {
   name: string;
   category: ItemCategory;
   icon: ItemIconName;
+  // Money glyph for this prize (derived from the amount tier) — what the card
+  // face and the win panel actually render.
+  emoji: string;
   amount: number | string;
   chance: string;
   weight: number;
@@ -90,17 +118,19 @@ export interface BoxItem {
 
 // Cash prize pool — mirrors public.drop_prizes in Supabase, where the actual
 // weighted roll happens server-side (roll_prize). Keep ids/weights/odds in sync
-// with the SQL pool seed. Weights sum to 100, so `chance` is the exact draw
-// probability: small amounts hit often, big amounts are genuinely rare.
+// with the SQL pool seed. Weights sum to 10000, so `chance` is the exact draw
+// probability: the two low tiers carry the everyday hit, and everything above
+// 100 ₪ is a genuine long shot (200 ₪ ~1 in 30, 500 ₪ ~1 in 250 drops).
 export const BOX_ITEMS: BoxItem[] = [
   {
     id: "cash-20",
     name: "20 ₪",
     category: "cash",
     icon: "chip",
+    emoji: "💵",
     amount: 20,
-    chance: "40%",
-    weight: 40,
+    chance: "42%",
+    weight: 4200,
     rarity: "common",
   },
   {
@@ -108,9 +138,10 @@ export const BOX_ITEMS: BoxItem[] = [
     name: "30 ₪",
     category: "cash",
     icon: "chip",
+    emoji: "💵",
     amount: 30,
-    chance: "25%",
-    weight: 25,
+    chance: "28%",
+    weight: 2800,
     rarity: "common",
   },
   {
@@ -118,49 +149,54 @@ export const BOX_ITEMS: BoxItem[] = [
     name: "50 ₪",
     category: "cash",
     icon: "stack",
+    emoji: "💰",
     amount: 50,
-    chance: "15%",
-    weight: 15,
+    chance: "17%",
+    weight: 1700,
     rarity: "uncommon",
   },
   {
     id: "cash-100",
     name: "100 ₪",
     category: "cash",
-    icon: "card",
+    icon: "stack",
+    emoji: "💰",
     amount: 100,
-    chance: "12%",
-    weight: 12,
+    chance: "8%",
+    weight: 800,
     rarity: "rare",
   },
   {
     id: "cash-200",
     name: "200 ₪",
     category: "cash",
-    icon: "stack",
+    icon: "gem",
+    emoji: "💎",
     amount: 200,
-    chance: "5%",
-    weight: 5,
+    chance: "3.3%",
+    weight: 330,
     rarity: "classified",
   },
   {
     id: "cash-350",
     name: "350 ₪",
     category: "cash",
-    icon: "king",
+    icon: "gem",
+    emoji: "💎",
     amount: 350,
-    chance: "2%",
-    weight: 2,
+    chance: "1.3%",
+    weight: 130,
     rarity: "covert",
   },
   {
     id: "cash-500",
     name: "500 ₪",
     category: "cash",
-    icon: "king",
+    icon: "fire",
+    emoji: "🔥",
     amount: 500,
-    chance: "1%",
-    weight: 1,
+    chance: "0.4%",
+    weight: 40,
     rarity: "special",
   },
 ];
@@ -195,6 +231,17 @@ export function ItemIcon({
       return <CardIcon size={size} className={className} />;
     case "stack":
       return <StackIcon size={size} className={className} />;
+    case "gem":
+    case "fire":
+      return (
+        <span
+          className={className}
+          style={{ fontSize: size * 1.15, lineHeight: 1 }}
+          aria-hidden="true"
+        >
+          {ITEM_EMOJI[icon]}
+        </span>
+      );
     case "king":
       return <KingIcon size={size} className={className} />;
   }

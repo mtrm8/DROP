@@ -50,28 +50,31 @@ alter table public.drop_codes add column if not exists prize_id text;
 alter table public.drop_codes add column if not exists prize_rolled_at timestamptz;
 
 -- Cash prize pool. The real weighted roll happens here (roll_prize), never in
--- the browser. Weights are relative; this seed sums to 100 so the odds column
--- equals the exact probability of hitting that amount.
+-- the browser. Weights are relative to each other and this seed sums to 10000,
+-- so the real hit chance of a tier is weight / 10000 — sub-1% odds are
+-- expressible, which is what makes the top tiers genuinely hard to hit.
 create table if not exists public.drop_prizes (
   id text primary key,
   name text not null,
   amount integer not null,
   chance text not null,
-  weight numeric not null,
+  weight numeric not null check (weight > 0),
   rarity text not null,
   icon text not null
 );
 
 alter table public.drop_prizes enable row level security;
 
+-- Rarity curve: the everyday tiers carry the volume, and every step up is an
+-- order-of-magnitude drop — 200 ₪ lands ~1 in 30 drops, 500 ₪ ~1 in 250.
 insert into public.drop_prizes (id, name, amount, chance, weight, rarity, icon) values
-  ('cash-20',  '20 ₪',   20,  '40%', 40, 'common',     'chip'),
-  ('cash-30',  '30 ₪',   30,  '25%', 25, 'common',     'chip'),
-  ('cash-50',  '50 ₪',   50,  '15%', 15, 'uncommon',   'stack'),
-  ('cash-100', '100 ₪', 100, '12%', 12, 'rare',       'card'),
-  ('cash-200', '200 ₪', 200,  '5%',  5, 'classified', 'stack'),
-  ('cash-350', '350 ₪', 350,  '2%',  2, 'covert',     'king'),
-  ('cash-500', '500 ₪', 500,  '1%',  1, 'special',    'king')
+  ('cash-20',  '20 ₪',   20,  '42%',   4200, 'common',     '💵'),
+  ('cash-30',  '30 ₪',   30,  '28%',   2800, 'common',     '💵'),
+  ('cash-50',  '50 ₪',   50,  '17%',   1700, 'uncommon',   '💰'),
+  ('cash-100', '100 ₪', 100,  '8%',     800, 'rare',       '💰'),
+  ('cash-200', '200 ₪', 200,  '3.3%',   330, 'classified', '💎'),
+  ('cash-350', '350 ₪', 350,  '1.3%',   130, 'covert',     '💎'),
+  ('cash-500', '500 ₪', 500,  '0.4%',    40, 'special',    '🔥')
 on conflict (id) do update set
   name = excluded.name,
   amount = excluded.amount,
@@ -79,6 +82,60 @@ on conflict (id) do update set
   weight = excluded.weight,
   rarity = excluded.rarity,
   icon = excluded.icon;
+
+-- The single source of truth for displayed odds: probability derived from the
+-- live weights, so the number shown on a card can never drift from the roll.
+create or replace view public.drop_prize_odds as
+  select p.id,
+         p.name,
+         p.amount,
+         p.weight,
+         p.rarity,
+         p.icon,
+         round(100.0 * p.weight / nullif(sum(p.weight) over (), 0), 2) as chance_pct
+    from public.drop_prizes p;
+
+-- Formats the derived probability for display: 42 -> "42%", 3.3 -> "3.3%",
+-- 0.4 -> "0.4%". Both prize RPCs return this, never a hand-written label.
+create or replace function public.drop_prize_chance(p_id text)
+returns text
+language sql
+stable
+set search_path = public
+as $$
+  select case
+           when o.chance_pct = trunc(o.chance_pct)
+             then trunc(o.chance_pct)::integer::text
+           else rtrim(rtrim(o.chance_pct::text, '0'), '.')
+         end || '%'
+    from public.drop_prize_odds o
+   where o.id = p_id;
+$$;
+
+-- Install-time guard: the seeded labels must match the weights they claim, and
+-- the pool must stay a proper distribution. A mismatch fails loudly instead of
+-- quietly promising odds the roll does not honour.
+do $$
+declare
+  v_total numeric;
+  v_bad text;
+begin
+  select sum(weight) into v_total from public.drop_prizes;
+  if v_total is null or v_total <= 0 then
+    raise exception 'drop_prizes is empty';
+  end if;
+
+  select string_agg(format('%s claims %s but its real odds are %s',
+                          id, chance, public.drop_prize_chance(id)), '; ')
+    into v_bad
+    from public.drop_prize_odds
+   where chance <> public.drop_prize_chance(id);
+
+  if v_bad is not null then
+    raise exception 'drop_prize_odds mismatch: %', v_bad;
+  end if;
+end;
+$$;
 
 create or replace function public.redeem_code(p_code text)
 returns json
@@ -179,7 +236,8 @@ begin
   end if;
 
   return query
-    select v_prize.id, v_prize.name, v_prize.amount, v_prize.chance, v_prize.rarity, v_prize.icon;
+    select v_prize.id, v_prize.name, v_prize.amount,
+           public.drop_prize_chance(v_prize.id), v_prize.rarity, v_prize.icon;
 end;
 $$;
 
@@ -192,7 +250,7 @@ language sql
 security definer
 set search_path = public
 as $$
-  select p.id, p.name, p.amount, p.chance, p.rarity, p.icon
+  select p.id, p.name, p.amount, public.drop_prize_chance(p.id), p.rarity, p.icon
     from public.drop_codes c
     join public.drop_prizes p on p.id = c.prize_id
    where lower(c.code) = lower(trim(p_code))

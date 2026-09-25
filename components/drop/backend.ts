@@ -13,6 +13,7 @@
 // There is deliberately NO client-side fallback: if the server cannot confirm a
 // code as unused, it is refused. (Requires these env vars at build time:
 //   NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY)
+import { moneyEmojiFor, moneyIconFor } from "./boxItems";
 import type { BoxItem, ItemIconName, RarityName } from "./boxItems";
 
 export const BACKEND_ENABLED =
@@ -111,7 +112,8 @@ type PrizeRow = {
 };
 
 const RARITY_NAMES = ["common", "uncommon", "rare", "classified", "covert", "special"] as const;
-const ICON_NAMES = ["crest", "ball", "chip", "card", "stack", "king"] as const;
+const ICON_NAMES = ["crest", "ball", "chip", "card", "stack", "gem", "fire", "king"] as const;
+const KNOWN_EMOJI = ["👑", "⚽", "🪙", "🃏", "💵", "💰", "💸", "💎", "🔥", "🤴"] as const;
 const ICON_BY_EMOJI: Record<string, ItemIconName> = {
   "👑": "crest",
   "⚽": "ball",
@@ -120,6 +122,8 @@ const ICON_BY_EMOJI: Record<string, ItemIconName> = {
   "💵": "stack",
   "💰": "stack",
   "💸": "stack",
+  "💎": "gem",
+  "🔥": "fire",
   "🤴": "king",
 };
 
@@ -144,7 +148,12 @@ function toPrize(row: PrizeRow | null | undefined): BoxItem | null {
   const iconRaw = (row.icon ?? "").trim();
   const icon = (ICON_NAMES as readonly string[]).includes(iconRaw)
     ? (iconRaw as ItemIconName)
-    : ICON_BY_EMOJI[iconRaw] ?? "stack";
+    : ICON_BY_EMOJI[iconRaw] ?? moneyIconFor(amount ?? 0);
+  // A money emoji decided by the amount tier: the server glyph when it sent a
+  // real one, otherwise derived locally so the card is never glyph-less.
+  const emoji = (KNOWN_EMOJI as readonly string[]).includes(iconRaw)
+    ? iconRaw
+    : moneyEmojiFor(amount ?? 0);
 
   return {
     id,
@@ -152,6 +161,7 @@ function toPrize(row: PrizeRow | null | undefined): BoxItem | null {
     name: amount !== null ? `${amount} ₪` : serverName,
     category: "cash",
     icon,
+    emoji,
     amount: amount ?? serverName,
     chance: normalizeChance(row.chance),
     weight: 0,
