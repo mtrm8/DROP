@@ -5,6 +5,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import { KeyRound, Lock, Sparkles } from "lucide-react";
 import { CardRevealAnimation } from "./CardRevealAnimation";
 import { redeemCode } from "./drop/backend";
+import { ItemIcon, RARITIES } from "./drop/boxItems";
+import type { BoxItem } from "./drop/boxItems";
 
 function CardEmblem() {
   return (
@@ -34,18 +36,118 @@ function CardEmblem() {
   );
 }
 
+type CompletedRecord = {
+  code: string;
+  item: BoxItem;
+};
+
+const COMPLETED_KEY = "drop-completed";
+
+function CompletedView({ record, onStartNew }: { record: CompletedRecord; onStartNew: () => void }) {
+  const rarity = RARITIES[record.item.rarity];
+  return (
+    <section className="px-4 lg:px-8 max-w-2xl mx-auto w-full pt-8 pb-4 sm:pt-12">
+      <motion.div
+        className="premium-panel relative overflow-hidden rounded-3xl"
+        initial={{ opacity: 0, y: 16, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+      >
+        <div className="pointer-events-none absolute -top-28 left-1/2 h-48 w-[420px] -translate-x-1/2" style={{ background: "radial-gradient(closest-side, rgba(228,174,57,0.07), transparent 72%)" }} />
+        <div className="pointer-events-none absolute -bottom-24 -right-16 h-64 w-64" style={{ background: "radial-gradient(closest-side, rgba(255,255,255,0.025), transparent 70%)" }} />
+
+        <div className="relative px-6 sm:px-10 py-8 sm:py-10 flex flex-col items-center text-center">
+          <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-emerald-400/[0.1] text-emerald-400 border border-emerald-400/25 uppercase tracking-[0.22em]">
+            הדרופ הושלם
+          </span>
+
+          <motion.div
+            className="relative mt-7 flex h-20 w-20 items-center justify-center"
+            initial={{ scale: 0, rotate: -12 }}
+            animate={{ scale: 1, rotate: 0 }}
+            transition={{ type: "spring", stiffness: 300, damping: 16, delay: 0.12 }}
+          >
+            <motion.span
+              className="pointer-events-none absolute inset-0 rounded-full"
+              style={{ border: `2px solid ${rarity.color}`, boxShadow: `0 0 44px ${rarity.glow}` }}
+              initial={{ scale: 0.6, opacity: 0 }}
+              animate={{ scale: 2.1, opacity: 0 }}
+              transition={{ duration: 1.2, ease: "easeOut", delay: 0.2 }}
+            />
+            <div
+              className="flex h-20 w-20 items-center justify-center rounded-full border-2"
+              style={{
+                borderColor: rarity.color,
+                background: "radial-gradient(circle at 35% 28%, rgba(255,255,255,0.12), rgba(14,16,24,0.98) 78%)",
+                boxShadow: `0 0 34px ${rarity.glow}`,
+              }}
+            >
+              <ItemIcon icon={record.item.icon} size={42} className="text-amber-300" />
+            </div>
+          </motion.div>
+
+          <h2 className="mt-5 text-xl sm:text-2xl font-black text-white tracking-tight">ההדרוף הושלם — מזל טוב!</h2>
+
+          <motion.p
+            className="mt-2 text-[11px] font-bold uppercase tracking-[0.18em]"
+            style={{ color: rarity.color, textShadow: `0 0 18px ${rarity.glow}` }}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.35, duration: 0.35 }}
+          >
+            {rarity.label} • {record.item.chance}
+          </motion.p>
+          <motion.h3
+            className="mt-1 text-2xl sm:text-3xl font-black"
+            style={{ color: rarity.color, textShadow: `0 0 22px ${rarity.glow}` }}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.42, duration: 0.35 }}
+          >
+            {record.item.name}
+          </motion.h3>
+
+          <p className="text-xs text-slate-400 mt-4 max-w-sm leading-relaxed">
+            הפרס יופיע במלואו בהפקדה הבאה. שמרו את פרטי הקבוצה לידכם — הזכייה תוכרז ותועבר בקרוב.
+          </p>
+
+          <p className="flex items-center justify-center gap-1.5 text-[11px] text-slate-500 mt-4">
+            <Lock size={12} className="text-red-400/80" />
+            הקוד <span dir="ltr" className="font-mono font-bold text-slate-400">{record.code}</span> נוצל — לא ניתן להפעילו שנית
+          </p>
+
+          <button
+            onClick={onStartNew}
+            className="group relative mt-7 w-full max-w-sm py-3.5 rounded-xl text-base font-black text-slate-950 flex items-center justify-center gap-2.5 transition outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0c13] bg-gradient-to-br from-amber-300 via-amber-400 to-amber-500 hover:brightness-110 active:scale-[0.99] shadow-[0_0_35px_rgba(245,158,11,0.3)]"
+          >
+            <Sparkles size={19} className="transition-transform group-hover:rotate-12" />
+            התחל הדרוף חדש
+          </button>
+        </div>
+      </motion.div>
+    </section>
+  );
+}
+
 export default function DailyDrop() {
   const [unlocked, setUnlocked] = useState(false);
   const [stage, setStage] = useState<"idle" | "cinematic">("idle");
   const [code, setCode] = useState("");
   const [errorKind, setErrorKind] = useState<null | "invalid" | "already_used">(null);
   const [unlocking, setUnlocking] = useState(false);
+  const [completed, setCompleted] = useState<CompletedRecord | null>(null);
 
   // Purge the legacy local burn registry from earlier builds — the server is
-  // now the only source of truth and no local record should shadow it.
+  // now the only source of truth and no local record should shadow it. Also
+  // restore a finished drop so a refresh never loops back to a fresh screen.
   useEffect(() => {
     try {
       window.localStorage.removeItem("drop-burned");
+      const raw = window.localStorage.getItem(COMPLETED_KEY);
+      if (raw) {
+        const rec = JSON.parse(raw) as CompletedRecord;
+        if (rec && rec.item && rec.item.name) setCompleted(rec);
+      }
     } catch {
       // ignore private-mode / storage errors
     }
@@ -55,8 +157,31 @@ export default function DailyDrop() {
     setStage("cinematic");
   };
 
-  const handleDropFinished = () => {
+  const finishDrop = (winner: BoxItem) => {
+    const record: CompletedRecord = { code, item: winner };
+    try {
+      window.localStorage.setItem(COMPLETED_KEY, JSON.stringify(record));
+    } catch {
+      // ignore private-mode / storage errors
+    }
+    setCompleted(record);
     setStage("idle");
+  };
+
+  const handleDropFinished = (winner: BoxItem) => {
+    finishDrop(winner);
+  };
+
+  const handleStartNew = () => {
+    try {
+      window.localStorage.removeItem(COMPLETED_KEY);
+    } catch {
+      // ignore private-mode / storage errors
+    }
+    setCompleted(null);
+    setUnlocked(false);
+    setCode("");
+    setErrorKind(null);
   };
 
   const handleCodeSubmit = async (e: React.FormEvent) => {
@@ -78,6 +203,10 @@ export default function DailyDrop() {
     setUnlocked(true);
     setCode(value);
   };
+
+  if (completed) {
+    return <CompletedView record={completed} onStartNew={handleStartNew} />;
+  }
 
   return (
     <>
@@ -292,9 +421,20 @@ export default function DailyDrop() {
         </div>
       </section>
 
-      {stage === "cinematic" && (
-        <CardRevealAnimation onFinished={handleDropFinished} onCancel={() => setStage("idle")} />
-      )}
+      <AnimatePresence mode="wait" initial={false}>
+        {stage === "cinematic" && (
+          <motion.div
+            key="drop-machine"
+            className="fixed inset-0 z-50"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.4, ease: "easeOut" }}
+          >
+            <CardRevealAnimation onFinished={handleDropFinished} onCancel={() => setStage("idle")} />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </>
   );
 }

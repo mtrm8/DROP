@@ -90,7 +90,7 @@ function CardBackFace({ compact = false }: { compact?: boolean }) {
   );
 }
 
-function CardFront({ item }: { item: BoxItem }) {
+function CardFront({ item, compact = false }: { item: BoxItem; compact?: boolean }) {
   const rarity = RARITIES[item.rarity];
   return (
     <div
@@ -102,17 +102,17 @@ function CardFront({ item }: { item: BoxItem }) {
       }}
     >
       <div className="absolute inset-x-3 top-0 h-px" style={{ background: `linear-gradient(90deg, transparent, ${rarity.color}, transparent)` }} />
-      <div className="flex h-full flex-col items-center justify-between px-2 py-2.5">
-        <span className="rounded-full px-2 py-px text-[9px] font-bold" style={{ background: rarity.bg, color: rarity.color, border: `1px solid ${rarity.border}` }}>
+      <div className="flex h-full flex-col items-center justify-between px-1.5 py-1.5">
+        <span className="rounded-full px-2 py-px text-[8px] font-bold" style={{ background: rarity.bg, color: rarity.color, border: `1px solid ${rarity.border}` }}>
           {item.chance}
         </span>
         <div
-          className="flex h-12 w-12 items-center justify-center rounded-full border"
+          className={`flex items-center justify-center rounded-full border ${compact ? "h-9 w-9" : "h-12 w-12"}`}
           style={{ borderColor: rarity.color, background: "radial-gradient(circle at 35% 28%, rgba(255,255,255,0.1), rgba(15,17,24,0.97) 78%)", boxShadow: `0 0 22px ${rarity.glow}` }}
         >
-          <ItemIcon icon={item.icon} size={26} className="text-amber-300" />
+          <ItemIcon icon={item.icon} size={compact ? 20 : 26} className="text-amber-300" />
         </div>
-        <div className="line-clamp-2 text-[9px] font-extrabold leading-tight" style={{ color: rarity.color, textShadow: `0 0 12px ${rarity.glow}` }}>
+        <div className={`line-clamp-2 font-extrabold leading-tight ${compact ? "text-[8px]" : "text-[9px]"}`} style={{ color: rarity.color, textShadow: `0 0 12px ${rarity.glow}` }}>
           {item.name}
         </div>
       </div>
@@ -294,28 +294,31 @@ export function CardRevealAnimation({ onFinished, onCancel }: CardRevealProps) {
                       key={c.id}
                       onClick={() => toggle(c.id)}
                       whileHover={picked ? undefined : { y: -7, scale: 1.05 }}
+                      whileTap={picked ? undefined : { scale: 0.97 }}
                       transition={{ type: "spring", stiffness: 400, damping: 22 }}
-                      className={`relative h-24 w-16 select-none sm:h-[100px] sm:w-[66px] ${picked ? "cursor-default" : "cursor-pointer"}`}
+                      className={`relative h-24 w-16 select-none [perspective:600px] sm:h-[100px] sm:w-[66px] ${picked ? "cursor-default" : "cursor-pointer"}`}
                       role="button"
                       aria-pressed={picked}
                     >
-                      <CardBackFace compact />
+                      <motion.div
+                        className="relative h-full w-full [transform-style:preserve-3d]"
+                        animate={{ rotateY: picked ? 180 : 0 }}
+                        transition={{ type: "spring", stiffness: 300, damping: 24 }}
+                      >
+                        <div className="absolute inset-0 [backface-visibility:hidden]">
+                          <CardBackFace compact />
+                        </div>
+                        <div className="absolute inset-0 [backface-visibility:hidden]" style={{ transform: "rotateY(180deg)" }}>
+                          <CardFront item={c.item} compact />
+                        </div>
+                      </motion.div>
                       {picked && (
                         <motion.div
-                          className="pointer-events-none absolute -inset-1.5 rounded-2xl"
+                          className="pointer-events-none absolute -inset-1.5 z-10 rounded-2xl"
                           style={{ border: "2px solid rgba(251,191,36,0.9)", boxShadow: "0 0 26px rgba(245,158,11,0.45)" }}
                           initial={{ opacity: 0, scale: 0.9 }}
                           animate={{ opacity: 1, scale: 1 }}
                         />
-                      )}
-                      {picked && (
-                        <motion.div
-                          className="absolute -right-2 -top-2 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-amber-300 to-amber-500 shadow-[0_0_12px_rgba(245,158,11,0.6)]"
-                          initial={{ scale: 0 }}
-                          animate={{ scale: 1 }}
-                        >
-                          <Check size={13} strokeWidth={3.5} className="text-slate-900" />
-                        </motion.div>
                       )}
                     </motion.div>
                   );
