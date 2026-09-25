@@ -157,6 +157,7 @@ export default function DailyDrop() {
   const [completed, setCompleted] = useState<CompletedRecord | null>(null);
   const [prize, setPrize] = useState<BoxItem | null>(null);
   const [resumed, setResumed] = useState(false);
+  const [authorizationConfirmed, setAuthorizationConfirmed] = useState(false);
   // Guards against a double-click / Enter+click firing two redeems for the same
   // code, which would burn it and then report a bogus "already used".
   const submitGuard = useRef(false);
@@ -245,8 +246,12 @@ export default function DailyDrop() {
     if (upperVal === "ADIR-DROP-2026") {
       setPrize(pickWeighted(BOX_ITEMS));
       setCode(value);
-      setStage("cinematic");
       settle();
+      setAuthorizationConfirmed(true);
+      window.setTimeout(() => {
+        setAuthorizationConfirmed(false);
+        setStage("cinematic");
+      }, 850);
       return;
     }
 
@@ -289,6 +294,58 @@ export default function DailyDrop() {
 
   return (
     <>
+      <AnimatePresence>
+        {authorizationConfirmed && (
+          <motion.div
+            key="test-code-authorized"
+            className="fixed inset-0 z-[100] flex flex-col items-center justify-center overflow-hidden bg-[#03140f]/95 px-6 text-center backdrop-blur-xl"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.22 }}
+            role="status"
+            aria-live="polite"
+          >
+            <div className="pointer-events-none absolute h-72 w-72 rounded-full bg-emerald-400/15 blur-[90px]" />
+            <motion.div
+              className="relative flex h-24 w-24 items-center justify-center rounded-full border-2 border-emerald-300/80 bg-emerald-400/10 text-emerald-200 shadow-[0_0_70px_rgba(52,211,153,0.38)]"
+              initial={{ scale: 0.45, rotate: -18 }}
+              animate={{ scale: [0.45, 1.12, 1], rotate: 0 }}
+              transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+            >
+              <svg viewBox="0 0 48 48" className="h-14 w-14" fill="none" aria-hidden="true">
+                <motion.path
+                  d="m10 25 9 9L38 14"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  initial={{ pathLength: 0, opacity: 0 }}
+                  animate={{ pathLength: 1, opacity: 1 }}
+                  transition={{ delay: 0.18, duration: 0.38, ease: "easeOut" }}
+                />
+              </svg>
+            </motion.div>
+            <motion.p
+              className="relative mt-7 text-xs font-black uppercase tracking-[0.34em] text-emerald-300"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.28, duration: 0.3 }}
+            >
+              AUTHORIZATION VERIFIED
+            </motion.p>
+            <motion.h2
+              className="relative mt-2 text-2xl font-black text-white sm:text-3xl"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.34, duration: 0.3 }}
+            >
+              הגישה אושרה
+            </motion.h2>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <section id="drop" className="px-4 lg:px-8 max-w-2xl mx-auto w-full pt-8 pb-4 sm:pt-12">
         <div className="premium-panel relative overflow-hidden rounded-3xl">
           {/* Restrained luxury ambience */}

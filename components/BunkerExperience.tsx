@@ -44,6 +44,7 @@ type AccessState = "checking" | "granted" | "locked";
 export default function BunkerExperience() {
   const [access, setAccess] = useState<AccessState>("checking");
   const [stake, setStake] = useState(100);
+  const [localTime, setLocalTime] = useState("--:--:--");
 
   useEffect(() => {
     try {
@@ -57,6 +58,20 @@ export default function BunkerExperience() {
     } catch {
       setAccess("locked");
     }
+  }, []);
+
+  useEffect(() => {
+    const updateLocalTime = () => {
+      setLocalTime(new Intl.DateTimeFormat("he-IL", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: false,
+      }).format(new Date()));
+    };
+    updateLocalTime();
+    const interval = window.setInterval(updateLocalTime, 1000);
+    return () => window.clearInterval(interval);
   }, []);
 
   const potentialReturn = stake * TOTAL_ODDS;
@@ -140,7 +155,15 @@ export default function BunkerExperience() {
             </motion.div>
           </div>
           <div className="relative mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-white/[0.08] pt-4 text-[11px] font-semibold text-cyan-100/60">
-            <span className="flex items-center gap-2"><Activity size={14} className="text-lime-300" /> COMMUNITY INSIGHTS</span>
+            <span className="flex items-center gap-2">
+              <motion.span
+                className="h-2 w-2 rounded-full bg-emerald-300 shadow-[0_0_12px_rgba(52,211,153,0.8)]"
+                animate={{ opacity: [0.45, 1, 0.45], scale: [0.85, 1.15, 0.85] }}
+                transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
+              />
+              <Activity size={14} className="text-lime-300" /> TERMINAL ONLINE
+            </span>
+            <span className="font-mono text-cyan-100/50">LOCAL {localTime}</span>
             <span className="rounded-full border border-amber-200/15 bg-amber-200/[0.04] px-3 py-1 text-amber-100/80">DEMO BOARD · NOT LIVE PICKS</span>
           </div>
         </motion.header>
