@@ -127,11 +127,17 @@ function FallingField() {
 
 export default function LandingPage() {
   return (
-    <main className="flex w-full max-w-[100vw] min-h-screen flex-col overflow-x-clip bg-[#05060a]">
+    <main
+      className="flex w-full max-w-[100vw] min-h-screen flex-col overflow-x-clip bg-[#05060a]"
+      style={{ backgroundColor: "#05060a" }}
+    >
       <Navbar />
 
       {/* hero */}
-      <section className="relative flex min-h-[88vh] flex-col items-center justify-center overflow-hidden px-5 text-center">
+      <section
+        className="relative flex w-full min-h-screen min-h-[100svh] flex-col items-center justify-center overflow-hidden px-5 py-24 text-center sm:min-h-[92vh]"
+        style={{ backgroundColor: "#05060a" }}
+      >
         <FallingField />
 
         <div className="pointer-events-none absolute inset-0 z-0">
@@ -139,11 +145,9 @@ export default function LandingPage() {
           <div className="absolute inset-0" style={{ background: "radial-gradient(110% 80% at 50% 0%, transparent 52%, rgba(0,0,0,0.6) 100%)" }} />
         </div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 26 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, ease: "easeOut" }}
-          className="relative z-10 flex flex-col items-center"
+        <div
+          className="relative z-10 flex w-full flex-col items-center text-center"
+          style={{ opacity: 1 }}
         >
           <HeroCard3D />
 
@@ -152,7 +156,9 @@ export default function LandingPage() {
             Sports · Poker · Community
           </span>
 
-          <h1 className="mt-7 text-6xl font-black tracking-tight leading-none sm:text-8xl">
+          <h1
+            className="mt-7 text-5xl font-black tracking-tight leading-none text-center sm:text-7xl lg:text-8xl"
+          >
             <span className="text-white">MOSHA</span>{" "}
             <span className="bg-gradient-to-l from-amber-200 via-amber-400 to-amber-600 bg-clip-text text-transparent drop-shadow-[0_0_28px_rgba(245,158,11,0.35)]">
               DROP
@@ -177,10 +183,10 @@ export default function LandingPage() {
               כניסה עם קוד הקהילה — קוד זמין פעם אחת בלבד
             </p>
           </div>
-        </motion.div>
+        </div>
 
         <motion.div
-          className="absolute bottom-7 left-1/2 z-10 -translate-x-1/2"
+          className="absolute bottom-6 left-1/2 z-10 hidden -translate-x-1/2 sm:block"
           animate={{ y: [0, 8, 0] }}
           transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
         >
@@ -189,13 +195,13 @@ export default function LandingPage() {
       </section>
 
       {/* how it works */}
-      <section className="relative px-6 pb-4">
+      <section className="relative w-full px-6 pb-4" style={{ backgroundColor: "#05060a" }}>
         <div className="mx-auto max-w-4xl">
           <motion.h2
-            initial={{ opacity: 0, y: 18 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-60px" }}
-            transition={{ duration: 0.6 }}
+            initial={{ y: 16 }}
+            whileInView={{ y: 0 }}
+            viewport={{ once: true, amount: 0.3 }}
+            transition={{ duration: 0.6, ease: "easeOut" }}
             className="text-center text-2xl font-black text-white sm:text-3xl"
           >
             הדרוף עובד בשלושה צעדים
@@ -209,10 +215,10 @@ export default function LandingPage() {
             ].map((s, i) => (
               <motion.div
                 key={s.n}
-                initial={{ opacity: 0, y: 24 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: "-60px" }}
-                transition={{ duration: 0.55, delay: i * 0.12 }}
+                initial={{ y: 22 }}
+                whileInView={{ y: 0 }}
+                viewport={{ once: true, amount: 0.3 }}
+                transition={{ duration: 0.55, delay: i * 0.12, ease: "easeOut" }}
                 className="rounded-2xl border border-white/[0.07] bg-white/[0.03] p-6 text-center transition hover:border-amber-400/25 hover:bg-white/[0.05]"
               >
                 <span className="font-serif text-3xl font-black" style={{ textShadow: "0 0 18px rgba(228,174,57,0.45)", color: "#fbbf24" }}>
@@ -227,14 +233,14 @@ export default function LandingPage() {
       </section>
 
       {/* closing CTA */}
-      <section className="relative overflow-hidden px-6 py-20 text-center">
+      <section className="relative w-full overflow-hidden px-6 py-20 text-center" style={{ backgroundColor: "#05060a" }}>
         <div className="pointer-events-none absolute left-1/2 top-1/2 h-64 w-[78vw] -translate-x-1/2 -translate-y-1/2 rounded-full bg-amber-500/[0.07] blur-[120px]" />
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-60px" }}
-          transition={{ duration: 0.6 }}
-          className="relative z-10"
+          initial={{ y: 20 }}
+          whileInView={{ y: 0 }}
+          viewport={{ once: true, amount: 0.3 }}
+          transition={{ duration: 0.6, ease: "easeOut" }}
+          className="relative z-10 mx-auto flex w-full max-w-xl flex-col items-center text-center"
         >
           <h2 className="text-2xl font-black text-white sm:text-4xl">
             מקום אחד <span className="bg-gradient-to-l from-amber-200 via-amber-400 to-amber-600 bg-clip-text text-transparent">למזל שלכם</span>
