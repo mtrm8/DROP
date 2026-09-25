@@ -57,7 +57,7 @@ grant execute on function public.redeem_code to anon;
 
 -- Seed active codes (add any community codes here; each can be used once, ever).
 insert into public.drop_codes (code)
-values ('DROP-M-1'), ('KOKOS-LOSINKA'), ('MMM-MMM1'), ('MOSIKO-DROP-1001')
+values ('DROP-M-1'), ('KOKOS-LOSINKA'), ('MMM-MMM1'), ('MOSIKO-DROP-1001'), ('RONEN-DROP-1')
 on conflict (code) do nothing;
 
 -- Reset/activate a specific code back to a fresh, unused state.
@@ -65,6 +65,6 @@ on conflict (code) do nothing;
 -- used flag if the code was previously redeemed. Point it at the code you want
 -- to hand out or test right now.
 insert into public.drop_codes (code)
-values ('MOSIKO-DROP-1001')
+values ('RONEN-DROP-1')
 on conflict (code) do update
   set used = false, used_at = null;
