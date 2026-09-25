@@ -117,16 +117,6 @@ function CompletedView({ record, onStartNew }: { record: CompletedRecord; onStar
             הקוד <span dir="ltr" className="font-mono font-bold text-slate-400">{record.code}</span> נוצל — לא ניתן להפעילו שנית
           </p>
 
-          <Link
-            href="/bunker"
-            className="group relative mt-7 flex w-full max-w-sm items-center justify-center gap-3 overflow-hidden rounded-2xl border border-cyan-300/50 bg-gradient-to-br from-cyan-300 via-cyan-400 to-lime-300 px-6 py-4 text-lg font-black text-slate-950 shadow-[0_0_36px_rgba(34,211,238,0.3)] transition hover:brightness-110 active:scale-[0.99]"
-          >
-            <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/35 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
-            <Atom size={22} className="relative transition-transform duration-500 group-hover:rotate-90" />
-            <span className="relative">כניסה לבונקר</span>
-            <span className="relative text-xs font-extrabold uppercase tracking-[0.18em]">THE BUNKER</span>
-          </Link>
-
           <button
             onClick={onStartNew}
             className="group relative mt-7 w-full max-w-sm py-3.5 rounded-xl text-base font-black text-slate-950 flex items-center justify-center gap-2.5 transition outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0c13] bg-gradient-to-br from-amber-300 via-amber-400 to-amber-500 hover:brightness-110 active:scale-[0.99] shadow-[0_0_35px_rgba(245,158,11,0.3)]"
@@ -134,6 +124,16 @@ function CompletedView({ record, onStartNew }: { record: CompletedRecord; onStar
             <Sparkles size={19} className="transition-transform group-hover:rotate-12" />
             התחל הדרוף חדש
           </button>
+
+          <Link
+            href="/bunker"
+            className="group relative mt-4 flex w-full max-w-sm items-center justify-center gap-3 overflow-hidden rounded-2xl border border-cyan-300/60 bg-gradient-to-br from-cyan-300 via-cyan-400 to-lime-300 px-6 py-4 text-lg font-black text-slate-950 shadow-[0_0_42px_rgba(34,211,238,0.38)] transition hover:brightness-110 active:scale-[0.99]"
+          >
+            <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/40 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
+            <Atom size={22} className="relative transition-transform duration-500 group-hover:rotate-90" />
+            <span className="relative">כניסה לבונקר</span>
+            <span className="relative text-xs font-extrabold uppercase tracking-[0.18em]">ENTER THE BUNKER</span>
+          </Link>
         </div>
       </motion.div>
     </section>
