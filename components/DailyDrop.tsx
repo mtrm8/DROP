@@ -6,8 +6,8 @@ import { Check, KeyRound, Lock, Sparkles, Timer } from "lucide-react";
 import { CardRevealAnimation } from "./CardRevealAnimation";
 import {
   claimToday,
-  hasClaimedToday,
   isValidCode,
+  syncClaim,
 } from "./drop/community";
 
 function CardEmblem() {
@@ -46,9 +46,17 @@ export default function DailyDrop() {
   const [codeError, setCodeError] = useState(false);
   const [unlocking, setUnlocking] = useState(false);
 
-  useEffect(() => {
-    setClaimed(hasClaimedToday());
-  }, []);
+useEffect(() => {
+  // Restore the "Completed Today" state on load/refresh if today's completion
+  // record exists; stale records (past midnight) are cleared by syncClaim.
+  const claimedToday = syncClaim();
+  if (claimedToday) {
+    setClaimed(true);
+    setUnlocked(true);
+  } else {
+    setClaimed(false);
+  }
+}, []);
 
   const spinLocked = claimed;
 
