@@ -4,6 +4,7 @@ const basePath = "/DROP";
 
 const nextConfig: NextConfig = {
   output: "export",
+  trailingSlash: true,
   basePath,
   assetPrefix: `${basePath}/`,
   env: {

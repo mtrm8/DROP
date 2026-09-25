@@ -117,23 +117,9 @@ export interface BoxItem {
   rarity: RarityName;
 }
 
-// Cash prize pool — mirrors public.drop_prizes in Supabase, where the actual
-// weighted roll happens server-side (roll_prize). Keep ids/weights/odds in sync
-// with the SQL pool seed. Weights sum to 10000, so `chance` is the exact draw
-// probability: high-tier and rare prizes are genuinely hard to hit (exponentially
-// rarer drop rates).
+// Client prize pool. Remaining weights and displayed odds are intentionally
+// unchanged; the retired 20₪ client prize is no longer eligible for a reveal.
 export const BOX_ITEMS: BoxItem[] = [
-  {
-    id: "cash-20",
-    name: "20 ₪",
-    category: "cash",
-    icon: "chip",
-    emoji: "💵",
-    amount: 20,
-    chance: "42%",
-    weight: 4200,
-    rarity: "common",
-  },
   {
     id: "cash-30",
     name: "30 ₪",

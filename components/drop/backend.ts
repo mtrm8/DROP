@@ -203,6 +203,9 @@ function toPrize(row: PrizeRow | null | undefined): BoxItem | null {
       : typeof row.amount === "string" && row.amount.trim() !== ""
         ? Number(row.amount.replace(/[^\d.]/g, ""))
         : null;
+  // Older deployed RPCs may still return the retired 20₪ prize. Ignore it so
+  // the client fallback selects from the current prize pool instead.
+  if (amount === 20 || /^20(?:\.0+)?\s*₪$/.test(serverName)) return null;
   if (!id || (amount === null && !serverName)) return null;
 
   const rarity = (row.rarity ?? "").trim() as RarityName;
