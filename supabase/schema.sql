@@ -68,16 +68,13 @@ alter table public.drop_prizes enable row level security;
 -- Rarity curve: the everyday tiers carry the volume, and high tiers are
 -- genuinely hard to hit (exponentially rarer drop rates).
 insert into public.drop_prizes (id, name, amount, chance, weight, rarity, icon) values
-  ('cash-20',   '20 ₪',   20,   '40%',    4000, 'common',     '💵'),
+  ('cash-20',   '20 ₪',   20,   '42%',    4200, 'common',     '💵'),
   ('cash-30',   '30 ₪',   30,   '25%',    2500, 'common',     '💵'),
-  ('cash-50',   '50 ₪',   50,   '15%',    1500, 'uncommon',   '💰'),
-  ('cash-100',  '100 ₪',  100,  '9.5%',    950, 'rare',       '💸'),
+  ('cash-50',   '50 ₪',   50,   '16%',    1600, 'uncommon',   '💰'),
+  ('cash-100',  '100 ₪',  100,  '10%',    1000, 'rare',       '💸'),
   ('cash-200',  '200 ₪',  200,  '5%',      500, 'classified', '💎'),
-  ('cash-350',  '350 ₪',  350,  '2.5%',    250, 'covert',     '💎'),
-  ('cash-500',  '500 ₪',  500,  '1.5%',    150, 'special',    '🔥'),
-  ('cash-1000', '1000 ₪', 1000, '1%',      100, 'special',    '👑'),
-  ('cash-2500', '2500 ₪', 2500, '0.4%',     40, 'special',    '👑'),
-  ('cash-5000', '5000 ₪', 5000, '0.1%',     10, 'special',    '🌟')
+  ('cash-350',  '350 ₪',  350,  '1.5%',    150, 'covert',     '💎'),
+  ('cash-500',  '500 ₪',  500,  '0.5%',     50, 'special',    '🔥')
 on conflict (id) do update set
   name = excluded.name,
   amount = excluded.amount,
