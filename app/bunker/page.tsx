@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import BunkerExperience from "@/components/BunkerExperience";
 
 export const metadata: Metadata = {
-  title: "The Bunker | Einstein Drop",
-  description: "מעבדת ההסתברויות של Einstein Drop — חישוב הדגמה אינטראקטיבי לאחר השלמת דרופ.",
+  title: "The Bunker · Analyst Deep-Dive | Einstein Drop",
+  description: "סקירת עומק קדם-משחק של טופס משולב, שווקי Over 2.5, יחסים וחישובי הסתברות.",
 };
 
 export default function BunkerPage() {
