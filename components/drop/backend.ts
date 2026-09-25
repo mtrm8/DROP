@@ -25,6 +25,24 @@ export type RedeemResult =
   | { status: "already_used" } // valid row exists but used=true -> blocked
   | { status: "invalid" }; // unknown code, or backend unreachable -> refused
 
+async function parseJsonRes(res: Response): Promise<any> {
+  const text = await res.text().catch(() => "");
+  if (!text.trim()) return null;
+  try {
+    const parsed = JSON.parse(text);
+    if (typeof parsed === "string") {
+      try {
+        return JSON.parse(parsed);
+      } catch {
+        return parsed;
+      }
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
 export async function redeemCode(rawInput: string): Promise<RedeemResult> {
   const value = rawInput.trim();
   if (!BACKEND_ENABLED) {
@@ -45,9 +63,9 @@ export async function redeemCode(rawInput: string): Promise<RedeemResult> {
       },
       body: JSON.stringify({ p_code: value }),
     });
+    const rawData = await parseJsonRes(res);
+    const data = Array.isArray(rawData) ? rawData[0] : rawData;
     if (res.ok) {
-      const rawData = await res.json().catch(() => ({}));
-      const data = Array.isArray(rawData) ? rawData[0] : rawData;
       const parsed = (data ?? {}) as {
         success?: boolean;
         error?: "not_found" | "already_redeemed" | string;
@@ -61,6 +79,13 @@ export async function redeemCode(rawInput: string): Promise<RedeemResult> {
       // not_found or any other server answer: code does not exist (or state
       // cannot be confirmed) -> generic invalid, never a bypass.
       return { status: "invalid" };
+    }
+    const errObj = (data ?? {}) as { error?: string; message?: string };
+    if (
+      errObj.error === "already_redeemed" ||
+      `${errObj.message ?? ""}`.toLowerCase().includes("already_redeemed")
+    ) {
+      return { status: "already_used" };
     }
     // RPC missing (404), backend hiccup (5xx/429): cannot verify -> refuse.
     return { status: "invalid" };
@@ -210,7 +235,8 @@ async function callPrizeRpc(
         },
         body,
       });
-      const data = (await res.json().catch(() => null)) as
+      const rawData = await parseJsonRes(res);
+      const data = rawData as
         | PrizeRow
         | PrizeRow[]
         | { code?: string; message?: string }
@@ -241,58 +267,6 @@ async function callPrizeRpc(
     }
   }
   return last;
-}
-
-export type VerifyResult =
-  | { status: "ok"; prize: BoxItem; resumed: boolean }
-  | { status: "already_used" }
-  | { status: "invalid" };
-
-export async function verifyAndRollDrop(rawInput: string): Promise<VerifyResult> {
-  const value = rawInput.trim();
-  if (!BACKEND_ENABLED) {
-    return { status: "invalid" };
-  }
-  const base = (process.env.NEXT_PUBLIC_SUPABASE_URL as string).replace(/\/+$/, "");
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string;
-  try {
-    const res = await fetch(`${base}/rest/v1/rpc/verify_and_roll_drop`, {
-      method: "POST",
-      cache: "no-store",
-      headers: {
-        "Content-Type": "application/json",
-        apikey: key,
-        Authorization: `Bearer ${key}`,
-      },
-      body: JSON.stringify({ p_code: value }),
-    });
-    if (res.ok) {
-      const rawData = await res.json().catch(() => null);
-      const data = Array.isArray(rawData) ? rawData[0] : rawData;
-      if (!data) return { status: "invalid" };
-      if (data.success === true && data.prize) {
-        const prizeRow = data.prize;
-        const prize = toPrize({
-          prize_id: prizeRow.id ?? prizeRow.prize_id,
-          prize_name: prizeRow.name ?? prizeRow.prize_name,
-          amount: prizeRow.amount,
-          chance: prizeRow.chance,
-          rarity: prizeRow.rarity,
-          icon: prizeRow.icon,
-        });
-        if (prize) {
-          return { status: "ok", prize, resumed: !!data.resumed };
-        }
-      }
-      if (data.status === "already_used" || data.error === "already_redeemed") {
-        return { status: "already_used" };
-      }
-      return { status: "invalid" };
-    }
-    return { status: "invalid" };
-  } catch {
-    return { status: "invalid" };
-  }
 }
 
 // Asks the server to roll (or return the already-rolled) prize for a code.
