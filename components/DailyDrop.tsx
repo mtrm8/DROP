@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Check, KeyRound, Lock, Sparkles } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+import { KeyRound, Lock, Sparkles } from "lucide-react";
 import { CardRevealAnimation } from "./CardRevealAnimation";
 import { redeemCode } from "./drop/backend";
 
@@ -116,110 +117,160 @@ export default function DailyDrop() {
                 : "הדרוף פתוח לחברי הקהילה בלבד — הזינו את קוד הגישה שקיבלתם."}
             </p>
 
-            <div className="w-full max-w-md text-right">
-              {/* access code field — freely editable, never disabled */}
-              <label
-                htmlFor="daily-drop-code"
-                className="block text-[11px] font-bold text-slate-400 mb-2"
-              >
-                קוד גישה לדרוף
-              </label>
-              <div
-                className={`flex items-center gap-2 rounded-xl border bg-white/[0.03] transition ${
-                  unlocked
-                    ? "border-amber-400/60 shadow-[0_0_18px_rgba(228,174,57,0.15)]"
-                    : codeError
-                      ? "border-red-500/60 animate-shake"
-                      : unlocking
-                        ? "border-amber-400/40"
-                        : "border-white/[0.08] focus-within:border-amber-400/50"
-                }`}
-              >
-                <KeyRound
-                  size={15}
-                  className={`shrink-0 mr-3 transition-colors ${unlocked ? "text-amber-400" : "text-slate-500"}`}
-                />
-                <input
-                  id="daily-drop-code"
-                  value={code}
-                  onChange={(e) => {
-                    setCode(e.target.value);
-                    setCodeError(false);
-                    setUnlocked(false);
-                  }}
-                  autoComplete="off"
-                  spellCheck={false}
-                  dir="ltr"
-                  className={`w-full bg-transparent py-3 pl-1 text-left font-mono font-bold text-base tracking-[0.16em] placeholder:text-slate-600 placeholder:font-sans placeholder:font-normal placeholder:tracking-normal outline-none ${
-                    unlocked || unlocking ? "text-amber-300" : "text-white"
-                  }`}
-                />
-                {unlocking && (
-                  <span className="ml-3 h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-amber-400/30 border-t-amber-400" />
-                )}
-              </div>
+            <AnimatePresence mode="wait" initial={false}>
+                {unlocked ? (
+                  <motion.div
+                    key="verified"
+                    className="flex w-full max-w-md flex-col items-center pt-2 pb-1 text-center"
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.94, y: -8 }}
+                    transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+                  >
+                    {/* green verification burst */}
+                    <div className="relative flex h-16 w-16 items-center justify-center">
+                      <motion.span
+                        className="pointer-events-none absolute inset-0 rounded-full"
+                        style={{ border: "2px solid rgba(52,211,153,0.5)", boxShadow: "0 0 40px rgba(52,211,153,0.5)" }}
+                        initial={{ scale: 0.55, opacity: 0 }}
+                        animate={{ scale: 2.2, opacity: 0 }}
+                        transition={{ duration: 0.9, ease: "easeOut", delay: 0.16 }}
+                      />
+                      <motion.div
+                        className="flex h-14 w-14 items-center justify-center rounded-full text-emerald-400"
+                        style={{
+                          background: "radial-gradient(circle at 35% 28%, rgba(52,211,153,0.18), rgba(6,10,13,0.96) 78%)",
+                          border: "2px solid rgba(52,211,153,0.6)",
+                          boxShadow: "0 0 34px rgba(52,211,153,0.45)",
+                        }}
+                        initial={{ scale: 0 }}
+                        animate={{ scale: [0, 1.14, 1] }}
+                        transition={{ type: "spring", stiffness: 320, damping: 15 }}
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" className="h-8 w-8">
+                          <motion.path
+                            d="M4.5 12.6l4.8 4.9L19.5 6.8"
+                            stroke="currentColor"
+                            strokeWidth={3.5}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            initial={{ pathLength: 0 }}
+                            animate={{ pathLength: 1 }}
+                            transition={{ duration: 0.4, ease: [0.65, 0, 0.45, 1], delay: 0.12 }}
+                          />
+                        </svg>
+                      </motion.div>
+                    </div>
 
-              <form onSubmit={handleCodeSubmit} className="mt-4">
-                {!unlocked ? (
-                  <>
-                    <button
-                      type="submit"
-                      disabled={unlocking}
-                      className={`group relative w-full py-3.5 rounded-xl text-base font-black text-slate-950 flex items-center justify-center gap-2.5 transition outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0c13] ${
-                        unlocking
-                          ? "bg-gradient-to-br from-amber-300 via-amber-400 to-amber-500 shadow-[0_0_26px_rgba(245,158,11,0.3)]"
-                          : "bg-gradient-to-br from-amber-300 via-amber-400 to-amber-500 hover:brightness-110 active:scale-[0.99] shadow-[0_0_35px_rgba(245,158,11,0.3)]"
+                    <motion.p
+                      className="mt-3 text-sm font-black text-emerald-300"
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.28, duration: 0.3 }}
+                    >
+                      הקוד אומת — הגישה מאושרת
+                    </motion.p>
+
+                    <motion.button
+                      onClick={startOpening}
+                      className="group relative mt-6 w-full rounded-2xl py-4 text-lg font-black flex items-center justify-center gap-2.5 transition bg-gradient-to-br from-amber-300 via-amber-400 to-amber-500 text-slate-950 hover:brightness-110 active:scale-[0.99] shadow-[0_0_35px_rgba(245,158,11,0.35)] outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0c13]"
+                      initial={{ opacity: 0, y: 14 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ type: "spring", stiffness: 260, damping: 20, delay: 0.42 }}
+                    >
+                      <Sparkles size={21} className="transition-transform group-hover:rotate-12" />
+                      הפעל את הדרוף
+                    </motion.button>
+
+                    <motion.p
+                      className="flex items-center justify-center text-[11px] text-slate-500 mt-3"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: 0.55, duration: 0.3 }}
+                    >
+                      הפרס יופיע בהפקדה הבאה בלבד
+                    </motion.p>
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    key="locked"
+                    className="w-full max-w-md text-right"
+                    exit={{ opacity: 0, scale: 0.97, y: 8 }}
+                    transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+                  >
+                    {/* access code field — freely editable, never disabled */}
+                    <label
+                      htmlFor="daily-drop-code"
+                      className="block text-[11px] font-bold text-slate-400 mb-2"
+                    >
+                      קוד גישה לדרוף
+                    </label>
+                    <div
+                      className={`flex items-center gap-2 rounded-xl border bg-white/[0.03] transition ${
+                        codeError
+                          ? "border-red-500/60 animate-shake"
+                          : unlocking
+                            ? "border-amber-400/40"
+                            : "border-white/[0.08] focus-within:border-amber-400/50"
                       }`}
                     >
-                      {unlocking ? (
-                        <>
-                          <span className="inline-block w-1.5 h-1.5 rounded-full bg-slate-900 animate-pulse" />
-                          מאמת גישה...
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles size={19} className="transition-transform group-hover:rotate-12" />
-                          אימות קוד
-                        </>
+                      <KeyRound
+                        size={15}
+                        className="shrink-0 mr-3 text-slate-500 transition-colors"
+                      />
+                      <input
+                        id="daily-drop-code"
+                        value={code}
+                        onChange={(e) => {
+                          setCode(e.target.value);
+                          setCodeError(false);
+                          setUnlocked(false);
+                        }}
+                        autoComplete="off"
+                        spellCheck={false}
+                        dir="ltr"
+                        className="w-full bg-transparent py-3 pl-1 text-left font-mono font-bold text-base tracking-[0.16em] placeholder:text-slate-600 placeholder:font-sans placeholder:font-normal placeholder:tracking-normal outline-none text-white"
+                      />
+                      {unlocking && (
+                        <span className="ml-3 h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-amber-400/30 border-t-amber-400" />
                       )}
-                    </button>
+                    </div>
 
-                    {codeError && (
-                      <p className="text-[11px] font-bold text-red-400 mt-2 animate-shake">
-                        קוד שגוי — נא לבדוק את הקוד שהתקבל
+                    <form onSubmit={handleCodeSubmit} className="mt-4">
+                      <button
+                        type="submit"
+                        disabled={unlocking}
+                        className="group relative w-full py-3.5 rounded-xl text-base font-black text-slate-950 flex items-center justify-center gap-2.5 transition outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0c13] bg-gradient-to-br from-amber-300 via-amber-400 to-amber-500 hover:brightness-110 active:scale-[0.99] shadow-[0_0_35px_rgba(245,158,11,0.3)]"
+                      >
+                        {unlocking ? (
+                          <>
+                            <span className="inline-block w-1.5 h-1.5 rounded-full bg-slate-900 animate-pulse" />
+                            מאמת גישה...
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles size={19} className="transition-transform group-hover:rotate-12" />
+                            אימות קוד
+                          </>
+                        )}
+                      </button>
+
+                      {codeError && (
+                        <p className="text-[11px] font-bold text-red-400 mt-2 animate-shake">
+                          קוד שגוי — נא לבדוק את הקוד שהתקבל
+                        </p>
+                      )}
+
+                      <p className="flex items-center justify-center gap-1.5 text-[11px] text-slate-500 mt-3">
+                        <Lock size={12} className="text-amber-500/70" />
+                        קוד הגישה ניתן בקבוצת הוואטסאפ של הקהילה
                       </p>
-                    )}
-
-                    <p className="flex items-center justify-center gap-1.5 text-[11px] text-slate-500 mt-3">
-                      <Lock size={12} className="text-amber-500/70" />
-                      קוד הגישה ניתן בקבוצת הוואטסאפ של הקהילה
-                    </p>
-                  </>
-                ) : (
-                  <p className="flex items-center justify-center gap-1.5 text-[11px] font-bold text-amber-300 mt-2">
-                    <Check size={14} strokeWidth={3} />
-                    הקוד אומת — הגישה מאושרת
-                  </p>
+                    </form>
+                  </motion.div>
                 )}
-              </form>
-            </div>
+</AnimatePresence>
 
-            {unlocked && (
-              <>
-                <button
-                  onClick={startOpening}
-                  className="group relative w-full max-w-md mt-5 py-4 rounded-2xl text-lg font-black flex items-center justify-center gap-2.5 transition outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0c13] text-slate-950 bg-gradient-to-br from-amber-300 via-amber-400 to-amber-500 hover:brightness-110 active:scale-[0.99] shadow-[0_0_35px_rgba(245,158,11,0.3)]"
-                >
-                  <Sparkles size={21} className="transition-transform group-hover:rotate-12" />
-                  הפעל את הדרוף
-                </button>
-
-                <p className="flex items-center justify-center text-[11px] text-slate-500 mt-3">
-                  הפרס יופיע בהפקדה הבאה בלבד
-                </p>
-              </>
-            )}
-          </div>
+        </div>
         </div>
       </section>
 
