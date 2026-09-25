@@ -6,6 +6,7 @@ import { Check, KeyRound, Lock, Sparkles, Timer } from "lucide-react";
 import { CardRevealAnimation } from "./CardRevealAnimation";
 import {
   claimToday,
+  getUsedCode,
   isValidCode,
   syncClaim,
 } from "./drop/community";
@@ -53,6 +54,7 @@ useEffect(() => {
   if (claimedToday) {
     setClaimed(true);
     setUnlocked(true);
+    setCode(getUsedCode());
   } else {
     setClaimed(false);
   }
@@ -67,7 +69,7 @@ useEffect(() => {
   const handleDropFinished = () => {
     setStage("idle");
     if (!claimed) {
-      claimToday();
+      claimToday(code);
       setClaimed(true);
     }
   };
