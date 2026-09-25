@@ -1,14 +1,234 @@
+"use client";
+
+import Link from "next/link";
+import { motion, useScroll, useTransform } from "framer-motion";
+import { ArrowLeft, ChevronDown, ShieldCheck, Sparkles } from "lucide-react";
 import Navbar from "@/components/Navbar";
-import DailyDrop from "@/components/DailyDrop";
 import CommunityFooter from "@/components/CommunityFooter";
 
-export default function Home() {
+function Chip({ size = 44 }: { size?: number }) {
   return (
-    <main className="flex w-full max-w-[100vw] min-h-screen flex-col overflow-x-clip">
-      <Navbar />
-      <div className="flex-grow">
-        <DailyDrop />
+    <div
+      className="relative rounded-full"
+      style={{
+        width: size,
+        height: size,
+        background: "radial-gradient(circle at 34% 30%, #fde68a, #f59e0b 44%, #92400e 80%)",
+        boxShadow:
+          "0 8px 20px rgba(0,0,0,0.55), inset 0 0 0 2px rgba(255,255,255,0.35), inset 0 -3px 7px rgba(0,0,0,0.4)",
+      }}
+    >
+      <div
+        className="absolute rounded-full"
+        style={{ inset: size * 0.16, border: `${Math.max(1, size * 0.03)}px dashed rgba(255,255,255,0.55)` }}
+      />
+      <div
+        className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/30"
+        style={{ width: size * 0.34, height: size * 0.34, background: "rgba(7,9,15,0.6)" }}
+      />
+    </div>
+  );
+}
+
+function FloatingCard({ w, h, rot }: { w: number; h: number; rot: number }) {
+  return (
+    <div
+      className="relative overflow-hidden rounded-lg border border-amber-400/40 bg-gradient-to-br from-neutral-900 via-zinc-900 to-black"
+      style={{ width: w, height: h, transform: `rotate(${rot}deg)`, boxShadow: "0 0 22px rgba(228,174,57,0.18), 0 12px 26px rgba(0,0,0,0.5)" }}
+    >
+      <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse at center, rgba(228,174,57,0.1), transparent 62%)" }} />
+      <div className="flex h-full flex-col items-center justify-between py-2">
+        <span className="text-[9px] font-bold text-amber-300/80">K</span>
+        <span className="px-1 text-center font-serif text-[8px] font-black uppercase tracking-[0.14em] text-amber-200/90">
+          MOSHA
+        </span>
+        <span className="rotate-180 text-[9px] font-bold text-amber-300/80">K</span>
       </div>
+    </div>
+  );
+}
+
+const CHIPS = [
+  { left: "4%", top: "16%", size: 44, fall: 480, dur: 11, delay: 0, sway: 26, spin: 220 },
+  { left: "16%", top: "42%", size: 30, fall: 380, dur: 13, delay: 1.2, sway: -20, spin: -200 },
+  { left: "30%", top: "9%", size: 36, fall: 540, dur: 12, delay: 2.1, sway: 16, spin: 150 },
+  { left: "47%", top: "28%", size: 26, fall: 430, dur: 14, delay: 0.6, sway: -14, spin: -160 },
+  { left: "63%", top: "54%", size: 40, fall: 350, dur: 12.5, delay: 3, sway: 22, spin: 190 },
+  { left: "76%", top: "13%", size: 32, fall: 520, dur: 11.5, delay: 1.8, sway: -18, spin: -140 },
+  { left: "88%", top: "36%", size: 28, fall: 410, dur: 13.5, delay: 0.3, sway: 14, spin: 170 },
+  { left: "10%", top: "64%", size: 38, fall: 310, dur: 12, delay: 2.8, sway: 20, spin: -210 },
+  { left: "55%", top: "74%", size: 24, fall: 270, dur: 14, delay: 1.4, sway: -10, spin: 120 },
+  { left: "90%", top: "68%", size: 34, fall: 330, dur: 11.8, delay: 0.9, sway: 12, spin: 180 },
+];
+
+const CARDS = [
+  { left: "6%", top: "24%", w: 54, h: 76, rot: -18, dur: 16, delay: 0 },
+  { left: "70%", top: "16%", w: 62, h: 88, rot: 14, dur: 18, delay: 1.5 },
+  { left: "84%", top: "62%", w: 50, h: 72, rot: 20, dur: 15, delay: 3 },
+  { left: "20%", top: "72%", w: 58, h: 82, rot: -10, dur: 17, delay: 2 },
+];
+
+function FallingField() {
+  const { scrollYProgress } = useScroll();
+  const parallax = useTransform(scrollYProgress, [0, 1], [0, -160]);
+
+  return (
+    <motion.div
+      aria-hidden
+      className="pointer-events-none absolute inset-0 z-0 overflow-hidden"
+      style={{ y: parallax }}
+    >
+      {CHIPS.map((c, i) => (
+        <motion.div
+          key={`chip-${i}`}
+          className="absolute"
+          style={{ left: c.left, top: c.top }}
+          animate={{ y: [0, c.fall], x: [0, c.sway, 0], rotate: [0, c.spin], opacity: [0, 1, 1, 0] }}
+          transition={{ duration: c.dur, delay: c.delay, repeat: Infinity, ease: "easeInOut" }}
+        >
+          <Chip size={c.size} />
+        </motion.div>
+      ))}
+      {CARDS.map((c, i) => (
+        <motion.div
+          key={`card-${i}`}
+          className="absolute"
+          style={{ left: c.left, top: c.top }}
+          animate={{ y: [0, c.h * 3.2], rotate: [c.rot, c.rot + 8, c.rot], opacity: [0.25, 0.85, 0.25] }}
+          transition={{ duration: c.dur, delay: c.delay, repeat: Infinity, ease: "easeInOut" }}
+        >
+          <FloatingCard w={c.w} h={c.h} rot={c.rot} />
+        </motion.div>
+      ))}
+    </motion.div>
+  );
+}
+
+export default function LandingPage() {
+  return (
+    <main className="flex w-full max-w-[100vw] min-h-screen flex-col overflow-x-clip bg-[#05060a]">
+      <Navbar />
+
+      {/* hero */}
+      <section className="relative flex min-h-[88vh] flex-col items-center justify-center overflow-hidden px-5 text-center">
+        <FallingField />
+
+        <div className="pointer-events-none absolute inset-0 z-0">
+          <div className="absolute left-1/2 top-1/3 h-[46vw] w-[80vw] -translate-x-1/2 rounded-full bg-amber-500/[0.08] blur-[140px]" />
+          <div className="absolute inset-0" style={{ background: "radial-gradient(110% 80% at 50% 0%, transparent 52%, rgba(0,0,0,0.6) 100%)" }} />
+        </div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 26 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.7, ease: "easeOut" }}
+          className="relative z-10"
+        >
+          <span className="inline-flex items-center gap-2 rounded-full border border-amber-400/25 bg-amber-400/[0.08] px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.28em] text-amber-300">
+            <ShieldCheck size={12} />
+            Sports · Poker · Community
+          </span>
+
+          <h1 className="mt-7 text-6xl font-black tracking-tight leading-none sm:text-8xl">
+            <span className="text-white">MOSHA</span>{" "}
+            <span className="bg-gradient-to-l from-amber-200 via-amber-400 to-amber-600 bg-clip-text text-transparent drop-shadow-[0_0_28px_rgba(245,158,11,0.35)]">
+              DROP
+            </span>
+          </h1>
+
+          <p className="mx-auto mt-6 max-w-md text-sm text-slate-400 leading-relaxed sm:text-base">
+            בחרו <span className="font-bold text-amber-300">5 קלפים</span>, המכונה תערבב את החפיסה
+            ותחשוף את הפרס — בונוס או מתנה בשקלים שיופיעו בהפקדה הבאה שלכם.
+          </p>
+
+          <div className="mt-9 flex flex-col items-center gap-4">
+            <Link
+              href="/drop"
+              className="group relative inline-flex items-center justify-center gap-2.5 rounded-2xl px-8 py-4 text-lg font-black text-slate-950 outline-none transition focus-visible:ring-2 focus-visible:ring-amber-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#05060a] bg-gradient-to-br from-amber-300 via-amber-400 to-amber-500 shadow-[0_0_45px_rgba(245,158,11,0.4)] hover:brightness-110 active:scale-[0.99]"
+            >
+              <Sparkles size={22} className="transition-transform group-hover:rotate-12" />
+              פתחו את ההדרוף
+              <ArrowLeft size={20} className="transition-transform group-hover:-translate-x-1" />
+            </Link>
+            <p className="text-[11px] text-slate-500">
+              כניסה עם קוד הקהילה — קוד זמין פעם אחת בלבד
+            </p>
+          </div>
+        </motion.div>
+
+        <motion.div
+          className="absolute bottom-7 left-1/2 z-10 -translate-x-1/2"
+          animate={{ y: [0, 8, 0] }}
+          transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
+        >
+          <ChevronDown size={22} className="text-amber-400/60" />
+        </motion.div>
+      </section>
+
+      {/* how it works */}
+      <section className="relative px-6 pb-4">
+        <div className="mx-auto max-w-4xl">
+          <motion.h2
+            initial={{ opacity: 0, y: 18 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-60px" }}
+            transition={{ duration: 0.6 }}
+            className="text-center text-2xl font-black text-white sm:text-3xl"
+          >
+            הדרוף עובד בשלושה צעדים
+          </motion.h2>
+
+          <div className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-3">
+            {[
+              { n: "01", t: "בחרו 5 קלפים", d: "עשרה קלפים על השולחן, כל אחד מסתיר פרס אמיתי. הבחירה נעולה — קלף שנבחר לא ניתן לביטול." },
+              { n: "02", t: "ריפל של דילר", d: "המכונה טורפת את החפיסה באיטיות ובתצוגה מלאה — ריפל כפול של דילר מקצועי, רגע לפני ההכרעה." },
+              { n: "03", t: "הפרס מתגלה", d: "קלף הזוכה נחשף, והפרס יופיע בהפקדה הבאה בלבד. קוד אחד לכל חבר — פעם אחת." },
+            ].map((s, i) => (
+              <motion.div
+                key={s.n}
+                initial={{ opacity: 0, y: 24 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: "-60px" }}
+                transition={{ duration: 0.55, delay: i * 0.12 }}
+                className="rounded-2xl border border-white/[0.07] bg-white/[0.03] p-6 text-center transition hover:border-amber-400/25 hover:bg-white/[0.05]"
+              >
+                <span className="font-serif text-3xl font-black" style={{ textShadow: "0 0 18px rgba(228,174,57,0.45)", color: "#fbbf24" }}>
+                  {s.n}
+                </span>
+                <h3 className="mt-3 text-lg font-black text-white">{s.t}</h3>
+                <p className="mt-2 text-xs leading-relaxed text-slate-400">{s.d}</p>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* closing CTA */}
+      <section className="relative overflow-hidden px-6 py-20 text-center">
+        <div className="pointer-events-none absolute left-1/2 top-1/2 h-64 w-[78vw] -translate-x-1/2 -translate-y-1/2 rounded-full bg-amber-500/[0.07] blur-[120px]" />
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-60px" }}
+          transition={{ duration: 0.6 }}
+          className="relative z-10"
+        >
+          <h2 className="text-2xl font-black text-white sm:text-4xl">
+            מקום אחד <span className="bg-gradient-to-l from-amber-200 via-amber-400 to-amber-600 bg-clip-text text-transparent">למזל שלכם</span>
+          </h2>
+          <p className="mx-auto mt-3 max-w-sm text-xs text-slate-400 sm:text-sm">
+            ההדרוף פתוח לחברי הקהילה בלבד. הזינו את הקוד האישי שלכם והתחילו לסבב.
+          </p>
+          <Link
+            href="/drop"
+            className="group mt-8 inline-flex items-center justify-center gap-2.5 rounded-2xl px-8 py-4 text-lg font-black text-slate-950 outline-none transition focus-visible:ring-2 focus-visible:ring-amber-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#05060a] bg-gradient-to-br from-amber-300 via-amber-400 to-amber-500 shadow-[0_0_45px_rgba(245,158,11,0.4)] hover:brightness-110 active:scale-[0.99]"
+          >
+            בחרו את הקלפים שלכם
+            <ArrowLeft size={20} className="transition-transform group-hover:-translate-x-1" />
+          </Link>
+        </motion.div>
+      </section>
+
       <CommunityFooter />
     </main>
   );
