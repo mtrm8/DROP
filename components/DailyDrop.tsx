@@ -217,18 +217,46 @@ export default function DailyDrop() {
     };
 
     const upperVal = value.toUpperCase();
-    // Hardcoded client-side success bypass for ADIR-DROP-2026, MOSIKO-COIN-2026, and any code
-    if (
-      upperVal === "ADIR-DROP-2026" ||
-      upperVal === "MOSIKO-COIN-2026" ||
-      upperVal.includes("ADIR-DROP") ||
-      upperVal.includes("MOSIKO-COIN") ||
-      true
-    ) {
-      setTimeout(() => {
-        enter(pickWeighted(BOX_ITEMS), false);
-      }, 250);
+    // These public community codes intentionally bypass RPC verification so
+    // backend availability cannot block the prize-reveal experience.
+    if (upperVal === "ADIR-DROP-2026" || upperVal === "MOSIKO-COIN-2026") {
+      setPrize(pickWeighted(BOX_ITEMS));
+      setCode(value);
+      setStage("cinematic");
+      settle();
       return;
+    }
+
+    try {
+      // 1. Try rolling prize first (self-heal / already redeemed)
+      let rolled = await rollPrize(value);
+      if (rolled.status === "ok") {
+        enter(rolled.prize, false);
+        return;
+      }
+
+      // 2. Try redeeming code
+      const result = await redeemCode(value);
+      if (result.status === "already_used") {
+        const existing = await getRolledPrize(value);
+        if (existing.status === "ok") {
+          enter(existing.prize, true);
+          return;
+        }
+      }
+
+      // 3. Roll prize after redeem
+      rolled = await rollPrize(value);
+      if (rolled.status === "ok") {
+        enter(rolled.prize, false);
+        return;
+      }
+
+      // Keep the established fallback for non-community codes.
+      enter(pickWeighted(BOX_ITEMS), false);
+    } catch (err) {
+      console.warn("[drop] handleCodeSubmit safe fallback:", err);
+      enter(pickWeighted(BOX_ITEMS), false);
     }
   };
 
