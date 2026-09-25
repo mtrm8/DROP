@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { motion, useMotionTemplate, useMotionValue, useSpring } from "framer-motion";
+import { motion, useMotionValue, useSpring, useTransform } from "framer-motion";
 import { ArrowLeft, ChevronDown, ShieldCheck, Sparkles } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import CommunityFooter from "@/components/CommunityFooter";
@@ -25,11 +25,14 @@ function FloatingCard({ w, h, rot }: { w: number; h: number; rot: number }) {
 }
 
 function HeroCard3D() {
-  const rotateX = useSpring(useMotionValue(0), { stiffness: 220, damping: 28, mass: 0.9 });
-  const rotateY = useSpring(useMotionValue(0), { stiffness: 220, damping: 28, mass: 0.9 });
+  const rotateX = useSpring(useMotionValue(0), { stiffness: 200, damping: 30, mass: 0.8 });
+  const rotateY = useSpring(useMotionValue(0), { stiffness: 200, damping: 30, mass: 0.8 });
   const glowX = useMotionValue(50);
   const glowY = useMotionValue(50);
-  const glow = useMotionTemplate`radial-gradient(circle at ${glowX}% ${glowY}%, rgba(251,191,36,0.22), rgba(251,191,36,0.05) 45%, transparent 70%)`;
+  // The gold spotlight is a single pre-rendered gradient driven by cheap
+  // transform-only motion (never re-painted per frame), keeping desktop smooth.
+  const glowShiftX = useSpring(useTransform(glowX, [0, 100], [-42, 42]), { stiffness: 250, damping: 28, mass: 0.7 });
+  const glowShiftY = useSpring(useTransform(glowY, [0, 100], [-42, 42]), { stiffness: 250, damping: 28, mass: 0.7 });
 
   function onPointerMove(e: React.PointerEvent<HTMLDivElement>) {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -55,15 +58,28 @@ function HeroCard3D() {
           onPointerMove={onPointerMove}
           onPointerLeave={onPointerLeave}
           className="relative touch-none select-none outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#05060a]"
-          style={{ transformStyle: "preserve-3d", rotateX, rotateY, cursor: "grab" }}
+          style={{ transformStyle: "preserve-3d", rotateX, rotateY, cursor: "grab", willChange: "transform", contain: "layout paint" }}
           whileTap={{ cursor: "grabbing" }}
         >
           <div
             className="relative h-[300px] w-[212px] sm:h-[390px] sm:w-[276px] overflow-hidden rounded-2xl border border-amber-400/45 bg-gradient-to-br from-[#12141c] via-[#0a0c12] to-black shadow-[0_30px_70px_-20px_rgba(0,0,0,0.85),0_0_40px_rgba(228,174,57,0.14)]"
-            style={{ transform: "translateZ(40px)" }}
+            style={{ transform: "translateZ(24px)" }}
           >
             <div className="absolute inset-0" style={{ background: "radial-gradient(120% 90% at 50% 0%, rgba(228,174,57,0.12), transparent 60%)" }} />
-            <motion.div className="pointer-events-none absolute inset-0" style={{ backgroundImage: glow }} />
+            <motion.div
+              className="pointer-events-none absolute rounded-full"
+              style={{
+                left: "50%",
+                top: "50%",
+                width: "240%",
+                height: "140%",
+                marginLeft: "-120%",
+                marginTop: "-70%",
+                x: glowShiftX,
+                y: glowShiftY,
+                background: "radial-gradient(circle at 50% 50%, rgba(251,191,36,0.24), rgba(251,191,36,0.06) 45%, transparent 70%)",
+              }}
+            />
 
             <div className="absolute inset-2 rounded-xl border border-amber-400/25" />
 

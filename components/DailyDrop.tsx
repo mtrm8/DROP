@@ -38,7 +38,6 @@ export default function DailyDrop() {
   const [stage, setStage] = useState<"idle" | "cinematic">("idle");
   const [code, setCode] = useState("");
   const [codeError, setCodeError] = useState(false);
-  const [codeUsedError, setCodeUsedError] = useState(false);
   const [unlocking, setUnlocking] = useState(false);
 
   const startOpening = () => {
@@ -54,16 +53,11 @@ export default function DailyDrop() {
     if (unlocking) return;
     const value = code.trim();
     setCodeError(false);
-    setCodeUsedError(false);
     setUnlocking(true);
     const result = await redeemCode(value);
     setUnlocking(false);
-    if (result.status === "invalid") {
+    if (result.status === "invalid" || result.status === "already_used") {
       setCodeError(true);
-      return;
-    }
-    if (result.status === "already_used") {
-      setCodeUsedError(true);
       return;
     }
     setUnlocked(true);
@@ -134,7 +128,7 @@ export default function DailyDrop() {
                 className={`flex items-center gap-2 rounded-xl border bg-white/[0.03] transition ${
                   unlocked
                     ? "border-amber-400/60 shadow-[0_0_18px_rgba(228,174,57,0.15)]"
-                    : codeError || codeUsedError
+                    : codeError
                       ? "border-red-500/60 animate-shake"
                       : unlocking
                         ? "border-amber-400/40"
@@ -151,7 +145,6 @@ export default function DailyDrop() {
                   onChange={(e) => {
                     setCode(e.target.value);
                     setCodeError(false);
-                    setCodeUsedError(false);
                     setUnlocked(false);
                   }}
                   autoComplete="off"
@@ -194,12 +187,6 @@ export default function DailyDrop() {
                     {codeError && (
                       <p className="text-[11px] font-bold text-red-400 mt-2 animate-shake">
                         קוד שגוי — נא לבדוק את הקוד שהתקבל
-                      </p>
-                    )}
-
-                    {codeUsedError && (
-                      <p className="text-[11px] font-bold text-red-400 mt-2 animate-shake">
-                        הקוד כבר נוצל או אינו תקף — אפשר לנסות קוד אחר
                       </p>
                     )}
 
