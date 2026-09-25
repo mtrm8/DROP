@@ -82,7 +82,7 @@ export default function BunkerExperience() {
             <LockKeyhole size={34} />
           </div>
           <p className="mt-6 text-xs font-black uppercase tracking-[0.3em] text-cyan-300">ACCESS LOCKED</p>
-          <h1 className="mt-3 text-3xl font-black text-white">הבונקר נפתח אחרי דרופ</h1>
+          <h1 className="mt-3 text-3xl font-black text-white">הבנקר נפתח אחרי דרופ</h1>
           <p className="mt-3 max-w-sm text-sm leading-7 text-slate-400">
             השלימו דרופ ושמרו את תוצאת הזכייה במכשיר הזה כדי לפתוח את מעבדת Einstein Drop.
           </p>
@@ -125,7 +125,7 @@ export default function BunkerExperience() {
               <h1 className="mt-2 text-4xl font-black tracking-tight text-white sm:text-6xl">
                 THE <span className="bg-gradient-to-l from-cyan-200 via-cyan-400 to-lime-300 bg-clip-text text-transparent">BUNKER</span>
               </h1>
-              <p className="mt-3 text-lg font-bold text-slate-200">הבונקר · חדר האנליסטים</p>
+              <p className="mt-3 text-lg font-bold text-slate-200">הבנקר · חדר האנליסטים</p>
               <p className="mt-2 max-w-xl text-sm leading-7 text-slate-400">
                 טפסי דוגמה, יחסים ותובנות קהילתיות בעיצוב לוח אנליסטים. כל הבחירות והסכומים המוצגים כאן להמחשה בלבד.
               </p>

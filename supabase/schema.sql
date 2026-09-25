@@ -58,9 +58,8 @@ alter table public.drop_codes add column if not exists prize_id text;
 alter table public.drop_codes add column if not exists prize_rolled_at timestamptz;
 
 -- Cash prize pool. The real weighted roll happens here (roll_prize), never in
--- the browser. Weights are relative to each other and this seed sums to 10000,
--- so the real hit chance of a tier is weight / 10000 — sub-1% odds are
--- expressible, which is what makes the top tiers genuinely hard to hit.
+-- the browser. Retire the 20₪ tier, including old persisted assignments, before
+-- seeding so it cannot re-enter a draw after this schema is applied.
 create table if not exists public.drop_prizes (
   id text primary key,
   name text not null,
@@ -73,13 +72,17 @@ create table if not exists public.drop_prizes (
 
 alter table public.drop_prizes enable row level security;
 
+update public.drop_codes
+   set prize_id = null, prize_rolled_at = null
+ where prize_id in (select id from public.drop_prizes where amount = 20 or id = 'cash-20');
+delete from public.drop_prizes where amount = 20 or id = 'cash-20';
+
 drop policy if exists "Allow anon and authenticated select on drop_prizes" on public.drop_prizes;
 create policy "Allow anon and authenticated select on drop_prizes" on public.drop_prizes for select using (true);
 
 -- Rarity curve: the everyday tiers carry the volume, and high tiers are
 -- genuinely hard to hit (exponentially rarer drop rates).
 insert into public.drop_prizes (id, name, amount, chance, weight, rarity, icon) values
-  ('cash-20',   '20 ₪',   20,   '42%',    4200, 'common',     '💵'),
   ('cash-30',   '30 ₪',   30,   '25%',    2500, 'common',     '💵'),
   ('cash-50',   '50 ₪',   50,   '16%',    1600, 'uncommon',   '💰'),
   ('cash-100',  '100 ₪',  100,  '10%',    1000, 'rare',       '💸'),
@@ -123,27 +126,18 @@ as $$
    where o.id = p_id;
 $$;
 
--- Install-time guard: the seeded labels must match the weights they claim, and
--- the pool must stay a proper distribution. A mismatch fails loudly instead of
--- quietly promising odds the roll does not honour.
+-- Install-time guard: the pool must be populated and the retired 20₪ tier must
+-- not be present. Live odds are always derived from the pool weights above.
 do $$
 declare
   v_total numeric;
-  v_bad text;
 begin
   select sum(weight) into v_total from public.drop_prizes;
   if v_total is null or v_total <= 0 then
     raise exception 'drop_prizes is empty';
   end if;
-
-  select string_agg(format('%s claims %s but its real odds are %s',
-                          id, chance, public.drop_prize_chance(id)), '; ')
-    into v_bad
-    from public.drop_prize_odds
-   where chance <> public.drop_prize_chance(id);
-
-  if v_bad is not null then
-    raise exception 'drop_prize_odds mismatch: %', v_bad;
+  if exists (select 1 from public.drop_prizes where amount = 20 or id = 'cash-20') then
+    raise exception 'retired prize remains in drop_prizes';
   end if;
 end;
 $$;

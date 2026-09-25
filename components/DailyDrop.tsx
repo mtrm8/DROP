@@ -135,7 +135,7 @@ function CompletedView({ record, onStartNew }: { record: CompletedRecord; onStar
             >
               <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/55 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
               <Atom size={27} className="relative transition-transform duration-500 group-hover:rotate-90" />
-              <span className="relative">כניסה לבונקר</span>
+              <span className="relative">כניסה לבנקר</span>
               <span className="relative text-xs font-extrabold uppercase tracking-[0.18em]">ENTER THE BUNKER</span>
               <Sparkles size={19} className="relative animate-pulse" />
             </Link>
@@ -171,7 +171,14 @@ export default function DailyDrop() {
       const raw = window.localStorage.getItem(COMPLETED_KEY);
       if (raw) {
         const rec = JSON.parse(raw) as CompletedRecord;
-        if (rec && rec.item && rec.item.name) setCompleted(rec);
+        if (rec && rec.item && rec.item.name) {
+          const savedAmount = Number(String(rec.item.amount ?? rec.item.name).replace(/[^\d.]/g, ""));
+          if (savedAmount === 20) {
+            window.localStorage.removeItem(COMPLETED_KEY);
+          } else {
+            setCompleted(rec);
+          }
+        }
       }
     } catch {
       // ignore private-mode / storage errors
