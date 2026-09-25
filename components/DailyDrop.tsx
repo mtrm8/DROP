@@ -125,15 +125,21 @@ function CompletedView({ record, onStartNew }: { record: CompletedRecord; onStar
             התחל הדרוף חדש
           </button>
 
-          <Link
-            href="/bunker"
-            className="group relative mt-4 flex w-full max-w-sm items-center justify-center gap-3 overflow-hidden rounded-2xl border border-cyan-300/60 bg-gradient-to-br from-cyan-300 via-cyan-400 to-lime-300 px-6 py-4 text-lg font-black text-slate-950 shadow-[0_0_42px_rgba(34,211,238,0.38)] transition hover:brightness-110 active:scale-[0.99]"
-          >
-            <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/40 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
-            <Atom size={22} className="relative transition-transform duration-500 group-hover:rotate-90" />
-            <span className="relative">כניסה לבונקר</span>
-            <span className="relative text-xs font-extrabold uppercase tracking-[0.18em]">ENTER THE BUNKER</span>
-          </Link>
+          <div className="mt-7 w-full max-w-lg">
+            <p className="mb-2 text-center text-[10px] font-black uppercase tracking-[0.3em] text-cyan-200/75">
+              ACCESS UNLOCKED · EINSTEIN DROP LAB
+            </p>
+            <Link
+              href={`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/bunker`}
+              className="group relative flex min-h-[76px] w-full items-center justify-center gap-3 overflow-hidden rounded-2xl border-2 border-cyan-100/70 bg-gradient-to-br from-cyan-200 via-cyan-400 to-lime-300 px-6 py-5 text-xl font-black text-slate-950 shadow-[0_0_24px_rgba(34,211,238,0.65),0_0_70px_rgba(34,211,238,0.32)] ring-4 ring-cyan-300/15 transition duration-300 hover:scale-[1.02] hover:brightness-110 hover:shadow-[0_0_34px_rgba(34,211,238,0.8),0_0_90px_rgba(34,211,238,0.42)] active:scale-[0.99]"
+            >
+              <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/55 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
+              <Atom size={27} className="relative transition-transform duration-500 group-hover:rotate-90" />
+              <span className="relative">כניסה לבונקר</span>
+              <span className="relative text-xs font-extrabold uppercase tracking-[0.18em]">ENTER THE BUNKER</span>
+              <Sparkles size={19} className="relative animate-pulse" />
+            </Link>
+          </div>
         </div>
       </motion.div>
     </section>
