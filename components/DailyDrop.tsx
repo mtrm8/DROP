@@ -7,9 +7,9 @@ import { CardRevealAnimation } from "./CardRevealAnimation";
 import {
   claimToday,
   getUsedCode,
-  isValidCode,
   syncClaim,
 } from "./drop/community";
+import { redeemCode } from "./drop/backend";
 
 function CardEmblem() {
   return (
@@ -45,6 +45,7 @@ export default function DailyDrop() {
   const [stage, setStage] = useState<"idle" | "cinematic">("idle");
   const [code, setCode] = useState("");
   const [codeError, setCodeError] = useState(false);
+  const [codeUsedError, setCodeUsedError] = useState(false);
   const [unlocking, setUnlocking] = useState(false);
 
 useEffect(() => {
@@ -74,21 +75,27 @@ useEffect(() => {
     }
   };
 
-  const handleCodeSubmit = (e: React.FormEvent) => {
+  const handleCodeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (unlocking || unlocked) return;
     const value = code.trim();
-    if (isValidCode(value)) {
-      setCodeError(false);
-      setUnlocking(true);
-      window.setTimeout(() => {
-        setUnlocked(true);
-        setUnlocking(false);
-        setCode(value);
-      }, 450);
-    } else {
+    setCodeError(false);
+    setCodeUsedError(false);
+    const result = await redeemCode(value);
+    if (result.status === "invalid") {
       setCodeError(true);
+      return;
     }
+    if (result.status === "already_used") {
+      setCodeUsedError(true);
+      return;
+    }
+    setUnlocking(true);
+    window.setTimeout(() => {
+      setUnlocked(true);
+      setUnlocking(false);
+      setCode(value);
+    }, 450);
   };
 
   return (
@@ -162,7 +169,7 @@ useEffect(() => {
               className={`flex items-center gap-2 rounded-xl border bg-white/[0.03] transition ${
                 unlocked
                   ? "border-amber-400/60 shadow-[0_0_18px_rgba(228,174,57,0.15)]"
-                  : codeError
+                  : codeError || codeUsedError
                     ? "border-red-500/60 animate-shake"
                     : unlocking
                       ? "border-amber-400/40"
@@ -179,6 +186,7 @@ useEffect(() => {
                 onChange={(e) => {
                   setCode(e.target.value);
                   setCodeError(false);
+                  setCodeUsedError(false);
                 }}
                 disabled={unlocking || unlocked}
                 autoComplete="off"
@@ -234,6 +242,12 @@ useEffect(() => {
                   {codeError && (
                     <p className="text-[11px] font-bold text-red-400 mt-2 animate-shake">
                       קוד שגוי — נא לבדוק את הקוד שהתקבל
+                    </p>
+                  )}
+
+                  {codeUsedError && (
+                    <p className="text-[11px] font-bold text-red-400 mt-2 animate-shake">
+                      הקוד הזה כבר נוצל — ניתנת להשתמש בקוד פעם אחת בלבד
                     </p>
                   )}
 
