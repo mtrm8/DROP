@@ -25,18 +25,18 @@ function FloatingCard({ w, h, rot }: { w: number; h: number; rot: number }) {
 }
 
 function HeroCard3D() {
-  const rotateX = useSpring(useMotionValue(0), { stiffness: 260, damping: 22, mass: 0.7 });
-  const rotateY = useSpring(useMotionValue(0), { stiffness: 260, damping: 22, mass: 0.7 });
+  const rotateX = useSpring(useMotionValue(0), { stiffness: 220, damping: 28, mass: 0.9 });
+  const rotateY = useSpring(useMotionValue(0), { stiffness: 220, damping: 28, mass: 0.9 });
   const glowX = useMotionValue(50);
   const glowY = useMotionValue(50);
   const glow = useMotionTemplate`radial-gradient(circle at ${glowX}% ${glowY}%, rgba(251,191,36,0.22), rgba(251,191,36,0.05) 45%, transparent 70%)`;
 
   function onPointerMove(e: React.PointerEvent<HTMLDivElement>) {
     const rect = e.currentTarget.getBoundingClientRect();
-    const px = (e.clientX - rect.left) / rect.width;
-    const py = (e.clientY - rect.top) / rect.height;
-    rotateY.set((px - 0.5) * 72);
-    rotateX.set((0.5 - py) * 72);
+    const px = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+    const py = Math.min(1, Math.max(0, (e.clientY - rect.top) / rect.height));
+    rotateY.set((px - 0.5) * 52);
+    rotateX.set((0.5 - py) * 52);
     glowX.set(px * 100);
     glowY.set(py * 100);
   }

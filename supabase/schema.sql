@@ -57,5 +57,5 @@ grant execute on function public.redeem_code to anon;
 
 -- Seed active codes (add any community codes here; each can be used once, ever).
 insert into public.drop_codes (code)
-values ('DROP-M-1')
+values ('DROP-M-1'), ('KOKOS-LOSINKA')
 on conflict (code) do nothing;
