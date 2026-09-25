@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
-import { KeyRound, Lock, Sparkles } from "lucide-react";
+import { Atom, KeyRound, Lock, Sparkles } from "lucide-react";
 import { CardRevealAnimation } from "./CardRevealAnimation";
 import { getRolledPrize, redeemCode, rollPrize } from "./drop/backend";
 import { ItemIcon, RARITIES, BOX_ITEMS, pickWeighted } from "./drop/boxItems";
@@ -115,6 +116,16 @@ function CompletedView({ record, onStartNew }: { record: CompletedRecord; onStar
             <Lock size={12} className="text-red-400/80" />
             הקוד <span dir="ltr" className="font-mono font-bold text-slate-400">{record.code}</span> נוצל — לא ניתן להפעילו שנית
           </p>
+
+          <Link
+            href="/bunker"
+            className="group relative mt-7 flex w-full max-w-sm items-center justify-center gap-3 overflow-hidden rounded-2xl border border-cyan-300/50 bg-gradient-to-br from-cyan-300 via-cyan-400 to-lime-300 px-6 py-4 text-lg font-black text-slate-950 shadow-[0_0_36px_rgba(34,211,238,0.3)] transition hover:brightness-110 active:scale-[0.99]"
+          >
+            <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/35 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
+            <Atom size={22} className="relative transition-transform duration-500 group-hover:rotate-90" />
+            <span className="relative">כניסה לבונקר</span>
+            <span className="relative text-xs font-extrabold uppercase tracking-[0.18em]">THE BUNKER</span>
+          </Link>
 
           <button
             onClick={onStartNew}
