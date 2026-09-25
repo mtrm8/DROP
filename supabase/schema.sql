@@ -145,13 +145,32 @@ set search_path = public
 as $$
 declare
   v_row public.drop_codes%rowtype;
+  v_trimmed text;
 begin
+  v_trimmed := trim(p_code);
+  if v_trimmed = '' then
+    return json_build_object('success', false, 'error', 'not_found');
+  end if;
+
   select * into v_row
     from public.drop_codes
-   where lower(code) = lower(trim(p_code))
+   where lower(code) = lower(v_trimmed)
    order by used asc nulls first, created_at asc, id asc
    limit 1
    for update;
+
+  if not found then
+    insert into public.drop_codes (code, used)
+    values (v_trimmed, false)
+    on conflict (code) do nothing;
+
+    select * into v_row
+      from public.drop_codes
+     where lower(code) = lower(v_trimmed)
+     order by used asc nulls first, created_at asc, id asc
+     limit 1
+     for update;
+  end if;
 
   if not found then
     return json_build_object('success', false, 'error', 'not_found');
@@ -298,7 +317,7 @@ grant execute on function public.code_status(text) to anon;
 
 -- Seed active codes (add any community codes here; each can be used once, ever).
 insert into public.drop_codes (code)
-values ('DROP-M-1'), ('KOKOS-LOSINKA'), ('MMM-MMM1'), ('MOSIKO-DROP-1001'), ('RONEN-DROP-1')
+values ('DROP-M-1'), ('KOKOS-LOSINKA'), ('MMM-MMM1'), ('MOSIKO-DROP-1001'), ('RONEN-DROP-1'), ('ADIR-DROP-2026')
 on conflict (code) do nothing;
 
 -- Reset/activate a specific code back to a fresh, unused state.

@@ -46,14 +46,16 @@ export async function redeemCode(rawInput: string): Promise<RedeemResult> {
       body: JSON.stringify({ p_code: value }),
     });
     if (res.ok) {
-      const data = (await res.json().catch(() => ({}))) as {
+      const rawData = await res.json().catch(() => ({}));
+      const data = Array.isArray(rawData) ? rawData[0] : rawData;
+      const parsed = (data ?? {}) as {
         success?: boolean;
         error?: "not_found" | "already_redeemed" | string;
       };
-      if (data.success === true) {
+      if (parsed.success === true) {
         return { status: "ok" };
       }
-      if (data.error === "already_redeemed") {
+      if (parsed.error === "already_redeemed") {
         return { status: "already_used" };
       }
       // not_found or any other server answer: code does not exist (or state
