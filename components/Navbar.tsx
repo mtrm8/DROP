@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { MessageCircle } from "lucide-react";
 import { TrophyIcon } from "./drop/sportsIcons";
+import { WHATSAPP_URL } from "./drop/community";
 
 export default function Navbar() {
   return (
@@ -25,12 +27,15 @@ export default function Navbar() {
 
         {/* Centered nav */}
         <nav className="hidden md:flex items-center gap-1 text-sm font-medium">
-          <Link
-            href="/drop"
-            className="px-3.5 py-2 rounded-lg text-amber-400 bg-amber-400/[0.08] border border-amber-400/20 hover:bg-amber-400/[0.14] transition"
+          <a
+            href={WHATSAPP_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-3.5 py-2 rounded-lg text-[#25D366] bg-[#25D366]/[0.08] border border-[#25D366]/25 hover:bg-[#25D366]/[0.16] transition flex items-center gap-2"
           >
-            הדרוף היומי
-          </Link>
+            <MessageCircle size={16} className="shrink-0" />
+            הצטרפו לקהילה בוואטסאפ
+          </a>
         </nav>
       </div>
     </header>

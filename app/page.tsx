@@ -1,34 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { motion, useScroll, useTransform } from "framer-motion";
+import { motion, useMotionTemplate, useMotionValue, useScroll, useSpring, useTransform } from "framer-motion";
 import { ArrowLeft, ChevronDown, ShieldCheck, Sparkles } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import CommunityFooter from "@/components/CommunityFooter";
-
-function Chip({ size = 44 }: { size?: number }) {
-  return (
-    <div
-      className="relative rounded-full"
-      style={{
-        width: size,
-        height: size,
-        background: "radial-gradient(circle at 34% 30%, #fde68a, #f59e0b 44%, #92400e 80%)",
-        boxShadow:
-          "0 8px 20px rgba(0,0,0,0.55), inset 0 0 0 2px rgba(255,255,255,0.35), inset 0 -3px 7px rgba(0,0,0,0.4)",
-      }}
-    >
-      <div
-        className="absolute rounded-full"
-        style={{ inset: size * 0.16, border: `${Math.max(1, size * 0.03)}px dashed rgba(255,255,255,0.55)` }}
-      />
-      <div
-        className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/30"
-        style={{ width: size * 0.34, height: size * 0.34, background: "rgba(7,9,15,0.6)" }}
-      />
-    </div>
-  );
-}
 
 function FloatingCard({ w, h, rot }: { w: number; h: number; rot: number }) {
   return (
@@ -48,18 +24,74 @@ function FloatingCard({ w, h, rot }: { w: number; h: number; rot: number }) {
   );
 }
 
-const CHIPS = [
-  { left: "4%", top: "16%", size: 44, fall: 480, dur: 11, delay: 0, sway: 26, spin: 220 },
-  { left: "16%", top: "42%", size: 30, fall: 380, dur: 13, delay: 1.2, sway: -20, spin: -200 },
-  { left: "30%", top: "9%", size: 36, fall: 540, dur: 12, delay: 2.1, sway: 16, spin: 150 },
-  { left: "47%", top: "28%", size: 26, fall: 430, dur: 14, delay: 0.6, sway: -14, spin: -160 },
-  { left: "63%", top: "54%", size: 40, fall: 350, dur: 12.5, delay: 3, sway: 22, spin: 190 },
-  { left: "76%", top: "13%", size: 32, fall: 520, dur: 11.5, delay: 1.8, sway: -18, spin: -140 },
-  { left: "88%", top: "36%", size: 28, fall: 410, dur: 13.5, delay: 0.3, sway: 14, spin: 170 },
-  { left: "10%", top: "64%", size: 38, fall: 310, dur: 12, delay: 2.8, sway: 20, spin: -210 },
-  { left: "55%", top: "74%", size: 24, fall: 270, dur: 14, delay: 1.4, sway: -10, spin: 120 },
-  { left: "90%", top: "68%", size: 34, fall: 330, dur: 11.8, delay: 0.9, sway: 12, spin: 180 },
-];
+function HeroCard3D() {
+  const rotateX = useSpring(useMotionValue(0), { stiffness: 260, damping: 22, mass: 0.7 });
+  const rotateY = useSpring(useMotionValue(0), { stiffness: 260, damping: 22, mass: 0.7 });
+  const glowX = useMotionValue(50);
+  const glowY = useMotionValue(50);
+  const glow = useMotionTemplate`radial-gradient(circle at ${glowX}% ${glowY}%, rgba(251,191,36,0.22), rgba(251,191,36,0.05) 45%, transparent 70%)`;
+
+  function onPointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const px = (e.clientX - rect.left) / rect.width;
+    const py = (e.clientY - rect.top) / rect.height;
+    rotateY.set((px - 0.5) * 72);
+    rotateX.set((0.5 - py) * 72);
+    glowX.set(px * 100);
+    glowY.set(py * 100);
+  }
+
+  function onPointerLeave() {
+    rotateX.set(0);
+    rotateY.set(0);
+  }
+
+  return (
+    <motion.div
+      className="relative"
+      animate={{ y: [0, -12, 0] }}
+      transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
+    >
+      <div className="[perspective:1400px]">
+        <motion.div
+          role="button"
+          aria-label="קלף MOSHA תלת־ממדי — גררו לסיבוב"
+          onPointerMove={onPointerMove}
+          onPointerLeave={onPointerLeave}
+          className="relative touch-none select-none outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#05060a]"
+          style={{ transformStyle: "preserve-3d", rotateX, rotateY, cursor: "grab" }}
+          whileTap={{ cursor: "grabbing" }}
+        >
+          <div
+            className="relative h-[300px] w-[212px] sm:h-[390px] sm:w-[276px] overflow-hidden rounded-2xl border border-amber-400/45 bg-gradient-to-br from-[#12141c] via-[#0a0c12] to-black shadow-[0_30px_70px_-20px_rgba(0,0,0,0.85),0_0_40px_rgba(228,174,57,0.14)]"
+            style={{ transform: "translateZ(40px)" }}
+          >
+            <div className="absolute inset-0" style={{ background: "radial-gradient(120% 90% at 50% 0%, rgba(228,174,57,0.12), transparent 60%)" }} />
+            <motion.div className="pointer-events-none absolute inset-0" style={{ backgroundImage: glow }} />
+
+            <div className="absolute inset-2 rounded-xl border border-amber-400/25" />
+
+            <span className="absolute left-3.5 top-3 text-xl font-bold text-amber-300/85 sm:text-2xl">K</span>
+            <span className="absolute right-3.5 bottom-3 rotate-180 text-xl font-bold text-amber-300/85 sm:text-2xl">K</span>
+
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+              <span className="font-serif text-7xl font-black sm:text-8xl" style={{ textShadow: "0 0 34px rgba(228,174,57,0.55)", color: "#fbbf24" }}>
+                M
+              </span>
+              <span className="text-xl font-black uppercase tracking-[0.34em] text-white sm:text-2xl">MOSHA</span>
+              <span className="rounded-full border border-amber-400/35 bg-amber-400/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.3em] text-amber-300 sm:text-xs">
+                Sports · Poker
+              </span>
+              <span className="mt-1.5 text-[9px] uppercase tracking-[0.3em] text-slate-500">Community Edition</span>
+            </div>
+
+            <div className="pointer-events-none absolute inset-0 rounded-2xl" style={{ background: "linear-gradient(112deg, transparent 38%, rgba(255,255,255,0.09) 46%, transparent 56%)" }} />
+          </div>
+        </motion.div>
+      </div>
+    </motion.div>
+  );
+}
 
 const CARDS = [
   { left: "6%", top: "24%", w: 54, h: 76, rot: -18, dur: 16, delay: 0 },
@@ -78,17 +110,6 @@ function FallingField() {
       className="pointer-events-none absolute inset-0 z-0 overflow-hidden"
       style={{ y: parallax }}
     >
-      {CHIPS.map((c, i) => (
-        <motion.div
-          key={`chip-${i}`}
-          className="absolute"
-          style={{ left: c.left, top: c.top }}
-          animate={{ y: [0, c.fall], x: [0, c.sway, 0], rotate: [0, c.spin], opacity: [0, 1, 1, 0] }}
-          transition={{ duration: c.dur, delay: c.delay, repeat: Infinity, ease: "easeInOut" }}
-        >
-          <Chip size={c.size} />
-        </motion.div>
-      ))}
       {CARDS.map((c, i) => (
         <motion.div
           key={`card-${i}`}
@@ -122,9 +143,11 @@ export default function LandingPage() {
           initial={{ opacity: 0, y: 26 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, ease: "easeOut" }}
-          className="relative z-10"
+          className="relative z-10 flex flex-col items-center"
         >
-          <span className="inline-flex items-center gap-2 rounded-full border border-amber-400/25 bg-amber-400/[0.08] px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.28em] text-amber-300">
+          <HeroCard3D />
+
+          <span className="mt-8 inline-flex items-center gap-2 rounded-full border border-amber-400/25 bg-amber-400/[0.08] px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.28em] text-amber-300">
             <ShieldCheck size={12} />
             Sports · Poker · Community
           </span>
