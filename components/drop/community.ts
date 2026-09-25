@@ -1,10 +1,10 @@
-export const COMMUNITY_CODES = ["DROP-M-1", "KOKOS-LOSINKA"];
+export const COMMUNITY_CODES = ["DROP-M-1", "KOKOS-LOSINKA", "MMM-MMM1"];
 
 // Development/test bypass: these codes are validated purely client-side so they
 // work instantly out-of-the-box (no Supabase SQL reset needed). After a success
 // they burn locally and reuse shows "already used"; appending ?resetcode=<CODE>
 // to the drop page URL clears the local record and makes them active again.
-export const TEST_CODES = ["KOKOS-LOSINKA"];
+export const TEST_CODES = ["KOKOS-LOSINKA", "MMM-MMM1"];
 
 export const WHATSAPP_URL = "https://chat.whatsapp.com/L4vkNyD9fOFIe1PN5Gp1aq";
 

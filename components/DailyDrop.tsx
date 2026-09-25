@@ -280,7 +280,7 @@ export default function DailyDrop() {
                           </p>
                           {errorKind === "already_used" && isTestCode(code) && (
                             <p className="mt-1 text-[10px] text-slate-500" dir="ltr">
-                              dev: add ?resetcode=KOKOS-LOSINKA to the URL to reactivate
+                              dev: add ?resetcode={code.trim().toUpperCase()} to the URL to reactivate
                             </p>
                           )}
                         </div>
