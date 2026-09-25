@@ -26,8 +26,9 @@ export const ITEM_EMOJI: Record<ItemIconName, string> = {
 };
 
 // Money tiers — the glyph a cash prize wears is derived from its amount, so the
-// card always looks richer as the amount climbs: notes -> cash bag -> gem -> fire.
+// card always looks richer as the amount climbs: notes -> cash bag -> gem -> fire -> crown.
 const MONEY_TIERS: { min: number; emoji: string; icon: ItemIconName }[] = [
+  { min: 1000, emoji: "👑", icon: "king" },
   { min: 500, emoji: "🔥", icon: "fire" },
   { min: 200, emoji: "💎", icon: "gem" },
   { min: 50, emoji: "💰", icon: "stack" },
@@ -119,8 +120,8 @@ export interface BoxItem {
 // Cash prize pool — mirrors public.drop_prizes in Supabase, where the actual
 // weighted roll happens server-side (roll_prize). Keep ids/weights/odds in sync
 // with the SQL pool seed. Weights sum to 10000, so `chance` is the exact draw
-// probability: the two low tiers carry the everyday hit, and everything above
-// 100 ₪ is a genuine long shot (200 ₪ ~1 in 30, 500 ₪ ~1 in 250 drops).
+// probability: high-tier and rare prizes are genuinely hard to hit (exponentially
+// rarer drop rates).
 export const BOX_ITEMS: BoxItem[] = [
   {
     id: "cash-20",
@@ -129,8 +130,8 @@ export const BOX_ITEMS: BoxItem[] = [
     icon: "chip",
     emoji: "💵",
     amount: 20,
-    chance: "42%",
-    weight: 4200,
+    chance: "39%",
+    weight: 3900,
     rarity: "common",
   },
   {
@@ -140,8 +141,8 @@ export const BOX_ITEMS: BoxItem[] = [
     icon: "chip",
     emoji: "💵",
     amount: 30,
-    chance: "28%",
-    weight: 2800,
+    chance: "25%",
+    weight: 2500,
     rarity: "common",
   },
   {
@@ -151,8 +152,8 @@ export const BOX_ITEMS: BoxItem[] = [
     icon: "stack",
     emoji: "💰",
     amount: 50,
-    chance: "17%",
-    weight: 1700,
+    chance: "16%",
+    weight: 1600,
     rarity: "uncommon",
   },
   {
@@ -162,8 +163,8 @@ export const BOX_ITEMS: BoxItem[] = [
     icon: "stack",
     emoji: "💰",
     amount: 100,
-    chance: "8%",
-    weight: 800,
+    chance: "10%",
+    weight: 1000,
     rarity: "rare",
   },
   {
@@ -173,8 +174,8 @@ export const BOX_ITEMS: BoxItem[] = [
     icon: "gem",
     emoji: "💎",
     amount: 200,
-    chance: "3.3%",
-    weight: 330,
+    chance: "5%",
+    weight: 500,
     rarity: "classified",
   },
   {
@@ -184,8 +185,8 @@ export const BOX_ITEMS: BoxItem[] = [
     icon: "gem",
     emoji: "💎",
     amount: 350,
-    chance: "1.3%",
-    weight: 130,
+    chance: "2%",
+    weight: 200,
     rarity: "covert",
   },
   {
@@ -195,8 +196,19 @@ export const BOX_ITEMS: BoxItem[] = [
     icon: "fire",
     emoji: "🔥",
     amount: 500,
-    chance: "0.4%",
-    weight: 40,
+    chance: "0.8%",
+    weight: 80,
+    rarity: "special",
+  },
+  {
+    id: "cash-1000",
+    name: "1000 ₪",
+    category: "cash",
+    icon: "king",
+    emoji: "👑",
+    amount: 1000,
+    chance: "0.2%",
+    weight: 20,
     rarity: "special",
   },
 ];

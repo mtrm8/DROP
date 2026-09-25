@@ -65,16 +65,17 @@ create table if not exists public.drop_prizes (
 
 alter table public.drop_prizes enable row level security;
 
--- Rarity curve: the everyday tiers carry the volume, and every step up is an
--- order-of-magnitude drop — 200 ₪ lands ~1 in 30 drops, 500 ₪ ~1 in 250.
+-- Rarity curve: the everyday tiers carry the volume, and high tiers are
+-- genuinely hard to hit (exponentially rarer drop rates).
 insert into public.drop_prizes (id, name, amount, chance, weight, rarity, icon) values
-  ('cash-20',  '20 ₪',   20,  '42%',   4200, 'common',     '💵'),
-  ('cash-30',  '30 ₪',   30,  '28%',   2800, 'common',     '💵'),
-  ('cash-50',  '50 ₪',   50,  '17%',   1700, 'uncommon',   '💰'),
-  ('cash-100', '100 ₪', 100,  '8%',     800, 'rare',       '💰'),
-  ('cash-200', '200 ₪', 200,  '3.3%',   330, 'classified', '💎'),
-  ('cash-350', '350 ₪', 350,  '1.3%',   130, 'covert',     '💎'),
-  ('cash-500', '500 ₪', 500,  '0.4%',    40, 'special',    '🔥')
+  ('cash-20',  '20 ₪',   20,  '39%',   3900, 'common',     '💵'),
+  ('cash-30',  '30 ₪',   30,  '25%',   2500, 'common',     '💵'),
+  ('cash-50',  '50 ₪',   50,  '16%',   1600, 'uncommon',   '💰'),
+  ('cash-100', '100 ₪', 100,  '10%',   1000, 'rare',       '💰'),
+  ('cash-200', '200 ₪', 200,  '5%',     500, 'classified', '💎'),
+  ('cash-350', '350 ₪', 350,  '2%',     200, 'covert',     '💎'),
+  ('cash-500', '500 ₪', 500,  '0.8%',    80, 'special',    '🔥'),
+  ('cash-1000','1000 ₪',1000, '0.2%',    20, 'special',    '👑')
 on conflict (id) do update set
   name = excluded.name,
   amount = excluded.amount,

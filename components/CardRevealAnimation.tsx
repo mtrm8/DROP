@@ -15,11 +15,11 @@ const SELECT_COUNT = 5;
 // edge. The selection grid gets its own (shorter) height budget so the cards
 // can be as large as the screen allows instead of being shrunk to fit room the
 // selection view never uses.
-const STAGE_W = 620;
-const GRID_H = 660;
-const MACHINE_H = 1060; /* 300 entry headroom + 760 content */
-const ENV_W = 480; /* covers the widest sideways fan-out */
-const ENTRY_PAD = 300;
+const STAGE_W = 820;
+const GRID_H = 780;
+const MACHINE_H = 1240; /* 340 entry headroom + 900 content */
+const ENV_W = 580; /* covers the widest sideways fan-out */
+const ENTRY_PAD = 340;
 
 type Phase = "grid" | "collect" | "revealSelection" | "shuffle" | "suspense" | "reveal" | "done";
 
@@ -110,23 +110,23 @@ function CardFront({ item, compact = false }: { item: BoxItem; compact?: boolean
       }}
     >
       <div className="absolute inset-x-3 top-0 h-px" style={{ background: `linear-gradient(90deg, transparent, ${rarity.color}, transparent)` }} />
-      <div className="flex h-full flex-col items-center justify-between px-2 py-2">
-        <span className="rounded-full px-2.5 py-px text-[10px] font-bold" style={{ background: rarity.bg, color: rarity.color, border: `1px solid ${rarity.border}` }}>
+      <div className="flex h-full flex-col items-center justify-between px-2 py-2.5">
+        <span className="rounded-full px-3 py-0.5 text-[11px] font-extrabold" style={{ background: rarity.bg, color: rarity.color, border: `1px solid ${rarity.border}` }}>
           {item.chance}
         </span>
         <div
-          className={`flex items-center justify-center rounded-full border ${compact ? "h-11 w-11" : "h-20 w-20"}`}
-          style={{ borderColor: rarity.color, background: "radial-gradient(circle at 35% 28%, rgba(255,255,255,0.1), rgba(15,17,24,0.97) 78%)", boxShadow: `0 0 26px ${rarity.glow}` }}
+          className={`flex items-center justify-center rounded-full border ${compact ? "h-13 w-13" : "h-22 w-22"}`}
+          style={{ borderColor: rarity.color, background: "radial-gradient(circle at 35% 28%, rgba(255,255,255,0.12), rgba(15,17,24,0.97) 78%)", boxShadow: `0 0 30px ${rarity.glow}` }}
         >
           <span
-            className="leading-none drop-shadow-[0_0_10px_rgba(255,214,102,0.35)]"
-            style={{ fontSize: compact ? 22 : 38 }}
+            className="leading-none drop-shadow-[0_0_12px_rgba(255,214,102,0.4)]"
+            style={{ fontSize: compact ? 26 : 44 }}
             aria-hidden="true"
           >
             {item.emoji}
           </span>
         </div>
-        <div className={`line-clamp-2 font-extrabold leading-tight ${compact ? "text-[10px]" : "text-[13px]"}`} style={{ color: rarity.color, textShadow: `0 0 12px ${rarity.glow}` }}>
+        <div className={`line-clamp-2 font-black leading-tight ${compact ? "text-xs" : "text-sm"}`} style={{ color: rarity.color, textShadow: `0 0 14px ${rarity.glow}` }}>
           {item.name}
         </div>
       </div>
@@ -313,7 +313,7 @@ export function CardRevealAnimation({ onFinished, onCancel, prize }: CardRevealP
                 </div>
               </div>
 
-              <div className="grid w-full max-w-[620px] grid-cols-5 place-items-center gap-2.5 sm:gap-3.5">
+              <div className="grid w-full max-w-[780px] grid-cols-5 place-items-center gap-3 sm:gap-4">
                 {cards.map((c) => {
                   const picked = c.selected;
                   return (
@@ -381,7 +381,7 @@ export function CardRevealAnimation({ onFinished, onCancel, prize }: CardRevealP
               transition={{ duration: 0.4 }}
             >
               {/* drop machine */}
-              <div className="relative h-[470px] w-[min(90vw,360px)]">
+              <div className="relative h-[530px] w-[min(94vw,410px)]">
                 {/* ambient glow */}
                 <motion.div
                   className="pointer-events-none absolute -inset-4 rounded-[40px]"
@@ -472,7 +472,7 @@ export function CardRevealAnimation({ onFinished, onCancel, prize }: CardRevealP
                     const tossRot = (i % 2 === 0 ? -1 : 1) * (16 + i * 4);
                     const delay = i * 0.13;
                     return (
-                      <motion.div key={c.id} className="absolute left-1/2 top-1/2 h-[150px] w-[112px] -ml-14 -mt-[75px] [transform-style:preserve-3d]" style={{ zIndex: isWinner ? 40 : 5, willChange: "transform" }}>
+                      <motion.div key={c.id} className="absolute left-1/2 top-1/2 h-[195px] w-[140px] -ml-[70px] -mt-[97px] [transform-style:preserve-3d]" style={{ zIndex: isWinner ? 40 : 5, willChange: "transform" }}>
                         <motion.div
                           className="relative h-full w-full [transform-style:preserve-3d]"
                           initial={
