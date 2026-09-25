@@ -151,7 +151,7 @@ export function CardRevealAnimation({ onFinished, onCancel }: CardRevealProps) {
     const compute = () => {
       const vw = window.innerWidth;
       const vh = window.innerHeight;
-      const scale = Math.min(1, (vh - 78) / 760, (vw - 24) / 360);
+      const scale = Math.min(1, (vh - 78) / 760, (vw - 24) / 380);
       setFit(Math.max(0.5, scale));
     };
     compute();
@@ -219,7 +219,7 @@ export function CardRevealAnimation({ onFinished, onCancel }: CardRevealProps) {
         {onCancel && (
           <button
             onClick={onCancel}
-            className="rounded-xl border border-white/10 bg-white/[0.03] p-2 text-slate-300 transition hover:border-amber-400/40 hover:text-amber-200"
+            className="rounded-xl border border-white/10 bg-white/[0.03] p-2 text-slate-300 transition outline-none hover:border-amber-400/40 hover:text-amber-200 focus-visible:ring-2 focus-visible:ring-amber-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#05060a]"
             aria-label="סגירה"
           >
             <X size={18} />
@@ -230,7 +230,7 @@ export function CardRevealAnimation({ onFinished, onCancel }: CardRevealProps) {
       <div className="relative z-10 flex min-h-0 flex-1 items-center justify-center overflow-hidden px-3">
         <div
           className="flex flex-col items-center justify-center"
-          style={{ height: 760 * fit, width: 360 * fit, transform: `scale(${fit})`, transformOrigin: "center center" }}
+          style={{ height: 760 * fit, width: 380 * fit, transform: `scale(${fit})`, transformOrigin: "center center" }}
         >
         <AnimatePresence mode="wait">
           {phase === "grid" ? (
@@ -269,7 +269,7 @@ export function CardRevealAnimation({ onFinished, onCancel }: CardRevealProps) {
                 </div>
               </div>
 
-              <div className="grid grid-cols-5 place-items-center gap-3 sm:gap-5">
+              <div className="grid w-full max-w-[380px] grid-cols-5 place-items-center gap-2 sm:gap-2.5">
                 {cards.map((c) => {
                   const picked = c.selected;
                   return (
@@ -278,7 +278,7 @@ export function CardRevealAnimation({ onFinished, onCancel }: CardRevealProps) {
                       onClick={() => toggle(c.id)}
                       whileHover={picked ? undefined : { y: -7, scale: 1.05 }}
                       transition={{ type: "spring", stiffness: 400, damping: 22 }}
-                      className={`relative h-24 w-16 select-none sm:h-32 sm:w-[88px] ${picked ? "cursor-default" : "cursor-pointer"}`}
+                      className={`relative h-24 w-16 select-none sm:h-[100px] sm:w-[66px] ${picked ? "cursor-default" : "cursor-pointer"}`}
                       role="button"
                       aria-pressed={picked}
                     >
@@ -308,7 +308,7 @@ export function CardRevealAnimation({ onFinished, onCancel }: CardRevealProps) {
               <button
                 onClick={startMachine}
                 disabled={!isComplete}
-                className={`group relative mt-8 mb-4 flex w-full max-w-sm items-center justify-center gap-2.5 rounded-xl py-3.5 text-base font-black transition ${
+                className={`group relative mt-8 mb-4 flex w-full max-w-sm items-center justify-center gap-2.5 rounded-xl py-3.5 text-base font-black transition outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#05060a] ${
                   isComplete
                     ? "bg-gradient-to-br from-amber-300 via-amber-400 to-amber-500 text-slate-950 shadow-[0_0_35px_rgba(245,158,11,0.35)] hover:brightness-110 active:scale-[0.99]"
                     : "cursor-not-allowed border border-white/10 bg-white/[0.03] text-slate-500"
@@ -556,7 +556,7 @@ export function CardRevealAnimation({ onFinished, onCancel }: CardRevealProps) {
                     <button
                       onClick={() => onFinished(winnerCard.item)}
                       disabled={!ready}
-                      className={`mt-3 flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-base font-black transition ${
+                      className={`mt-3 flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-base font-black transition outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0c13] ${
                         ready
                           ? "bg-gradient-to-br from-amber-300 via-amber-400 to-amber-500 text-slate-950 shadow-[0_0_32px_rgba(245,158,11,0.4)] hover:brightness-110 active:scale-[0.99]"
                           : "cursor-not-allowed border border-white/10 bg-white/[0.04] text-slate-500"

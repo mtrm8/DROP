@@ -83,15 +83,15 @@ export default function DailyDrop() {
 
   return (
     <>
-      <section id="drop" className="px-4 lg:px-8 max-w-2xl mx-auto w-full pt-12 pb-4">
+      <section id="drop" className="px-4 lg:px-8 max-w-2xl mx-auto w-full pt-8 pb-4 sm:pt-12">
         <div className="premium-panel relative overflow-hidden rounded-3xl">
         {/* Restrained luxury ambience */}
         <div className="pointer-events-none absolute -top-28 left-1/2 -translate-x-1/2 w-[420px] h-48 rounded-full bg-amber-400/[0.06] blur-3xl" />
         <div className="pointer-events-none absolute -bottom-24 -right-16 w-64 h-64 rounded-full bg-white/[0.02] blur-3xl" />
 
-        <div className="relative px-6 sm:px-10 py-10 flex flex-col items-center text-center">
+        <div className="relative px-6 sm:px-10 py-8 sm:py-10 flex flex-col items-center text-center">
           {/* Badge + status */}
-          <div className="flex items-center gap-2.5 mb-8">
+          <div className="flex items-center gap-2.5 mb-6 sm:mb-8">
             <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-amber-400/[0.1] text-amber-400 border border-amber-400/25 uppercase tracking-[0.22em]">
               Daily Sports &amp; Poker Drop
             </span>
@@ -131,10 +131,10 @@ export default function DailyDrop() {
             <CardEmblem />
           </div>
 
-          <h2 className="mt-10 text-xl sm:text-2xl font-black text-white tracking-tight leading-snug">
+          <h2 className="mt-8 sm:mt-10 text-xl sm:text-2xl font-black text-white tracking-tight leading-snug">
             הדרוף היומי של קהילת הכדורגל והפוקר
           </h2>
-          <p className="text-xs text-slate-400 mt-2 mb-7 max-w-sm leading-relaxed">
+          <p className="text-xs text-slate-400 mt-2 mb-6 sm:mb-7 max-w-sm leading-relaxed">
             {unlocked
               ? "בחרו 5 קלפים — המכונה תערבב את החפיסה ותחשוף את הפרס, שיופיע בהפקדה הבאה."
               : "הדרוף פתוח לחברי הקהילה בלבד — הזינו את קוד הגישה שקיבלתם."}
@@ -202,7 +202,7 @@ export default function DailyDrop() {
                   <button
                     type="submit"
                     disabled={unlocking}
-                    className={`group relative w-full py-3.5 rounded-xl text-base font-black text-slate-950 flex items-center justify-center gap-2.5 transition ${
+                    className={`group relative w-full py-3.5 rounded-xl text-base font-black text-slate-950 flex items-center justify-center gap-2.5 transition outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0c13] ${
                       unlocking
                         ? "bg-gradient-to-br from-amber-300 via-amber-400 to-amber-500 shadow-[0_0_26px_rgba(245,158,11,0.3)]"
                         : "bg-gradient-to-br from-amber-300 via-amber-400 to-amber-500 hover:brightness-110 active:scale-[0.99] shadow-[0_0_35px_rgba(245,158,11,0.3)]"
@@ -246,7 +246,7 @@ export default function DailyDrop() {
               <button
                 onClick={startOpening}
                 disabled={spinLocked}
-                className={`group relative w-full max-w-md mt-5 py-4 rounded-2xl text-lg font-black flex items-center justify-center gap-2.5 transition ${
+                className={`group relative w-full max-w-md mt-5 py-4 rounded-2xl text-lg font-black flex items-center justify-center gap-2.5 transition outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0c13] ${
                   spinLocked
                     ? "cursor-not-allowed border border-white/10 bg-white/[0.03] text-slate-500"
                     : "text-slate-950 bg-gradient-to-br from-amber-300 via-amber-400 to-amber-500 hover:brightness-110 active:scale-[0.99] shadow-[0_0_35px_rgba(245,158,11,0.3)]"
