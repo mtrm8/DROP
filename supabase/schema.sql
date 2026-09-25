@@ -150,7 +150,9 @@ begin
   -- The stored prize counts only if it belongs to the CURRENT redemption. If a
   -- code was reset (used_at bumped on the next redeem) and re-redeemed, the old
   -- prize is stale and gets rolled fresh — so "reset the code" really resets
-  -- the whole drop instead of replaying the previous amount.
+  -- the whole drop instead of replaying the previous amount. A prize_id that no
+  -- longer exists in the pool is treated as stale too, so this can never
+  -- return a row of NULLs.
   if v_code.prize_id is not null
      and v_code.prize_rolled_at is not null
      and v_code.used_at is not null
@@ -158,10 +160,12 @@ begin
     select * into v_prize
       from public.drop_prizes
      where id = v_code.prize_id;
-  else
+  end if;
+
+  if v_prize.id is null then
     select * into v_prize
       from public.drop_prizes
-     order by -ln(random()) / greatest(weight, 0.0001)
+     order by -ln(random()) / greatest(weight::double precision, 0.0001)
      limit 1;
 
     if not found then
@@ -241,9 +245,10 @@ on conflict (code) do nothing;
 
 -- Reset/activate a specific code back to a fresh, unused state.
 -- Safe to re-run as often as needed: inserts the row if missing, or clears the
--- used flag if the code was previously redeemed. Point it at the code you want
--- to hand out or test right now.
+-- used flag AND any previous prize if the code was already redeemed — so the
+-- next test is a completely fresh drop. Point it at the code you want to hand
+-- out or test right now.
 insert into public.drop_codes (code)
 values ('RONEN-DROP-1')
 on conflict (code) do update
-  set used = false, used_at = null;
+  set used = false, used_at = null, prize_id = null, prize_rolled_at = null;
