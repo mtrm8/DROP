@@ -70,31 +70,103 @@ export async function redeemCode(rawInput: string): Promise<RedeemResult> {
 export type PrizeResult =
   | { status: "ok"; prize: BoxItem } // prize decided & persisted by the server
   | { status: "empty" } // server answered cleanly: no prize on record (yet)
-  | { status: "error"; code?: string; message?: string }; // RPC missing / raised / offline
+  | {
+      status: "error";
+      code?: string;
+      message?: string;
+      missing?: boolean; // the RPC does not exist / is not callable — infra, not the code
+      refused?: boolean; // server definitively rejected this code (4xx answer)
+    };
+
+type PrizeRpcError = { code?: string; message?: string; missing?: boolean; refused?: boolean };
+
+function classify(res: { ok: boolean; status: number }, data: unknown): PrizeRpcError {
+  const err = (data ?? {}) as { code?: string; message?: string };
+  const haystack = `${err.code ?? ""} ${err.message ?? ""}`.toLowerCase();
+  const missing =
+    res.status === 404 ||
+    haystack.includes("pgrst202") ||
+    haystack.includes("42883") ||
+    haystack.includes("does not exist") ||
+    haystack.includes("could not find the function");
+  return {
+    code: err.code,
+    message: err.message,
+    missing,
+    refused: !missing && res.status >= 400 && res.status < 500,
+  };
+}
 
 type PrizeRow = {
+  // canonical contract
   prize_id?: string | null;
   prize_name?: string | null;
-  amount?: number | null;
-  chance?: string | null;
+  // legacy/compact contract used by some installs
+  id?: string | null;
+  name?: string | null;
+  amount?: number | string | null;
+  chance?: number | string | null;
   rarity?: string | null;
   icon?: string | null;
 };
 
+const RARITY_NAMES = ["common", "uncommon", "rare", "classified", "covert", "special"] as const;
+const ICON_NAMES = ["crest", "ball", "chip", "card", "stack", "king"] as const;
+const ICON_BY_EMOJI: Record<string, ItemIconName> = {
+  "👑": "crest",
+  "⚽": "ball",
+  "🪙": "chip",
+  "🃏": "card",
+  "💵": "stack",
+  "💰": "stack",
+  "💸": "stack",
+  "🤴": "king",
+};
+
+// Accepts every deployed prize-RPC flavour: {prize_id, prize_name, ...} or the
+// compact {id, name, ...}, `chance` as a number or a string, and `icon` as an
+// icon name or an emoji. A valid prize must never be discarded over cosmetics.
 function toPrize(row: PrizeRow | null | undefined): BoxItem | null {
-  if (!row || !row.prize_id || !row.prize_name || typeof row.amount !== "number") {
-    return null;
-  }
+  if (!row) return null;
+  const id = (row.prize_id ?? row.id ?? "").trim();
+  const serverName = (row.prize_name ?? row.name ?? "").trim();
+  const amount =
+    typeof row.amount === "number"
+      ? Number.isFinite(row.amount)
+        ? row.amount
+        : null
+      : typeof row.amount === "string" && row.amount.trim() !== ""
+        ? Number(row.amount.replace(/[^\d.]/g, ""))
+        : null;
+  if (!id || (amount === null && !serverName)) return null;
+
+  const rarity = (row.rarity ?? "").trim() as RarityName;
+  const iconRaw = (row.icon ?? "").trim();
+  const icon = (ICON_NAMES as readonly string[]).includes(iconRaw)
+    ? (iconRaw as ItemIconName)
+    : ICON_BY_EMOJI[iconRaw] ?? "stack";
+
   return {
-    id: row.prize_id,
-    name: row.prize_name,
+    id,
+    // the exact cash amount is what the user won — show that, not a legacy label
+    name: amount !== null ? `${amount} ₪` : serverName,
     category: "cash",
-    icon: (row.icon ?? "chip") as ItemIconName,
-    amount: row.amount,
-    chance: row.chance ?? "",
+    icon,
+    amount: amount ?? serverName,
+    chance: normalizeChance(row.chance),
     weight: 0,
-    rarity: (row.rarity ?? "common") as RarityName,
+    rarity: (RARITY_NAMES as readonly string[]).includes(rarity) ? rarity : "common",
   };
+}
+
+function normalizeChance(raw: unknown): string {
+  if (typeof raw === "number" && Number.isFinite(raw)) return `${raw}%`;
+  if (typeof raw === "string") {
+    const t = raw.trim();
+    if (!t) return "";
+    return t.includes("%") || !/^\d+(\.\d+)?$/.test(t) ? t : `${t}%`;
+  }
+  return "";
 }
 
 // A server-side FAILURE must never be reported as "no prize on record" — the
@@ -109,35 +181,54 @@ async function callPrizeRpc(
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
   if (!url || !key) return { status: "error", message: "backend_disabled" };
   const base = url.replace(/\/+$/, "");
-  try {
-    const res = await fetch(`${base}/rest/v1/rpc/${rpc}`, {
-      method: "POST",
-      // never let a proxy/browser reuse a stale code-verification answer
-      cache: "no-store",
-      headers: {
-        "Content-Type": "application/json",
-        apikey: key,
-        Authorization: `Bearer ${key}`,
-      },
-      body: JSON.stringify({ p_code: rawInput.trim() }),
-    });
-    const data = (await res.json().catch(() => null)) as
-      | PrizeRow
-      | PrizeRow[]
-      | { code?: string; message?: string }
-      | null;
-    if (!res.ok) {
-      const err = (data ?? {}) as { code?: string; message?: string };
-      return { status: "error", code: err.code, message: err.message };
+  const endpoint = `${base}/rest/v1/rpc/${rpc}`;
+  const body = JSON.stringify({ p_code: rawInput.trim() });
+  let last: PrizeResult = { status: "error", message: "network" };
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const res = await fetch(endpoint, {
+        method: "POST",
+        // never let a proxy/browser reuse a stale code-verification answer
+        cache: "no-store",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: key,
+          Authorization: `Bearer ${key}`,
+        },
+        body,
+      });
+      const data = (await res.json().catch(() => null)) as
+        | PrizeRow
+        | PrizeRow[]
+        | { code?: string; message?: string }
+        | null;
+      if (!res.ok) {
+        const err = classify(res, data);
+        // a definitive 4xx answer about the code itself is final; a missing RPC
+        // or a server hiccup is not — give it exactly one more try
+        if (!err.missing && !err.refused && attempt === 0) {
+          last = { status: "error", ...err };
+          await new Promise((r) => setTimeout(r, 500));
+          continue;
+        }
+        return { status: "error", ...err };
+      }
+      const first = Array.isArray(data) ? data[0] : (data as PrizeRow | null);
+      const prize = toPrize(first);
+      if (prize) return { status: "ok", prize };
+      if (Array.isArray(data) && data.length === 0) return { status: "empty" };
+      return { status: "error", message: "unexpected_prize_response" };
+    } catch {
+      if (attempt === 0) {
+        last = { status: "error", message: "network" };
+        await new Promise((r) => setTimeout(r, 500));
+        continue;
+      }
+      return { status: "error", message: "network" };
     }
-    const first = Array.isArray(data) ? data[0] : (data as PrizeRow | null);
-    const prize = toPrize(first);
-    if (prize) return { status: "ok", prize };
-    if (Array.isArray(data) && data.length === 0) return { status: "empty" };
-    return { status: "error", message: "unexpected_prize_response" };
-  } catch {
-    return { status: "error", message: "network" };
   }
+  return last;
 }
 
 // Asks the server to roll (or return the already-rolled) prize for a code.

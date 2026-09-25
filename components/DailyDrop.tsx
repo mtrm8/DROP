@@ -133,7 +133,9 @@ export default function DailyDrop() {
   const [unlocked, setUnlocked] = useState(false);
   const [stage, setStage] = useState<"idle" | "cinematic">("idle");
   const [code, setCode] = useState("");
-  const [errorKind, setErrorKind] = useState<null | "invalid" | "already_used" | "roll_failed" | "server_error">(null);
+  const [errorKind, setErrorKind] = useState<
+    null | "invalid" | "already_used" | "roll_failed" | "prize_missing" | "server_error"
+  >(null);
   const [unlocking, setUnlocking] = useState(false);
   const [completed, setCompleted] = useState<CompletedRecord | null>(null);
   const [prize, setPrize] = useState<BoxItem | null>(null);
@@ -220,6 +222,14 @@ export default function DailyDrop() {
       enter(rolled.prize, false);
       return;
     }
+    // The prize RPC is not installed / not callable: this is an infrastructure
+    // problem, and redeeming now would burn a perfectly good code for nothing.
+    if (rolled.status === "error" && rolled.missing) {
+      console.warn("[drop] roll_prize unavailable:", rolled.code, rolled.message);
+      settle();
+      setErrorKind("server_error");
+      return;
+    }
 
     const result = await redeemCode(value);
     if (result.status === "invalid") {
@@ -228,16 +238,17 @@ export default function DailyDrop() {
       return;
     }
     if (result.status === "already_used") {
-      // Only an explicit, clean EMPTY answer from the server proves the code is
-      // burned with nothing on record. A server-side error is reported as a
-      // temporary system failure — never mislabelled as "already used".
+      // The code state is already confirmed by redeem_code, so get_prize only
+      // decides "resume" vs "nothing on record". A definitive refusal (4xx) or
+      // a clean empty answer both mean no prize to resume — only a real
+      // infrastructure failure is reported as a temporary system error.
       const existing = await getRolledPrize(value);
       if (existing.status === "ok") {
         enter(existing.prize, true);
         return;
       }
       settle();
-      if (existing.status === "empty") {
+      if (existing.status === "empty" || (existing.status === "error" && existing.refused)) {
         setErrorKind("already_used");
         return;
       }
@@ -254,7 +265,14 @@ export default function DailyDrop() {
     }
     settle();
     if (rolled.status === "error") {
-      console.warn("[drop] roll_prize failed:", rolled.code, rolled.message);
+      console.warn("[drop] roll_prize failed:", rolled.code, rolled.message, {
+        refused: rolled.refused,
+        missing: rolled.missing,
+      });
+      // The code is now burned and the server refused to roll for it: say so
+      // plainly instead of leaving a silent dead end.
+      setErrorKind(rolled.refused ? "prize_missing" : "roll_failed");
+      return;
     }
     setErrorKind("roll_failed");
   };
@@ -462,9 +480,11 @@ export default function DailyDrop() {
                               ? "הקוד כבר נוצל — הקוד הזה כבר הופעל בעבר ולא ניתן להשתמש בו שוב"
                               : errorKind === "roll_failed"
                                 ? "תקלה זמנית במערכת הפרסים — אם כבר אימתתם את הקוד, נסו שוב (אפשר להמשיך את הדרופ)"
-                                : errorKind === "server_error"
-                                  ? "תקלה זמנית במערכת הקודים — הקוד לא נבדק, נסו שוב בעוד רגע"
-                                  : "קוד שגוי – נא לבדוק את הקוד שהתקבל"}
+                                : errorKind === "prize_missing"
+                                  ? "הקוד אומת, אך מערכת הפרסים לא החזירה פרס לאחר מכן — נסו שוב, ואם זו לא התקלה הראשונה פנו להדרופ"
+                                  : errorKind === "server_error"
+                                    ? "תקלה זמנית במערכת הקודים — הקוד לא נבדק, נסו שוב בעוד רגע"
+                                    : "קוד שגוי – נא לבדוק את הקוד שהתקבל"}
                           </p>
                         </div>
                       )}
