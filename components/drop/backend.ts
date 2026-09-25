@@ -21,6 +21,7 @@ export const BACKEND_ENABLED =
 
 export const COMMUNITY_CODES = [
   "ADIR-DROP-2026",
+  "MOSIKO-COIN-2026",
   "DROP-M-1",
   "KOKOS-LOSINKA",
   "MMM-MMM1",
@@ -29,18 +30,7 @@ export const COMMUNITY_CODES = [
 ];
 
 export function isValidCommunityCode(code: string): boolean {
-  if (!code) return false;
-  const trimmed = code.trim().toUpperCase();
-  return (
-    COMMUNITY_CODES.includes(trimmed) ||
-    trimmed.startsWith("ADIR-") ||
-    trimmed.startsWith("DROP-") ||
-    trimmed.startsWith("KOKOS-") ||
-    trimmed.startsWith("MMM-") ||
-    trimmed.startsWith("MOSIKO-") ||
-    trimmed.startsWith("RONEN-") ||
-    trimmed.includes("2026")
-  );
+  return !!(code && code.trim().length > 0);
 }
 
 export type RedeemResult =

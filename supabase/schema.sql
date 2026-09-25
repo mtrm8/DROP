@@ -336,7 +336,7 @@ grant execute on function public.drop_prize_chance(text) to anon, authenticated,
 
 -- Seed active codes (add any community codes here; each can be used once, ever).
 insert into public.drop_codes (code)
-values ('DROP-M-1'), ('KOKOS-LOSINKA'), ('MMM-MMM1'), ('MOSIKO-DROP-1001'), ('RONEN-DROP-1'), ('ADIR-DROP-2026')
+values ('DROP-M-1'), ('KOKOS-LOSINKA'), ('MMM-MMM1'), ('MOSIKO-DROP-1001'), ('RONEN-DROP-1'), ('ADIR-DROP-2026'), ('MOSIKO-COIN-2026')
 on conflict (code) do nothing;
 
 -- Reset/activate a specific code back to a fresh, unused state.
