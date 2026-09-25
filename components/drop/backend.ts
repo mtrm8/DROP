@@ -1,4 +1,4 @@
-import { isValidCode, isCodeBurned, burnCode } from "./community";
+import { isValidCode, isTestCode, isCodeBurned, burnCode } from "./community";
 
 // Server-authoritative one-time code validation via Supabase (PostgREST RPC).
 // Disabled until these are set (e.g. in .env.local, NEVER committed):
@@ -19,6 +19,16 @@ export async function redeemCode(rawInput: string): Promise<RedeemResult> {
   const value = rawInput.trim();
   if (!isValidCode(value)) {
     return { status: "invalid", mode: "client" };
+  }
+  if (isTestCode(value)) {
+    // Development bypass: validated client-side only, so it works instantly
+    // out-of-the-box without Supabase SQL. Burns locally after success; reuse
+    // shows "already used" until resetCodeBurn() clears the record.
+    if (isCodeBurned(value)) {
+      return { status: "already_used", code: value, mode: "client" };
+    }
+    burnCode(value);
+    return { status: "ok", mode: "client" };
   }
   // Single-use guard runs even before the network: a code accepted in fallback
   // mode is burned locally, so reusing it in a loop fails instantly.

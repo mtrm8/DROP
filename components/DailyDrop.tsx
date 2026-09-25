@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { KeyRound, Lock, Sparkles } from "lucide-react";
 import { CardRevealAnimation } from "./CardRevealAnimation";
 import { redeemCode } from "./drop/backend";
+import { isTestCode, resetCodeBurn } from "./drop/community";
 
 function CardEmblem() {
   return (
@@ -38,8 +39,19 @@ export default function DailyDrop() {
   const [unlocked, setUnlocked] = useState(false);
   const [stage, setStage] = useState<"idle" | "cinematic">("idle");
   const [code, setCode] = useState("");
-  const [codeError, setCodeError] = useState(false);
+  const [errorKind, setErrorKind] = useState<null | "invalid" | "already_used">(null);
   const [unlocking, setUnlocking] = useState(false);
+
+  // Dev/test bypass: ?resetcode=KOKOS-LOSINKA (or ?reset=all) clears the local
+  // burn record so a test code is active again without any Supabase SQL.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const target = (params.get("resetcode") ?? params.get("reset") ?? "").trim().toUpperCase();
+    if (target) {
+      resetCodeBurn(target === "ALL" ? undefined : target);
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []);
 
   const startOpening = () => {
     setStage("cinematic");
@@ -53,12 +65,16 @@ export default function DailyDrop() {
     e.preventDefault();
     if (unlocking) return;
     const value = code.trim();
-    setCodeError(false);
+    setErrorKind(null);
     setUnlocking(true);
     const result = await redeemCode(value);
     setUnlocking(false);
-    if (result.status === "invalid" || result.status === "already_used") {
-      setCodeError(true);
+    if (result.status === "invalid") {
+      setErrorKind("invalid");
+      return;
+    }
+    if (result.status === "already_used") {
+      setErrorKind("already_used");
       return;
     }
     setUnlocked(true);
@@ -207,7 +223,7 @@ export default function DailyDrop() {
                     </label>
                     <div
                       className={`flex items-center gap-2 rounded-xl border bg-white/[0.03] transition ${
-                        codeError
+                        errorKind
                           ? "border-red-500/60 animate-shake"
                           : unlocking
                             ? "border-amber-400/40"
@@ -223,7 +239,7 @@ export default function DailyDrop() {
                         value={code}
                         onChange={(e) => {
                           setCode(e.target.value);
-                          setCodeError(false);
+                          setErrorKind(null);
                           setUnlocked(false);
                         }}
                         autoComplete="off"
@@ -255,10 +271,19 @@ export default function DailyDrop() {
                         )}
                       </button>
 
-                      {codeError && (
-                        <p className="text-[11px] font-bold text-red-400 mt-2 animate-shake">
-                          קוד שגוי — נא לבדוק את הקוד שהתקבל
-                        </p>
+                      {errorKind && (
+                        <div className="mt-2 animate-shake">
+                          <p className="text-[11px] font-bold text-red-400">
+                            {errorKind === "already_used"
+                              ? "הקוד כבר נוצל — הקוד הזה כבר הופעל בעבר ולא ניתן להשתמש בו שוב"
+                              : "קוד שגוי — נא לבדוק את הקוד שהתקבל"}
+                          </p>
+                          {errorKind === "already_used" && isTestCode(code) && (
+                            <p className="mt-1 text-[10px] text-slate-500" dir="ltr">
+                              dev: add ?resetcode=KOKOS-LOSINKA to the URL to reactivate
+                            </p>
+                          )}
+                        </div>
                       )}
 
                       <p className="flex items-center justify-center gap-1.5 text-[11px] text-slate-500 mt-3">
