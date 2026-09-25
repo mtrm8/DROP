@@ -243,6 +243,58 @@ async function callPrizeRpc(
   return last;
 }
 
+export type VerifyResult =
+  | { status: "ok"; prize: BoxItem; resumed: boolean }
+  | { status: "already_used" }
+  | { status: "invalid" };
+
+export async function verifyAndRollDrop(rawInput: string): Promise<VerifyResult> {
+  const value = rawInput.trim();
+  if (!BACKEND_ENABLED) {
+    return { status: "invalid" };
+  }
+  const base = (process.env.NEXT_PUBLIC_SUPABASE_URL as string).replace(/\/+$/, "");
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string;
+  try {
+    const res = await fetch(`${base}/rest/v1/rpc/verify_and_roll_drop`, {
+      method: "POST",
+      cache: "no-store",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: key,
+        Authorization: `Bearer ${key}`,
+      },
+      body: JSON.stringify({ p_code: value }),
+    });
+    if (res.ok) {
+      const rawData = await res.json().catch(() => null);
+      const data = Array.isArray(rawData) ? rawData[0] : rawData;
+      if (!data) return { status: "invalid" };
+      if (data.success === true && data.prize) {
+        const prizeRow = data.prize;
+        const prize = toPrize({
+          prize_id: prizeRow.id ?? prizeRow.prize_id,
+          prize_name: prizeRow.name ?? prizeRow.prize_name,
+          amount: prizeRow.amount,
+          chance: prizeRow.chance,
+          rarity: prizeRow.rarity,
+          icon: prizeRow.icon,
+        });
+        if (prize) {
+          return { status: "ok", prize, resumed: !!data.resumed };
+        }
+      }
+      if (data.status === "already_used" || data.error === "already_redeemed") {
+        return { status: "already_used" };
+      }
+      return { status: "invalid" };
+    }
+    return { status: "invalid" };
+  } catch {
+    return { status: "invalid" };
+  }
+}
+
 // Asks the server to roll (or return the already-rolled) prize for a code.
 // Safe to call first: on a redeemed-but-unrolled code it completes the roll
 // (self-healing), and on a fresh code the server either rolls it outright or
