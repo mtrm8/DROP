@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Atom, KeyRound, Lock, Sparkles } from "lucide-react";
 import { CardRevealAnimation } from "./CardRevealAnimation";
+import EinsteinConfetti from "./EinsteinConfetti";
 import { getRolledPrize, redeemCode, rollPrize } from "./drop/backend";
 import { ItemIcon, RARITIES, BOX_ITEMS, pickWeighted } from "./drop/boxItems";
 import type { BoxItem } from "./drop/boxItems";
@@ -158,6 +159,8 @@ export default function DailyDrop() {
   const [prize, setPrize] = useState<BoxItem | null>(null);
   const [resumed, setResumed] = useState(false);
   const [authorizationConfirmed, setAuthorizationConfirmed] = useState(false);
+  const [showWinConfetti, setShowWinConfetti] = useState(false);
+  const winConfettiTimer = useRef<number | null>(null);
   // Guards against a double-click / Enter+click firing two redeems for the same
   // code, which would burn it and then report a bogus "already used".
   const submitGuard = useRef(false);
@@ -185,6 +188,10 @@ export default function DailyDrop() {
     }
   }, []);
 
+  useEffect(() => () => {
+    if (winConfettiTimer.current !== null) window.clearTimeout(winConfettiTimer.current);
+  }, []);
+
   const startOpening = () => {
     setStage("cinematic");
   };
@@ -202,9 +209,18 @@ export default function DailyDrop() {
 
   const handleDropFinished = (winner: BoxItem) => {
     finishDrop(winner);
+    setShowWinConfetti(true);
+    if (winConfettiTimer.current !== null) window.clearTimeout(winConfettiTimer.current);
+    winConfettiTimer.current = window.setTimeout(() => {
+      setShowWinConfetti(false);
+      winConfettiTimer.current = null;
+    }, 3800);
   };
 
   const handleStartNew = () => {
+    if (winConfettiTimer.current !== null) window.clearTimeout(winConfettiTimer.current);
+    winConfettiTimer.current = null;
+    setShowWinConfetti(false);
     try {
       window.localStorage.removeItem(COMPLETED_KEY);
     } catch {
@@ -251,7 +267,7 @@ export default function DailyDrop() {
       window.setTimeout(() => {
         setAuthorizationConfirmed(false);
         setStage("cinematic");
-      }, 850);
+      }, 2500);
       return;
     }
 
@@ -289,7 +305,12 @@ export default function DailyDrop() {
   };
 
   if (completed) {
-    return <CompletedView record={completed} onStartNew={handleStartNew} />;
+    return (
+      <>
+        <CompletedView record={completed} onStartNew={handleStartNew} />
+        {showWinConfetti && <EinsteinConfetti />}
+      </>
+    );
   }
 
   return (

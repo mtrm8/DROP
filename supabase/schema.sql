@@ -83,12 +83,12 @@ create policy "Allow anon and authenticated select on drop_prizes" on public.dro
 -- Rarity curve: the everyday tiers carry the volume, and high tiers are
 -- genuinely hard to hit (exponentially rarer drop rates).
 insert into public.drop_prizes (id, name, amount, chance, weight, rarity, icon) values
-  ('cash-30',   '30 ₪',   30,   '25%',    2500, 'common',     '💵'),
-  ('cash-50',   '50 ₪',   50,   '16%',    1600, 'uncommon',   '💰'),
-  ('cash-100',  '100 ₪',  100,  '10%',    1000, 'rare',       '💸'),
-  ('cash-200',  '200 ₪',  200,  '5%',      500, 'classified', '💎'),
-  ('cash-350',  '350 ₪',  350,  '1.5%',    150, 'covert',     '💎'),
-  ('cash-500',  '500 ₪',  500,  '0.5%',     50, 'special',    '🔥')
+  ('cash-30',   '30 ₪',   30,   '43.1%',   2500, 'common',     '💵'),
+  ('cash-50',   '50 ₪',   50,   '27.59%',  1600, 'uncommon',   '💰'),
+  ('cash-100',  '100 ₪',  100,  '17.24%',  1000, 'rare',       '💸'),
+  ('cash-200',  '200 ₪',  200,  '8.62%',    500, 'classified', '💎'),
+  ('cash-350',  '350 ₪',  350,  '2.59%',    150, 'covert',     '💎'),
+  ('cash-500',  '500 ₪',  500,  '0.86%',     50, 'special',    '🔥')
 on conflict (id) do update set
   name = excluded.name,
   amount = excluded.amount,
@@ -131,6 +131,7 @@ $$;
 do $$
 declare
   v_total numeric;
+  v_bad text;
 begin
   select sum(weight) into v_total from public.drop_prizes;
   if v_total is null or v_total <= 0 then
@@ -138,6 +139,16 @@ begin
   end if;
   if exists (select 1 from public.drop_prizes where amount = 20 or id = 'cash-20') then
     raise exception 'retired prize remains in drop_prizes';
+  end if;
+
+  select string_agg(format('%s claims %s but its real odds are %s',
+                          id, chance, public.drop_prize_chance(id)), '; ')
+    into v_bad
+    from public.drop_prize_odds
+   where chance <> public.drop_prize_chance(id);
+
+  if v_bad is not null then
+    raise exception 'drop_prize_odds mismatch: %', v_bad;
   end if;
 end;
 $$;

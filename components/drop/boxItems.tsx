@@ -117,8 +117,8 @@ export interface BoxItem {
   rarity: RarityName;
 }
 
-// Client prize pool. Remaining weights and displayed odds are intentionally
-// unchanged; the retired 20₪ client prize is no longer eligible for a reveal.
+// Active client prize pool. Displayed odds are normalized over the remaining
+// weights after retiring the 20₪ tier and match the server-derived percentages.
 export const BOX_ITEMS: BoxItem[] = [
   {
     id: "cash-30",
@@ -127,7 +127,7 @@ export const BOX_ITEMS: BoxItem[] = [
     icon: "chip",
     emoji: "💵",
     amount: 30,
-    chance: "25%",
+    chance: "43.1%",
     weight: 2500,
     rarity: "common",
   },
@@ -138,7 +138,7 @@ export const BOX_ITEMS: BoxItem[] = [
     icon: "stack",
     emoji: "💰",
     amount: 50,
-    chance: "16%",
+    chance: "27.59%",
     weight: 1600,
     rarity: "uncommon",
   },
@@ -149,7 +149,7 @@ export const BOX_ITEMS: BoxItem[] = [
     icon: "stack",
     emoji: "💸",
     amount: 100,
-    chance: "10%",
+    chance: "17.24%",
     weight: 1000,
     rarity: "rare",
   },
@@ -160,7 +160,7 @@ export const BOX_ITEMS: BoxItem[] = [
     icon: "gem",
     emoji: "💎",
     amount: 200,
-    chance: "5%",
+    chance: "8.62%",
     weight: 500,
     rarity: "classified",
   },
@@ -171,7 +171,7 @@ export const BOX_ITEMS: BoxItem[] = [
     icon: "gem",
     emoji: "💎",
     amount: 350,
-    chance: "1.5%",
+    chance: "2.59%",
     weight: 150,
     rarity: "covert",
   },
@@ -182,7 +182,7 @@ export const BOX_ITEMS: BoxItem[] = [
     icon: "fire",
     emoji: "🔥",
     amount: 500,
-    chance: "0.5%",
+    chance: "0.86%",
     weight: 50,
     rarity: "special",
   },

@@ -208,6 +208,10 @@ function toPrize(row: PrizeRow | null | undefined): BoxItem | null {
   if (amount === 20 || /^20(?:\.0+)?\s*₪$/.test(serverName)) return null;
   if (!id || (amount === null && !serverName)) return null;
 
+  const configuredPrize = BOX_ITEMS.find(
+    (item) => item.id === id || (amount !== null && Number(item.amount) === amount)
+  );
+
   const rarity = (row.rarity ?? "").trim() as RarityName;
   const iconRaw = (row.icon ?? "").trim();
   const icon = (ICON_NAMES as readonly string[]).includes(iconRaw)
@@ -227,7 +231,7 @@ function toPrize(row: PrizeRow | null | undefined): BoxItem | null {
     icon,
     emoji,
     amount: amount ?? serverName,
-    chance: normalizeChance(row.chance),
+    chance: configuredPrize?.chance ?? normalizeChance(row.chance),
     weight: 0,
     rarity: (RARITY_NAMES as readonly string[]).includes(rarity) ? rarity : "common",
   };
