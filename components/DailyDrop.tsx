@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { KeyRound, Lock, Sparkles } from "lucide-react";
 import { CardRevealAnimation } from "./CardRevealAnimation";
-import { redeemCode } from "./drop/backend";
+import { getRolledPrize, redeemCode, rollPrize } from "./drop/backend";
 import { ItemIcon, RARITIES } from "./drop/boxItems";
 import type { BoxItem } from "./drop/boxItems";
 
@@ -133,9 +133,10 @@ export default function DailyDrop() {
   const [unlocked, setUnlocked] = useState(false);
   const [stage, setStage] = useState<"idle" | "cinematic">("idle");
   const [code, setCode] = useState("");
-  const [errorKind, setErrorKind] = useState<null | "invalid" | "already_used">(null);
+  const [errorKind, setErrorKind] = useState<null | "invalid" | "already_used" | "roll_failed">(null);
   const [unlocking, setUnlocking] = useState(false);
   const [completed, setCompleted] = useState<CompletedRecord | null>(null);
+  const [prize, setPrize] = useState<BoxItem | null>(null);
 
   // Purge the legacy local burn registry from earlier builds — the server is
   // now the only source of truth and no local record should shadow it. Also
@@ -182,6 +183,7 @@ export default function DailyDrop() {
     setUnlocked(false);
     setCode("");
     setErrorKind(null);
+    setPrize(null);
   };
 
   const handleCodeSubmit = async (e: React.FormEvent) => {
@@ -191,15 +193,34 @@ export default function DailyDrop() {
     setErrorKind(null);
     setUnlocking(true);
     const result = await redeemCode(value);
-    setUnlocking(false);
     if (result.status === "invalid") {
+      setUnlocking(false);
       setErrorKind("invalid");
       return;
     }
     if (result.status === "already_used") {
-      setErrorKind("already_used");
+      // A redeemed code whose prize was already rolled can be RESUMED (same
+      // code, same server prize) — this never produces a fresh roll, so a
+      // leaked/burned code still gets nothing.
+      const existing = await getRolledPrize(value);
+      setUnlocking(false);
+      if (!existing) {
+        setErrorKind("already_used");
+        return;
+      }
+      setPrize(existing);
+      setUnlocked(true);
+      setCode(value);
       return;
     }
+    // Redeemed — now let the SERVER roll the weighted cash prize.
+    const rolled = await rollPrize(value);
+    setUnlocking(false);
+    if (rolled.status !== "ok") {
+      setErrorKind("roll_failed");
+      return;
+    }
+    setPrize(rolled.prize);
     setUnlocked(true);
     setCode(value);
   };
@@ -403,7 +424,9 @@ export default function DailyDrop() {
                           <p className="text-[11px] font-bold text-red-400">
                             {errorKind === "already_used"
                               ? "הקוד כבר נוצל — הקוד הזה כבר הופעל בעבר ולא ניתן להשתמש בו שוב"
-                              : "קוד שגוי – נא לבדוק את הקוד שהתקבל"}
+                              : errorKind === "roll_failed"
+                                ? "תקלה זמנית במערכת הפרסים — אם כבר אימתתם את הקוד, נסו להמשיך את הדרופ"
+                                : "קוד שגוי – נא לבדוק את הקוד שהתקבל"}
                           </p>
                         </div>
                       )}
@@ -422,7 +445,7 @@ export default function DailyDrop() {
       </section>
 
       <AnimatePresence mode="wait" initial={false}>
-        {stage === "cinematic" && (
+        {stage === "cinematic" && prize && (
           <motion.div
             key="drop-machine"
             className="fixed inset-0 z-50"
@@ -431,7 +454,11 @@ export default function DailyDrop() {
             exit={{ opacity: 0 }}
             transition={{ duration: 0.4, ease: "easeOut" }}
           >
-            <CardRevealAnimation onFinished={handleDropFinished} onCancel={() => setStage("idle")} />
+            <CardRevealAnimation
+              prize={prize}
+              onFinished={handleDropFinished}
+              onCancel={() => setStage("idle")}
+            />
           </motion.div>
         )}
       </AnimatePresence>

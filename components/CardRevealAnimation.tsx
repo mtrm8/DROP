@@ -28,6 +28,10 @@ interface DealCard {
 interface CardRevealProps {
   onFinished: (winner: BoxItem) => void;
   onCancel?: () => void;
+  // The cash prize the SERVER already rolled for this code. The machine only
+  // decides which slot visually shows it — the amount can never be influenced,
+  // re-rolled or forged by the client.
+  prize: BoxItem;
 }
 
 // ---- realistic dealer riffle: lift -> split halves -> overlapping interleave -> mint, twice, in one long smooth pass ----
@@ -142,10 +146,20 @@ function GoldBurst({ glow }: { glow: string }) {
   );
 }
 
-export function CardRevealAnimation({ onFinished, onCancel }: CardRevealProps) {
-  const [cards, setCards] = useState<DealCard[]>(() =>
-    Array.from({ length: CARDS_COUNT }, (_, i) => ({ id: i, item: pickWeighted(BOX_ITEMS), selected: false }))
-  );
+// The deck always contains the server-rolled prize at a random slot; the other
+// cards are purely cosmetic decoys drawn from the same cash pool.
+function buildDeck(prize: BoxItem): DealCard[] {
+  const prizeSlot = Math.floor(Math.random() * CARDS_COUNT);
+  const decoys = BOX_ITEMS.filter((item) => item.id !== prize.id);
+  return Array.from({ length: CARDS_COUNT }, (_, i) => ({
+    id: i,
+    item: i === prizeSlot ? prize : pickWeighted(decoys),
+    selected: false,
+  }));
+}
+
+export function CardRevealAnimation({ onFinished, onCancel, prize }: CardRevealProps) {
+  const [cards, setCards] = useState<DealCard[]>(() => buildDeck(prize));
   const [winnerId, setWinnerId] = useState<number | null>(null);
   const [phase, setPhase] = useState<Phase>("grid");
 
@@ -201,8 +215,9 @@ export function CardRevealAnimation({ onFinished, onCancel }: CardRevealProps) {
     } else if (phase === "suspense") {
       timers.push(
         window.setTimeout(() => {
-          const pool = cards.filter((c) => c.selected);
-          if (pool.length) setWinnerId(pool[Math.floor(Math.random() * pool.length)].id);
+          // The machine "picks" the slot holding the server-rolled prize.
+          const target = cards.find((c) => c.item.id === prize.id) ?? cards[0];
+          if (target) setWinnerId(target.id);
           setPhase("reveal");
         }, 1250)
       );
