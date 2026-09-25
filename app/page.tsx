@@ -4,7 +4,7 @@ import CommunityFooter from "@/components/CommunityFooter";
 
 export default function Home() {
   return (
-    <main className="flex flex-col min-h-screen">
+    <main className="flex w-full max-w-[100vw] min-h-screen flex-col overflow-x-clip">
       <Navbar />
       <div className="flex-grow">
         <DailyDrop />

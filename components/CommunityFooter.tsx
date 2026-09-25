@@ -3,16 +3,16 @@ import { WHATSAPP_URL } from "./drop/community";
 
 export default function CommunityFooter() {
   return (
-    <footer className="premium-hairline border-t border-white/[0.06] mt-12 px-4 lg:px-8 py-8">
-      <div className="max-w-xl mx-auto flex flex-col items-center gap-4 text-center">
+    <footer className="premium-hairline w-full border-t border-white/[0.06] mt-8 sm:mt-12 px-4 lg:px-8 py-8 pb-[max(2rem,env(safe-area-inset-bottom))]">
+      <div className="mx-auto flex w-full max-w-xl flex-col items-center gap-4 text-center">
         <a
           href={WHATSAPP_URL}
           target="_blank"
           rel="noopener noreferrer"
-          className="px-5 py-2.5 rounded-xl text-slate-950 bg-gradient-to-br from-amber-200 via-amber-400 to-amber-600 hover:brightness-110 shadow-[0_0_22px_rgba(228,174,57,0.25)] transition active:scale-95 text-sm font-black flex items-center gap-2"
+          className="w-full max-w-xs sm:w-auto px-5 py-3 rounded-xl text-slate-950 bg-gradient-to-br from-amber-200 via-amber-400 to-amber-600 hover:brightness-110 shadow-[0_0_22px_rgba(228,174,57,0.25)] transition active:scale-95 text-sm font-black flex items-center justify-center gap-2"
         >
-          <MessageCircle size={16} />
-          הצטרפו לקהילה בוואטסאפ
+          <MessageCircle size={16} className="shrink-0" />
+          <span className="truncate">הצטרפו לקהילה בוואטסאפ</span>
         </a>
         <p className="text-[11px] text-slate-600 flex items-center gap-1.5">
           <ShieldCheck size={12} className="text-slate-500" />
