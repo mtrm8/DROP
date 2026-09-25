@@ -5,7 +5,6 @@ import { AnimatePresence, motion } from "framer-motion";
 import { KeyRound, Lock, Sparkles } from "lucide-react";
 import { CardRevealAnimation } from "./CardRevealAnimation";
 import { redeemCode } from "./drop/backend";
-import { isTestCode, resetCodeBurn } from "./drop/community";
 
 function CardEmblem() {
   return (
@@ -42,14 +41,13 @@ export default function DailyDrop() {
   const [errorKind, setErrorKind] = useState<null | "invalid" | "already_used">(null);
   const [unlocking, setUnlocking] = useState(false);
 
-  // Dev/test bypass: ?resetcode=KOKOS-LOSINKA (or ?reset=all) clears the local
-  // burn record so a test code is active again without any Supabase SQL.
+  // Purge the legacy local burn registry from earlier builds — the server is
+  // now the only source of truth and no local record should shadow it.
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const target = (params.get("resetcode") ?? params.get("reset") ?? "").trim().toUpperCase();
-    if (target) {
-      resetCodeBurn(target === "ALL" ? undefined : target);
-      window.history.replaceState({}, "", window.location.pathname);
+    try {
+      window.localStorage.removeItem("drop-burned");
+    } catch {
+      // ignore private-mode / storage errors
     }
   }, []);
 
@@ -271,18 +269,13 @@ export default function DailyDrop() {
                         )}
                       </button>
 
-                      {errorKind && (
+{errorKind && (
                         <div className="mt-2 animate-shake">
                           <p className="text-[11px] font-bold text-red-400">
                             {errorKind === "already_used"
                               ? "הקוד כבר נוצל — הקוד הזה כבר הופעל בעבר ולא ניתן להשתמש בו שוב"
-                              : "קוד שגוי — נא לבדוק את הקוד שהתקבל"}
+                              : "קוד שגוי – נא לבדוק את הקוד שהתקבל"}
                           </p>
-                          {errorKind === "already_used" && isTestCode(code) && (
-                            <p className="mt-1 text-[10px] text-slate-500" dir="ltr">
-                              dev: add ?resetcode={code.trim().toUpperCase()} to the URL to reactivate
-                            </p>
-                          )}
                         </div>
                       )}
 

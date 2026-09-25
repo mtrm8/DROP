@@ -1,44 +1,27 @@
-import { isValidCode, isTestCode, isCodeBurned, burnCode } from "./community";
-
-// Server-authoritative one-time code validation via Supabase (PostgREST RPC).
-// Disabled until these are set (e.g. in .env.local, NEVER committed):
-//   NEXT_PUBLIC_SUPABASE_URL
-//   NEXT_PUBLIC_SUPABASE_ANON_KEY
-// While disabled, validation falls back to the legacy client-only flow and every
-// device can still use the code. See supabase/schema.sql for the redeem_code RPC.
+// Strictly server-authoritative one-time code validation via Supabase
+// (PostgREST RPC). The drop_codes table + redeem_code RPC are the only source
+// of truth: the RPC is SECURITY DEFINER and atomically sets used = true /
+// used_at = now() inside a transaction with a WHERE used = false guard, so
+// exactly one device ever wins and every later attempt returns
+// "already_redeemed" across all browsers/devices.
+//
+// There is deliberately NO client-side fallback: if the server cannot confirm a
+// code as unused, it is refused. (Requires these env vars at build time:
+//   NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY)
 export const BACKEND_ENABLED =
   !!process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() &&
   !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
 
 export type RedeemResult =
-  | { status: "ok"; mode: "server" | "client" }
-  | { status: "already_used"; code: string; mode: "server" | "client" }
-  | { status: "invalid"; mode: "client" };
+  | { status: "ok" } // verified & atomically marked used in Supabase
+  | { status: "already_used" } // valid row exists but used=true -> blocked
+  | { status: "invalid" }; // unknown code, or backend unreachable -> refused
 
 export async function redeemCode(rawInput: string): Promise<RedeemResult> {
   const value = rawInput.trim();
-  if (!isValidCode(value)) {
-    return { status: "invalid", mode: "client" };
-  }
-  if (isTestCode(value)) {
-    // Development bypass: validated client-side only, so it works instantly
-    // out-of-the-box without Supabase SQL. Burns locally after success; reuse
-    // shows "already used" until resetCodeBurn() clears the record.
-    if (isCodeBurned(value)) {
-      return { status: "already_used", code: value, mode: "client" };
-    }
-    burnCode(value);
-    return { status: "ok", mode: "client" };
-  }
-  // Single-use guard runs even before the network: a code accepted in fallback
-  // mode is burned locally, so reusing it in a loop fails instantly.
-  if (isCodeBurned(value)) {
-    return { status: "already_used", code: value, mode: "client" };
-  }
   if (!BACKEND_ENABLED) {
-    // Legacy mode: burn locally so the code can't be replayed in loops.
-    burnCode(value);
-    return { status: "ok", mode: "client" };
+    // Backend not configured: nothing can be verified, so strictly refuse.
+    return { status: "invalid" };
   }
   const base = (process.env.NEXT_PUBLIC_SUPABASE_URL as string).replace(/\/+$/, "");
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string;
@@ -58,34 +41,19 @@ export async function redeemCode(rawInput: string): Promise<RedeemResult> {
         error?: "not_found" | "already_redeemed" | string;
       };
       if (data.success === true) {
-        // The RPC atomically sets used = true / used_at = now() in the same
-        // transaction, so the burn is permanent in Supabase; the next attempt
-        // returns "already_redeemed" on every device. Mark it locally as well
-        // so even this browser can never re-enter it after a reload.
-        burnCode(value);
-        return { status: "ok", mode: "server" };
+        return { status: "ok" };
       }
-      // Code known on the client but not yet seeded in the DB (e.g. the
-      // schema.sql insert hasn't been run for this code): the client-side
-      // community list is the source of truth, so accept it, and burn it
-      // locally so it can't be replayed in loops. Once the row exists, the
-      // server takes over and enforces true global single-use.
-      if (data.error === "not_found") {
-        burnCode(value);
-        return { status: "ok", mode: "client" };
+      if (data.error === "already_redeemed") {
+        return { status: "already_used" };
       }
-      return { status: "already_used", code: value, mode: "server" };
+      // not_found or any other server answer: code does not exist (or state
+      // cannot be confirmed) -> generic invalid, never a bypass.
+      return { status: "invalid" };
     }
-    // RPC endpoint missing (404): no server-side tracking exists for this
-    // code, so the fallback accept must burn locally to keep single-use.
-    if (res.status === 404) {
-      burnCode(value);
-      return { status: "ok", mode: "client" };
-    }
-    // Backend hiccup (5xx / 429): don't consume anything, stay lenient.
-    return { status: "ok", mode: "client" };
+    // RPC missing (404), backend hiccup (5xx/429): cannot verify -> refuse.
+    return { status: "invalid" };
   } catch {
-    // Offline / network failure: don't consume anything, stay lenient.
-    return { status: "ok", mode: "client" };
+    // Offline / network failure: cannot verify -> strictly refuse.
+    return { status: "invalid" };
   }
 }

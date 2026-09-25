@@ -57,13 +57,13 @@ grant execute on function public.redeem_code to anon;
 
 -- Seed active codes (add any community codes here; each can be used once, ever).
 insert into public.drop_codes (code)
-values ('DROP-M-1'), ('KOKOS-LOSINKA')
+values ('DROP-M-1'), ('KOKOS-LOSINKA'), ('MMM-MMM1')
 on conflict (code) do nothing;
 
 -- Reset/activate a specific code back to a fresh, unused state.
 -- Safe to re-run as often as needed: inserts the row if missing, or clears the
 -- used flag if the code was previously redeemed. (Used to reactivate a code.)
 insert into public.drop_codes (code)
-values ('KOKOS-LOSINKA')
+values ('MMM-MMM1')
 on conflict (code) do update
   set used = false, used_at = null;
