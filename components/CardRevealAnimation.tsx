@@ -73,24 +73,24 @@ const shuffleScale = () => [1, 1.04, 1.1, 1.14, 1.02, 1.1, 1.12, 1.02, 1, 1, 1, 
 function CardBackFace() {
   return (
     <div
-      className="absolute inset-0 flex flex-col items-center justify-between overflow-hidden rounded-2xl border-2 border-amber-400/50 bg-gradient-to-br from-neutral-900 via-zinc-900 to-black p-3.5"
-      style={{ boxShadow: "0 0 35px rgba(228,174,57,0.22), inset 0 0 22px rgba(228,174,57,0.08)" }}
+      className="absolute inset-0 flex flex-col items-center justify-between overflow-hidden rounded-2xl border-2 border-cyan-400/50 bg-gradient-to-br from-slate-900 via-slate-950 to-black p-3.5"
+      style={{ boxShadow: "0 0 35px rgba(34,211,238,0.24), inset 0 0 22px rgba(34,211,238,0.08)" }}
     >
-      <div className="pointer-events-none absolute inset-0" style={{ background: "radial-gradient(ellipse at center, rgba(228,174,57,0.12), transparent 62%)" }} />
-      <div className="pointer-events-none absolute inset-0 card-sheen" style={{ background: "linear-gradient(115deg, transparent 28%, rgba(255,224,138,0.12) 42%, rgba(255,224,138,0.05) 52%, transparent 62%)" }} />
-      <div className="pointer-events-none absolute inset-1.5 rounded-xl border border-amber-500/25" />
-      <div className="flex w-full justify-between text-xs font-black text-amber-300">
+      <div className="pointer-events-none absolute inset-0" style={{ background: "radial-gradient(ellipse at center, rgba(34,211,238,0.12), transparent 62%)" }} />
+      <div className="pointer-events-none absolute inset-0 card-sheen" style={{ background: "linear-gradient(115deg, transparent 28%, rgba(165,243,252,0.14) 42%, rgba(165,243,252,0.05) 52%, transparent 62%)" }} />
+      <div className="pointer-events-none absolute inset-1.5 rounded-xl border border-cyan-500/25" />
+      <div className="flex w-full justify-between text-xs font-black text-cyan-300">
         <span>K</span>
         <span>♠</span>
       </div>
       <div className="flex flex-col items-center gap-1">
         <span className="text-3xl leading-none">♛</span>
-        <span className="font-serif font-black tracking-wider text-amber-300 text-xl" style={{ textShadow: "0 0 12px rgba(228,174,57,0.6)" }}>
-          MOSHA
+        <span className="font-serif font-black tracking-wider text-cyan-300 text-xl" style={{ textShadow: "0 0 12px rgba(34,211,238,0.65)" }}>
+          EINSTEIN
         </span>
         <span className="text-[8px] font-extrabold uppercase tracking-[0.28em] text-amber-400/60">הדרוף היומי</span>
       </div>
-      <div className="flex w-full rotate-180 justify-between text-xs font-black text-amber-300">
+      <div className="flex w-full rotate-180 justify-between text-xs font-black text-cyan-300">
         <span>K</span>
         <span>♠</span>
       </div>
@@ -240,23 +240,23 @@ export function CardRevealAnimation({ onFinished, onCancel, prize }: CardRevealP
   }, [phase]);
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-[#05060a]">
-      {/* pure black & gold ambience */}
+    <div className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-[#050b12]">
+      {/* Midnight lab ambience */}
       <div className="pointer-events-none absolute inset-0">
-        <div className="absolute left-1/2 top-1/4 h-[44vw] w-[74vw] -translate-x-1/2" style={{ background: "radial-gradient(closest-side, rgba(228,174,57,0.09), transparent 72%)" }} />
-        <div className="absolute bottom-0 left-1/2 h-64 w-[84vw] -translate-x-1/2" style={{ background: "radial-gradient(closest-side, rgba(228,174,57,0.05), transparent 72%)" }} />
+        <div className="absolute left-1/2 top-1/4 h-[44vw] w-[74vw] -translate-x-1/2" style={{ background: "radial-gradient(closest-side, rgba(34,211,238,0.12), transparent 72%)" }} />
+        <div className="absolute bottom-0 left-1/2 h-64 w-[84vw] -translate-x-1/2" style={{ background: "radial-gradient(closest-side, rgba(132,204,22,0.06), transparent 72%)" }} />
         <div className="absolute inset-0" style={{ background: "radial-gradient(120% 90% at 50% 0%, transparent 55%, rgba(0,0,0,0.55) 100%)" }} />
       </div>
 
       {/* header */}
       <div className="relative z-20 flex items-center justify-between border-b border-white/[0.06] px-4 py-3 sm:px-8">
         <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-amber-400/40 bg-gradient-to-br from-[#1a2030] to-[#0c0f16] shadow-[0_0_16px_rgba(228,174,57,0.18)]">
-            <span className="text-base">♛</span>
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-cyan-400/40 bg-gradient-to-br from-[#102431] to-[#0c0f16] shadow-[0_0_16px_rgba(34,211,238,0.2)]">
+            <span className="text-base text-cyan-300">∑</span>
           </div>
           <div>
-            <p className="text-[10px] uppercase tracking-[0.25em] text-amber-400/70">Drop Machine</p>
-            <p className="text-sm font-bold text-white leading-tight">הדרוף היומי — מכונת הקלפים</p>
+            <p className="text-[10px] uppercase tracking-[0.25em] text-cyan-300/80">Einstein Drop Lab</p>
+            <p className="text-sm font-bold text-white leading-tight">איינשטיין דרופ — מעבדת הקלפים</p>
           </div>
         </div>
         {onCancel && (
@@ -389,12 +389,12 @@ export function CardRevealAnimation({ onFinished, onCancel, prize }: CardRevealP
                       phase === "reveal" || phase === "done"
                         ? winnerCard
                           ? `0 0 90px ${RARITIES[winnerCard.item.rarity].glow}`
-                          : "0 0 70px rgba(228,174,57,0.28)"
+                          : "0 0 70px rgba(34,211,238,0.28)"
                         : phase === "shuffle" || phase === "suspense"
                           ? "0 0 70px rgba(245,158,11,0.32)"
                           : phase === "revealSelection"
-                            ? "0 0 60px rgba(228,174,57,0.24)"
-                            : "0 0 45px rgba(228,174,57,0.15)",
+                            ? "0 0 60px rgba(34,211,238,0.24)"
+                            : "0 0 45px rgba(34,211,238,0.18)",
                   }}
                   transition={{ duration: 0.8 }}
                 />
@@ -435,8 +435,8 @@ export function CardRevealAnimation({ onFinished, onCancel, prize }: CardRevealP
                   </div>
                   <div className="absolute inset-x-5 bottom-14 h-20 rounded-2xl border border-white/[0.06] bg-white/[0.02]" />
                   <div className="absolute left-1/2 bottom-6 -translate-x-1/2 text-center">
-                    <span className="font-serif text-lg font-black text-amber-300/80" style={{ textShadow: "0 0 14px rgba(228,174,57,0.5)" }}>
-                      MOSHA DROP
+                    <span className="font-serif text-lg font-black text-cyan-300/80" style={{ textShadow: "0 0 14px rgba(34,211,238,0.5)" }}>
+                       EINSTEIN DROP
                     </span>
                   </div>
                 </div>
@@ -447,7 +447,7 @@ export function CardRevealAnimation({ onFinished, onCancel, prize }: CardRevealP
                     className="pointer-events-none absolute left-1/2 top-0 z-[4] h-full w-32 -translate-x-1/2"
                     animate={{ opacity: [0.25, 0.65, 0.25], scaleX: [1, 0.92, 1] }}
                     transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
-                    style={{ background: "radial-gradient(ellipse at 50% 28%, rgba(228,174,57,0.3), transparent 68%)" }}
+                    style={{ background: "radial-gradient(ellipse at 50% 28%, rgba(34,211,238,0.3), transparent 68%)" }}
                   />
                 )}
 

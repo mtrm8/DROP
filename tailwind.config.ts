@@ -11,6 +11,19 @@ const config: Config = {
       colors: {
         background: "var(--background)",
         foreground: "var(--foreground)",
+        amber: {
+          50: "#ecfeff",
+          100: "#cffafe",
+          200: "#a5f3fc",
+          300: "#67e8f9",
+          400: "#22d3ee",
+          500: "#06b6d4",
+          600: "#0891b2",
+          700: "#0e7490",
+          800: "#155e75",
+          900: "#164e63",
+          950: "#083344",
+        },
         gold: {
           300: "#fde047",
           400: "#facc15",
@@ -32,7 +45,7 @@ const config: Config = {
       },
       backgroundImage: {
         'radial-gradient': 'radial-gradient(circle at center, var(--tw-gradient-stops))',
-        'hero-glow': 'radial-gradient(circle at 45% 15%, rgba(228, 174, 57, 0.12) 0%, rgba(124, 58, 237, 0.05) 46%, transparent 74%)',
+        'hero-glow': 'radial-gradient(circle at 45% 15%, rgba(34, 211, 238, 0.15) 0%, rgba(132, 204, 22, 0.05) 46%, transparent 74%)',
       },
     },
   },

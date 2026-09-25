@@ -2,23 +2,23 @@
 
 import Link from "next/link";
 import { motion, useMotionValue, useSpring, useTransform } from "framer-motion";
-import { ArrowLeft, ChevronDown, ShieldCheck, Sparkles } from "lucide-react";
+import { Atom, ArrowLeft, BrainCircuit, ChevronDown, ShieldCheck, Sparkles } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import CommunityFooter from "@/components/CommunityFooter";
 
 function FloatingCard({ w, h, rot }: { w: number; h: number; rot: number }) {
   return (
     <div
-      className="relative overflow-hidden rounded-lg border border-amber-400/40 bg-gradient-to-br from-neutral-900 via-zinc-900 to-black"
-      style={{ width: w, height: h, transform: `rotate(${rot}deg)`, boxShadow: "0 0 22px rgba(228,174,57,0.18), 0 12px 26px rgba(0,0,0,0.5)" }}
+      className="relative overflow-hidden rounded-lg border border-cyan-400/40 bg-gradient-to-br from-slate-900 via-slate-950 to-black"
+      style={{ width: w, height: h, transform: `rotate(${rot}deg)`, boxShadow: "0 0 22px rgba(34,211,238,0.2), 0 12px 26px rgba(0,0,0,0.5)" }}
     >
-      <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse at center, rgba(228,174,57,0.1), transparent 62%)" }} />
+      <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse at center, rgba(34,211,238,0.12), transparent 62%)" }} />
       <div className="flex h-full flex-col items-center justify-between py-2">
-        <span className="text-[9px] font-bold text-amber-300/80">K</span>
+        <span className="text-[9px] font-bold text-cyan-300/80">K</span>
         <span className="px-1 text-center font-serif text-[8px] font-black uppercase tracking-[0.14em] text-amber-200/90">
-          MOSHA
+          EINSTEIN
         </span>
-        <span className="rotate-180 text-[9px] font-bold text-amber-300/80">K</span>
+        <span className="rotate-180 text-[9px] font-bold text-cyan-300/80">K</span>
       </div>
     </div>
   );
@@ -54,7 +54,7 @@ function HeroCard3D() {
       <div className="[perspective:1400px]">
         <motion.div
           role="button"
-          aria-label="קלף MOSHA תלת־ממדי — גררו לסיבוב"
+          aria-label="קלף Einstein Drop תלת־ממדי — גררו לסיבוב"
           onPointerMove={onPointerMove}
           onPointerLeave={onPointerLeave}
           className="relative touch-none select-none outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#05060a]"
@@ -62,10 +62,10 @@ function HeroCard3D() {
           whileTap={{ cursor: "grabbing" }}
         >
           <div
-            className="relative h-[300px] w-[212px] sm:h-[390px] sm:w-[276px] overflow-hidden rounded-2xl border border-amber-400/45 bg-gradient-to-br from-[#12141c] via-[#0a0c12] to-black shadow-[0_30px_70px_-20px_rgba(0,0,0,0.85),0_0_40px_rgba(228,174,57,0.14)]"
+            className="relative h-[300px] w-[212px] sm:h-[390px] sm:w-[276px] overflow-hidden rounded-2xl border border-cyan-400/45 bg-gradient-to-br from-[#101b27] via-[#08111b] to-black shadow-[0_30px_70px_-20px_rgba(0,0,0,0.85),0_0_40px_rgba(34,211,238,0.16)]"
             style={{ transform: "translateZ(24px)" }}
           >
-            <div className="absolute inset-0" style={{ background: "radial-gradient(120% 90% at 50% 0%, rgba(228,174,57,0.12), transparent 60%)" }} />
+            <div className="absolute inset-0" style={{ background: "radial-gradient(120% 90% at 50% 0%, rgba(34,211,238,0.14), transparent 60%)" }} />
             <motion.div
               className="pointer-events-none absolute rounded-full"
               style={{
@@ -81,20 +81,20 @@ function HeroCard3D() {
               }}
             />
 
-            <div className="absolute inset-2 rounded-xl border border-amber-400/25" />
+            <div className="absolute inset-2 rounded-xl border border-cyan-400/25" />
 
-            <span className="absolute left-3.5 top-3 text-xl font-bold text-amber-300/85 sm:text-2xl">K</span>
-            <span className="absolute right-3.5 bottom-3 rotate-180 text-xl font-bold text-amber-300/85 sm:text-2xl">K</span>
+            <span className="absolute left-3.5 top-3 text-xl font-bold text-cyan-300/85 sm:text-2xl">K</span>
+            <span className="absolute right-3.5 bottom-3 rotate-180 text-xl font-bold text-cyan-300/85 sm:text-2xl">K</span>
 
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
-              <span className="font-serif text-7xl font-black sm:text-8xl" style={{ textShadow: "0 0 34px rgba(228,174,57,0.55)", color: "#fbbf24" }}>
-                M
+              <span className="font-serif text-5xl font-black text-cyan-300 sm:text-6xl" style={{ textShadow: "0 0 34px rgba(34,211,238,0.55)" }}>
+                E=mc²
               </span>
-              <span className="text-xl font-black uppercase tracking-[0.34em] text-white sm:text-2xl">MOSHA</span>
-              <span className="rounded-full border border-amber-400/35 bg-amber-400/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.3em] text-amber-300 sm:text-xs">
-                Sports · Poker
+              <span className="text-xl font-black uppercase tracking-[0.2em] text-white sm:text-2xl">EINSTEIN</span>
+              <span className="rounded-full border border-cyan-400/35 bg-cyan-400/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.3em] text-cyan-300 sm:text-xs">
+                DROP LAB · COMMUNITY
               </span>
-              <span className="mt-1.5 text-[9px] uppercase tracking-[0.3em] text-slate-500">Community Edition</span>
+              <span className="mt-1.5 text-[9px] uppercase tracking-[0.3em] text-slate-500">איינשטיין דרופ · מעבדת המזל</span>
             </div>
 
             <div className="pointer-events-none absolute inset-0 rounded-2xl" style={{ background: "linear-gradient(112deg, transparent 38%, rgba(255,255,255,0.09) 46%, transparent 56%)" }} />
@@ -157,7 +157,7 @@ export default function LandingPage() {
         <div className="pointer-events-none absolute inset-0 z-0">
           <div
             className="absolute left-1/2 top-1/3 h-[48vw] w-[82vw] -translate-x-1/2"
-            style={{ background: "radial-gradient(closest-side, rgba(245,158,11,0.13), rgba(245,158,11,0.05) 55%, transparent 72%)" }}
+            style={{ background: "radial-gradient(closest-side, rgba(34,211,238,0.14), rgba(132,204,22,0.05) 55%, transparent 72%)" }}
           />
           <div className="absolute inset-0" style={{ background: "radial-gradient(110% 80% at 50% 0%, transparent 52%, rgba(0,0,0,0.6) 100%)" }} />
         </div>
@@ -170,20 +170,19 @@ export default function LandingPage() {
 
           <span className="mt-8 inline-flex items-center gap-2 rounded-full border border-amber-400/25 bg-amber-400/[0.08] px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.28em] text-amber-300">
             <ShieldCheck size={12} />
-            Sports · Poker · Community
+            SMART PLAY · REAL REWARDS
           </span>
 
-          <h1
-            className="mt-7 text-5xl font-black tracking-tight leading-none text-center sm:text-7xl lg:text-8xl"
-          >
-            <span className="text-white">MOSHA</span>{" "}
-            <span className="bg-gradient-to-l from-amber-200 via-amber-400 to-amber-600 bg-clip-text text-transparent drop-shadow-[0_0_28px_rgba(245,158,11,0.35)]">
+          <h1 className="mt-7 flex flex-col text-[clamp(2.5rem,10vw,6rem)] font-black tracking-tight leading-[0.9] text-center">
+            <span dir="ltr" className="text-white">EINSTEIN</span>
+            <span dir="ltr" className="bg-gradient-to-l from-cyan-200 via-cyan-400 to-lime-300 bg-clip-text text-transparent drop-shadow-[0_0_28px_rgba(34,211,238,0.35)]">
               DROP
             </span>
           </h1>
 
           <p className="mx-auto mt-6 max-w-md text-sm text-slate-400 leading-relaxed sm:text-base">
-            בחרו <span className="font-bold text-amber-300">5 קלפים</span>, המכונה תערבב את החפיסה
+            <BrainCircuit className="mb-1 inline text-cyan-300" size={16} /> חוכמה, אינטואיציה וקצת מזל.
+            בחרו <span className="font-bold text-cyan-300">5 קלפים</span>, המכונה תערבב את החפיסה
             ותחשוף את הפרס — בונוס או מתנה בשקלים שיופיעו בהפקדה הבאה שלכם.
           </p>
 
@@ -258,7 +257,7 @@ export default function LandingPage() {
           className="relative z-10 mx-auto flex w-full max-w-xl flex-col items-center text-center"
         >
           <h2 className="text-2xl font-black text-white sm:text-4xl">
-            מקום אחד <span className="bg-gradient-to-l from-amber-200 via-amber-400 to-amber-600 bg-clip-text text-transparent">למזל שלכם</span>
+            <Atom className="mb-1 inline text-cyan-300" size={24} /> מקום אחד <span className="bg-gradient-to-l from-cyan-200 via-cyan-400 to-lime-300 bg-clip-text text-transparent">למזל שלכם</span>
           </h2>
           <p className="mx-auto mt-3 max-w-sm text-xs text-slate-400 sm:text-sm">
             ההדרוף פתוח לחברי הקהילה בלבד. הזינו את הקוד האישי שלכם והתחילו לסבב.

@@ -20,8 +20,8 @@ function CardEmblem() {
             width: 70,
             height: 104,
             transform: `rotate(${(i - 1) * 12}deg) translateX(${(i - 1) * 30}px)`,
-            boxShadow: "0 0 34px rgba(228,174,57,0.14), 0 14px 30px rgba(0,0,0,0.45)",
-            backgroundImage: "radial-gradient(ellipse at center, rgba(228,174,57,0.08), transparent 60%)",
+            boxShadow: "0 0 34px rgba(34,211,238,0.16), 0 14px 30px rgba(0,0,0,0.45)",
+            backgroundImage: "radial-gradient(ellipse at center, rgba(34,211,238,0.1), transparent 60%)",
           }}
         >
           <div className="absolute inset-1 rounded-lg border border-amber-500/15" />
@@ -53,7 +53,7 @@ function CompletedView({ record, onStartNew }: { record: CompletedRecord; onStar
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
       >
-        <div className="pointer-events-none absolute -top-28 left-1/2 h-48 w-[420px] -translate-x-1/2" style={{ background: "radial-gradient(closest-side, rgba(228,174,57,0.07), transparent 72%)" }} />
+        <div className="pointer-events-none absolute -top-28 left-1/2 h-48 w-[420px] -translate-x-1/2" style={{ background: "radial-gradient(closest-side, rgba(34,211,238,0.09), transparent 72%)" }} />
         <div className="pointer-events-none absolute -bottom-24 -right-16 h-64 w-64" style={{ background: "radial-gradient(closest-side, rgba(255,255,255,0.025), transparent 70%)" }} />
 
         <div className="relative px-6 sm:px-10 py-8 sm:py-10 flex flex-col items-center text-center">
@@ -269,14 +269,14 @@ export default function DailyDrop() {
       <section id="drop" className="px-4 lg:px-8 max-w-2xl mx-auto w-full pt-8 pb-4 sm:pt-12">
         <div className="premium-panel relative overflow-hidden rounded-3xl">
           {/* Restrained luxury ambience */}
-          <div className="pointer-events-none absolute -top-28 left-1/2 h-48 w-[420px] -translate-x-1/2" style={{ background: "radial-gradient(closest-side, rgba(228,174,57,0.07), transparent 72%)" }} />
+          <div className="pointer-events-none absolute -top-28 left-1/2 h-48 w-[420px] -translate-x-1/2" style={{ background: "radial-gradient(closest-side, rgba(34,211,238,0.09), transparent 72%)" }} />
           <div className="pointer-events-none absolute -bottom-24 -right-16 h-64 w-64" style={{ background: "radial-gradient(closest-side, rgba(255,255,255,0.025), transparent 70%)" }} />
 
           <div className="relative px-6 sm:px-10 py-8 sm:py-10 flex flex-col items-center text-center">
             {/* Badge + status */}
             <div className="flex items-center gap-2.5 mb-6 sm:mb-8">
               <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-amber-400/[0.1] text-amber-400 border border-amber-400/25 uppercase tracking-[0.22em]">
-                Daily Sports &amp; Poker Drop
+                Einstein Drop · איינשטיין דרופ
               </span>
               <span
                 className={`flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 rounded-full border ${

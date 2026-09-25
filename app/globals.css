@@ -4,7 +4,7 @@
 
 @layer base {
   :root {
-    --background: #07090f;
+    --background: #050b12;
     --foreground: #f8fafc;
   }
 }
@@ -28,24 +28,22 @@ body {
   overflow-x: clip;
 }
 
-/* ---- Luxury dark foundation: carbon weave + brushed metal + restrained neon ---- */
+/* ---- Einstein Drop: midnight science lab with blueprint grid + neon cyan ---- */
 
-/* Carbon-weave page background with soft gold & violet ambience */
+/* Blueprint grid with cool cyan and lime lab ambience */
 .texture-carbon {
-  background-color: #07090f;
+  background-color: #050b12;
   background-image:
-    linear-gradient(27deg, rgba(255, 255, 255, 0.022) 5px, transparent 5px),
-    linear-gradient(207deg, rgba(255, 255, 255, 0.022) 5px, transparent 5px),
-    linear-gradient(27deg, rgba(0, 0, 0, 0.34) 5px, transparent 5px),
-    linear-gradient(207deg, rgba(0, 0, 0, 0.34) 5px, transparent 5px),
-    radial-gradient(1100px 460px at 50% -120px, rgba(228, 174, 57, 0.09), transparent 62%),
-    radial-gradient(900px 420px at 88% 0%, rgba(124, 58, 237, 0.07), transparent 55%);
-  background-size: 10px 10px, 10px 10px, 10px 10px, 10px 10px, 100% 100%, 100% 100%;
-  background-position: 0 0, 0 0, 5px 5px, 5px 5px, 0 0, 0 0;
+    linear-gradient(rgba(34, 211, 238, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(34, 211, 238, 0.035) 1px, transparent 1px),
+    radial-gradient(1100px 460px at 50% -120px, rgba(34, 211, 238, 0.12), transparent 62%),
+    radial-gradient(900px 420px at 88% 0%, rgba(132, 204, 22, 0.055), transparent 55%);
+  background-size: 36px 36px, 36px 36px, 100% 100%, 100% 100%;
+  background-position: 0 0, 0 0, 0 0, 0 0;
   background-attachment: scroll;
 }
 
-/* GPU-composited falling MOSHA card loop (no JS/RAF, runs off the main thread) */
+/* GPU-composited falling Einstein Drop card loop (no JS/RAF) */
 @keyframes fall-card {
   0% {
     transform: translate3d(0, -6vh, 0) rotate(var(--rot, 0deg));
@@ -111,7 +109,7 @@ body {
     repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.014) 0 2px, transparent 2px 14px);
 }
 
-/* Premium panel: brushed metal base + gold→violet hairline edge */
+/* Premium panel: technical glass with cyan→lime hairline edge */
 .premium-panel {
   position: relative;
   background:
@@ -129,14 +127,14 @@ body {
   background: linear-gradient(
     90deg,
     transparent,
-    rgba(228, 174, 57, 0.45),
-    rgba(124, 58, 237, 0.35),
+    rgba(34, 211, 238, 0.55),
+    rgba(132, 204, 22, 0.35),
     transparent
   );
   pointer-events: none;
 }
 
-/* Gold→violet hairline edge for bars (navbar, sticky bar) */
+/* Cyan→lime hairline edge for bars (navbar, sticky bar) */
 .premium-hairline {
   position: relative;
 }
@@ -149,8 +147,8 @@ body {
   background: linear-gradient(
     90deg,
     transparent,
-    rgba(228, 174, 57, 0.4),
-    rgba(124, 58, 237, 0.3),
+    rgba(34, 211, 238, 0.5),
+    rgba(132, 204, 22, 0.32),
     transparent
   );
   pointer-events: none;
