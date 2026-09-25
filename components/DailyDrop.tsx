@@ -219,7 +219,7 @@ export default function DailyDrop() {
     const upperVal = value.toUpperCase();
     // These public community codes intentionally bypass RPC verification so
     // backend availability cannot block the prize-reveal experience.
-    if (upperVal === "ADIR-DROP-2026" || upperVal === "MOSIKO-COIN-2026") {
+    if (upperVal === "ADIR-DROP-2026") {
       setPrize(pickWeighted(BOX_ITEMS));
       setCode(value);
       setStage("cinematic");
