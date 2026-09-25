@@ -78,6 +78,12 @@ body {
   animation: bob 1.6s ease-in-out infinite;
 }
 
+/* Skip layout/paint of off-screen sections on large desktop viewports */
+.cv-auto {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 720px;
+}
+
 /* Brushed metallic sheen for premium surfaces */
 .texture-metal {
   background-image:

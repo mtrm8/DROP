@@ -36,10 +36,22 @@ export async function redeemCode(rawInput: string): Promise<RedeemResult> {
       body: JSON.stringify({ p_code: value }),
     });
     if (res.ok) {
-      const data = (await res.json().catch(() => ({}))) as { success?: boolean };
-      return data.success === true
-        ? { status: "ok", mode: "server" }
-        : { status: "already_used", code: value, mode: "server" };
+      const data = (await res.json().catch(() => ({}))) as {
+        success?: boolean;
+        error?: "not_found" | "already_redeemed" | string;
+      };
+      if (data.success === true) {
+        return { status: "ok", mode: "server" };
+      }
+      // Code known on the client but not yet seeded in the DB (e.g. the
+      // schema.sql insert hasn't been run for this code): the client-side
+      // community list is the source of truth, so accept it. This keeps codes
+      // working immediately without manual Supabase SQL. Once the row exists,
+      // the server enforces true single-use ("already_redeemed").
+      if (data.error === "not_found") {
+        return { status: "ok", mode: "client" };
+      }
+      return { status: "already_used", code: value, mode: "server" };
     }
     // RPC not deployed yet (404) or backend hiccup: degrade to the legacy flow.
     return { status: "ok", mode: "client" };

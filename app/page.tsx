@@ -155,7 +155,10 @@ export default function LandingPage() {
         <FallingField />
 
         <div className="pointer-events-none absolute inset-0 z-0">
-          <div className="absolute left-1/2 top-1/3 h-[46vw] w-[80vw] -translate-x-1/2 rounded-full bg-amber-500/[0.08] blur-[140px]" />
+          <div
+            className="absolute left-1/2 top-1/3 h-[48vw] w-[82vw] -translate-x-1/2"
+            style={{ background: "radial-gradient(closest-side, rgba(245,158,11,0.13), rgba(245,158,11,0.05) 55%, transparent 72%)" }}
+          />
           <div className="absolute inset-0" style={{ background: "radial-gradient(110% 80% at 50% 0%, transparent 52%, rgba(0,0,0,0.6) 100%)" }} />
         </div>
 
@@ -207,7 +210,7 @@ export default function LandingPage() {
       </section>
 
       {/* how it works */}
-      <section className="relative w-full px-6 pb-4" style={{ backgroundColor: "#05060a" }}>
+      <section className="cv-auto relative w-full px-6 pb-4" style={{ backgroundColor: "#05060a" }}>
         <div className="mx-auto max-w-4xl">
           <motion.h2
             initial={{ y: 16 }}
@@ -245,8 +248,8 @@ export default function LandingPage() {
       </section>
 
       {/* closing CTA */}
-      <section className="relative w-full overflow-hidden px-6 py-20 text-center" style={{ backgroundColor: "#05060a" }}>
-        <div className="pointer-events-none absolute left-1/2 top-1/2 h-64 w-[78vw] -translate-x-1/2 -translate-y-1/2 rounded-full bg-amber-500/[0.07] blur-[120px]" />
+      <section className="cv-auto relative w-full overflow-hidden px-6 py-20 text-center" style={{ backgroundColor: "#05060a" }}>
+        <div className="pointer-events-none absolute left-1/2 top-1/2 h-[44vh] w-[78vw] -translate-x-1/2 -translate-y-1/2" style={{ background: "radial-gradient(closest-side, rgba(245,158,11,0.10), transparent 70%)" }} />
         <motion.div
           initial={{ y: 20 }}
           whileInView={{ y: 0 }}

@@ -200,7 +200,7 @@ export function CardRevealAnimation({ onFinished, onCancel }: CardRevealProps) {
     <div className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-[#05060a]">
       {/* pure black & gold ambience */}
       <div className="pointer-events-none absolute inset-0">
-        <div className="absolute left-1/2 top-1/4 h-[42vw] w-[72vw] -translate-x-1/2 rounded-full bg-amber-500/[0.05] blur-[140px]" />
+        <div className="absolute left-1/2 top-1/4 h-[44vw] w-[74vw] -translate-x-1/2" style={{ background: "radial-gradient(closest-side, rgba(228,174,57,0.09), transparent 72%)" }} />
         <div className="absolute bottom-0 left-1/2 h-64 w-[84vw] -translate-x-1/2 rounded-full bg-amber-400/[0.03] blur-[130px]" />
         <div className="absolute inset-0" style={{ background: "radial-gradient(120% 90% at 50% 0%, transparent 55%, rgba(0,0,0,0.55) 100%)" }} />
       </div>

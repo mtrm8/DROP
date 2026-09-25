@@ -7,7 +7,7 @@ import { WHATSAPP_URL } from "./drop/community";
 
 export default function Navbar() {
   return (
-    <header className="sticky top-0 z-50 premium-hairline border-b border-white/[0.06] texture-metal bg-[#07090f]/85 backdrop-blur-xl px-4 lg:px-8">
+    <header className="sticky top-0 z-50 premium-hairline border-b border-white/[0.06] texture-metal bg-[#07090f]/90 backdrop-blur-md px-4 lg:px-8">
       <div className="max-w-7xl mx-auto h-16 flex items-center justify-between gap-6">
         {/* Logo — Moshe wordmark + gold trophy */}
         <Link href="/" className="flex items-center gap-3 shrink-0 group">
