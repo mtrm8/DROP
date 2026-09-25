@@ -15,11 +15,11 @@ const SELECT_COUNT = 5;
 // edge. The selection grid gets its own (shorter) height budget so the cards
 // can be as large as the screen allows instead of being shrunk to fit room the
 // selection view never uses.
-const STAGE_W = 820;
-const GRID_H = 780;
-const MACHINE_H = 1240; /* 340 entry headroom + 900 content */
-const ENV_W = 580; /* covers the widest sideways fan-out */
-const ENTRY_PAD = 340;
+const STAGE_W = 1000;
+const GRID_H = 880;
+const MACHINE_H = 1450; /* 360 entry headroom + 1090 content */
+const ENV_W = 720; /* covers the widest sideways fan-out */
+const ENTRY_PAD = 360;
 
 type Phase = "grid" | "collect" | "revealSelection" | "shuffle" | "suspense" | "reveal" | "done";
 
@@ -70,27 +70,27 @@ const shuffleZ = (i: number) => {
 };
 const shuffleScale = () => [1, 1.04, 1.1, 1.14, 1.02, 1.1, 1.12, 1.02, 1, 1, 1, 1];
 
-function CardBackFace({ compact = false }: { compact?: boolean }) {
+function CardBackFace() {
   return (
     <div
-      className="absolute inset-0 flex flex-col items-center justify-between overflow-hidden rounded-xl border border-amber-400/50 bg-gradient-to-br from-neutral-900 via-zinc-900 to-black p-2.5"
-      style={{ boxShadow: "0 0 26px rgba(228,174,57,0.16), inset 0 0 18px rgba(228,174,57,0.06)" }}
+      className="absolute inset-0 flex flex-col items-center justify-between overflow-hidden rounded-2xl border-2 border-amber-400/50 bg-gradient-to-br from-neutral-900 via-zinc-900 to-black p-3.5"
+      style={{ boxShadow: "0 0 35px rgba(228,174,57,0.22), inset 0 0 22px rgba(228,174,57,0.08)" }}
     >
-      <div className="pointer-events-none absolute inset-0" style={{ background: "radial-gradient(ellipse at center, rgba(228,174,57,0.1), transparent 62%)" }} />
-      <div className="pointer-events-none absolute inset-0 card-sheen" style={{ background: "linear-gradient(115deg, transparent 28%, rgba(255,224,138,0.1) 42%, rgba(255,224,138,0.04) 52%, transparent 62%)" }} />
-      <div className="pointer-events-none absolute inset-1 rounded-lg border border-amber-500/20" />
-      <div className="flex w-full justify-between text-[11px] font-bold text-amber-300/80">
+      <div className="pointer-events-none absolute inset-0" style={{ background: "radial-gradient(ellipse at center, rgba(228,174,57,0.12), transparent 62%)" }} />
+      <div className="pointer-events-none absolute inset-0 card-sheen" style={{ background: "linear-gradient(115deg, transparent 28%, rgba(255,224,138,0.12) 42%, rgba(255,224,138,0.05) 52%, transparent 62%)" }} />
+      <div className="pointer-events-none absolute inset-1.5 rounded-xl border border-amber-500/25" />
+      <div className="flex w-full justify-between text-xs font-black text-amber-300">
         <span>K</span>
         <span>♠</span>
       </div>
-      <div className="flex flex-col items-center gap-0.5">
-        <span className={compact ? "text-lg leading-none" : "text-2xl leading-none"}>♛</span>
-        <span className={`font-serif font-black text-amber-300 ${compact ? "text-[13px]" : "text-xl"}`} style={{ textShadow: "0 0 10px rgba(228,174,57,0.5)" }}>
+      <div className="flex flex-col items-center gap-1">
+        <span className="text-3xl leading-none">♛</span>
+        <span className="font-serif font-black tracking-wider text-amber-300 text-xl" style={{ textShadow: "0 0 12px rgba(228,174,57,0.6)" }}>
           MOSHA
         </span>
-        {!compact && <span className="text-[7px] font-semibold uppercase tracking-[0.24em] text-amber-400/50">הדרוף היומי</span>}
+        <span className="text-[8px] font-extrabold uppercase tracking-[0.28em] text-amber-400/60">הדרוף היומי</span>
       </div>
-      <div className="flex w-full rotate-180 justify-between text-[11px] font-bold text-amber-300/80">
+      <div className="flex w-full rotate-180 justify-between text-xs font-black text-amber-300">
         <span>K</span>
         <span>♠</span>
       </div>
@@ -98,35 +98,34 @@ function CardBackFace({ compact = false }: { compact?: boolean }) {
   );
 }
 
-function CardFront({ item, compact = false }: { item: BoxItem; compact?: boolean }) {
+function CardFront({ item }: { item: BoxItem }) {
   const rarity = RARITIES[item.rarity];
   return (
     <div
-      className="absolute inset-0 overflow-hidden rounded-xl text-center"
+      className="absolute inset-0 overflow-hidden rounded-2xl text-center"
       style={{
         background: "linear-gradient(170deg, #171a22 0%, #0c0f17 55%, #090b11 100%)",
-        border: `1px solid ${rarity.border}`,
-        boxShadow: `0 0 26px ${rarity.glow}, 0 14px 30px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06)`,
+        border: `2px solid ${rarity.border}`,
+        boxShadow: `0 0 35px ${rarity.glow}, 0 16px 36px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.08)`,
       }}
     >
-      <div className="absolute inset-x-3 top-0 h-px" style={{ background: `linear-gradient(90deg, transparent, ${rarity.color}, transparent)` }} />
-      <div className="flex h-full flex-col items-center justify-between px-2 py-2.5">
-        <span className="rounded-full px-3 py-0.5 text-[11px] font-extrabold" style={{ background: rarity.bg, color: rarity.color, border: `1px solid ${rarity.border}` }}>
+      <div className="absolute inset-x-4 top-0 h-1" style={{ background: `linear-gradient(90deg, transparent, ${rarity.color}, transparent)` }} />
+      <div className="flex h-full flex-col items-center justify-between px-3 py-3.5">
+        <span className="rounded-full px-3.5 py-1 text-xs font-extrabold" style={{ background: rarity.bg, color: rarity.color, border: `1px solid ${rarity.border}` }}>
           {item.chance}
         </span>
         <div
-          className={`flex items-center justify-center rounded-full border ${compact ? "h-13 w-13" : "h-22 w-22"}`}
-          style={{ borderColor: rarity.color, background: "radial-gradient(circle at 35% 28%, rgba(255,255,255,0.12), rgba(15,17,24,0.97) 78%)", boxShadow: `0 0 30px ${rarity.glow}` }}
+          className="flex h-24 w-24 items-center justify-center rounded-full border-2"
+          style={{ borderColor: rarity.color, background: "radial-gradient(circle at 35% 28%, rgba(255,255,255,0.15), rgba(15,17,24,0.98) 78%)", boxShadow: `0 0 35px ${rarity.glow}` }}
         >
           <span
-            className="leading-none drop-shadow-[0_0_12px_rgba(255,214,102,0.4)]"
-            style={{ fontSize: compact ? 26 : 44 }}
+            className="leading-none drop-shadow-[0_0_16px_rgba(255,214,102,0.5)] text-5xl"
             aria-hidden="true"
           >
             {item.emoji}
           </span>
         </div>
-        <div className={`line-clamp-2 font-black leading-tight ${compact ? "text-xs" : "text-sm"}`} style={{ color: rarity.color, textShadow: `0 0 14px ${rarity.glow}` }}>
+        <div className="line-clamp-2 font-black leading-tight text-base" style={{ color: rarity.color, textShadow: `0 0 16px ${rarity.glow}` }}>
           {item.name}
         </div>
       </div>
@@ -313,14 +312,14 @@ export function CardRevealAnimation({ onFinished, onCancel, prize }: CardRevealP
                 </div>
               </div>
 
-              <div className="grid w-full max-w-[780px] grid-cols-5 place-items-center gap-3 sm:gap-4">
+              <div className="grid w-full max-w-[960px] grid-cols-5 place-items-center gap-4 sm:gap-6">
                 {cards.map((c) => {
                   const picked = c.selected;
                   return (
                     <motion.div
                       key={c.id}
                       onClick={() => toggle(c.id)}
-                      whileHover={picked ? undefined : { y: -9, scale: 1.05 }}
+                      whileHover={picked ? undefined : { y: -10, scale: 1.06 }}
                       whileTap={picked ? undefined : { scale: 0.97 }}
                       transition={{ type: "spring", stiffness: 400, damping: 22 }}
                       className={`relative aspect-[5/7] w-full select-none [perspective:600px] ${picked ? "cursor-default" : "cursor-pointer"}`}
@@ -333,16 +332,16 @@ export function CardRevealAnimation({ onFinished, onCancel, prize }: CardRevealP
                         transition={{ type: "spring", stiffness: 300, damping: 24 }}
                       >
                         <div className="absolute inset-0 [backface-visibility:hidden]">
-                          <CardBackFace compact />
+                          <CardBackFace />
                         </div>
                         <div className="absolute inset-0 [backface-visibility:hidden]" style={{ transform: "rotateY(180deg)" }}>
-                          <CardFront item={c.item} compact />
+                          <CardFront item={c.item} />
                         </div>
                       </motion.div>
                       {picked && (
                         <motion.div
-                          className="pointer-events-none absolute -inset-1.5 z-10 rounded-2xl"
-                          style={{ border: "2px solid rgba(251,191,36,0.9)", boxShadow: "0 0 26px rgba(245,158,11,0.45)" }}
+                          className="pointer-events-none absolute -inset-2 z-10 rounded-2xl"
+                          style={{ border: "2px solid rgba(251,191,36,0.95)", boxShadow: "0 0 32px rgba(245,158,11,0.5)" }}
                           initial={{ opacity: 0, scale: 0.9 }}
                           animate={{ opacity: 1, scale: 1 }}
                         />
@@ -381,21 +380,21 @@ export function CardRevealAnimation({ onFinished, onCancel, prize }: CardRevealP
               transition={{ duration: 0.4 }}
             >
               {/* drop machine */}
-              <div className="relative h-[530px] w-[min(94vw,410px)]">
+              <div className="relative h-[620px] w-[min(94vw,480px)]">
                 {/* ambient glow */}
                 <motion.div
-                  className="pointer-events-none absolute -inset-4 rounded-[40px]"
+                  className="pointer-events-none absolute -inset-6 rounded-[44px]"
                   animate={{
                     boxShadow:
                       phase === "reveal" || phase === "done"
                         ? winnerCard
-                          ? `0 0 80px ${RARITIES[winnerCard.item.rarity].glow}`
-                          : "0 0 60px rgba(228,174,57,0.24)"
+                          ? `0 0 90px ${RARITIES[winnerCard.item.rarity].glow}`
+                          : "0 0 70px rgba(228,174,57,0.28)"
                         : phase === "shuffle" || phase === "suspense"
-                          ? "0 0 60px rgba(245,158,11,0.28)"
+                          ? "0 0 70px rgba(245,158,11,0.32)"
                           : phase === "revealSelection"
-                            ? "0 0 50px rgba(228,174,57,0.2)"
-                            : "0 0 40px rgba(228,174,57,0.12)",
+                            ? "0 0 60px rgba(228,174,57,0.24)"
+                            : "0 0 45px rgba(228,174,57,0.15)",
                   }}
                   transition={{ duration: 0.8 }}
                 />
@@ -472,7 +471,7 @@ export function CardRevealAnimation({ onFinished, onCancel, prize }: CardRevealP
                     const tossRot = (i % 2 === 0 ? -1 : 1) * (16 + i * 4);
                     const delay = i * 0.13;
                     return (
-                      <motion.div key={c.id} className="absolute left-1/2 top-1/2 h-[195px] w-[140px] -ml-[70px] -mt-[97px] [transform-style:preserve-3d]" style={{ zIndex: isWinner ? 40 : 5, willChange: "transform" }}>
+                      <motion.div key={c.id} className="absolute left-1/2 top-1/2 h-[235px] w-[170px] -ml-[85px] -mt-[117px] [transform-style:preserve-3d]" style={{ zIndex: isWinner ? 40 : 5, willChange: "transform" }}>
                         <motion.div
                           className="relative h-full w-full [transform-style:preserve-3d]"
                           initial={
@@ -529,8 +528,8 @@ export function CardRevealAnimation({ onFinished, onCancel, prize }: CardRevealP
                           }
                         >
                           <div className="absolute inset-0 [transform-style:preserve-3d]">
-                            <div className="absolute inset-0 [backface-visibility:hidden]">
-                              <CardBackFace compact />
+                              <div className="absolute inset-0 [backface-visibility:hidden]">
+                              <CardBackFace />
                             </div>
                             <div className="absolute inset-0 [backface-visibility:hidden]" style={{ transform: "rotateY(180deg)" }}>
                               <CardFront item={c.item} />
