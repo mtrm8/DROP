@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import Navbar from "./Navbar";
 import CommunityFooter from "./CommunityFooter";
+import BunkerMatchSimulator from "./BunkerMatchSimulator";
 
 const COMPLETED_KEY = "drop-completed";
 const DEMO_LEGS = [
@@ -167,6 +168,8 @@ export default function BunkerExperience() {
             <span className="rounded-full border border-amber-200/15 bg-amber-200/[0.04] px-3 py-1 text-amber-100/80">DEMO BOARD · NOT LIVE PICKS</span>
           </div>
         </motion.header>
+
+        <BunkerMatchSimulator />
 
         <div className="mt-7 grid items-start gap-6 lg:grid-cols-[1.15fr_0.85fr]">
           <motion.section
