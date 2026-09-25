@@ -137,6 +137,7 @@ export default function DailyDrop() {
     null | "invalid" | "already_used" | "roll_failed" | "prize_missing" | "server_error"
   >(null);
   const [unlocking, setUnlocking] = useState(false);
+  const [errorDetail, setErrorDetail] = useState<string | null>(null);
   const [completed, setCompleted] = useState<CompletedRecord | null>(null);
   const [prize, setPrize] = useState<BoxItem | null>(null);
   const [resumed, setResumed] = useState(false);
@@ -189,6 +190,7 @@ export default function DailyDrop() {
     setUnlocked(false);
     setCode("");
     setErrorKind(null);
+    setErrorDetail(null);
     setPrize(null);
     setResumed(false);
   };
@@ -200,6 +202,7 @@ export default function DailyDrop() {
     if (!value) return;
     submitGuard.current = true;
     setErrorKind(null);
+    setErrorDetail(null);
     setUnlocking(true);
     const settle = () => {
       submitGuard.current = false;
@@ -222,11 +225,18 @@ export default function DailyDrop() {
       enter(rolled.prize, false);
       return;
     }
-    // The prize RPC is not installed / not callable: this is an infrastructure
-    // problem, and redeeming now would burn a perfectly good code for nothing.
+    // The prize RPC is not installed / not callable: redeeming now would burn a
+    // perfectly good code for nothing. A code that was already redeemed with a
+    // prize on record can still be resumed, because the server stored it.
     if (rolled.status === "error" && rolled.missing) {
       console.warn("[drop] roll_prize unavailable:", rolled.code, rolled.message);
+      const stored = await getRolledPrize(value);
+      if (stored.status === "ok") {
+        enter(stored.prize, true);
+        return;
+      }
       settle();
+      setErrorDetail(`roll_prize · ${rolled.code ?? "unavailable"}`);
       setErrorKind("server_error");
       return;
     }
@@ -239,20 +249,24 @@ export default function DailyDrop() {
     }
     if (result.status === "already_used") {
       // The code state is already confirmed by redeem_code, so get_prize only
-      // decides "resume" vs "nothing on record". A definitive refusal (4xx) or
-      // a clean empty answer both mean no prize to resume — only a real
-      // infrastructure failure is reported as a temporary system error.
+      // decides "resume" vs "nothing on record". A definitive refusal (4xx), a
+      // clean empty answer, or a missing/broken prize function all mean there is
+      // no prize to resume — only a live-but-failing call is a temporary error.
       const existing = await getRolledPrize(value);
       if (existing.status === "ok") {
         enter(existing.prize, true);
         return;
       }
       settle();
-      if (existing.status === "empty" || (existing.status === "error" && existing.refused)) {
+      if (
+        existing.status === "empty" ||
+        (existing.status === "error" && (existing.refused || existing.missing))
+      ) {
         setErrorKind("already_used");
         return;
       }
       console.warn("[drop] get_prize failed:", existing.code, existing.message);
+      setErrorDetail(`get_prize · ${existing.code ?? "unreachable"}`);
       setErrorKind("server_error");
       return;
     }
@@ -269,6 +283,7 @@ export default function DailyDrop() {
         refused: rolled.refused,
         missing: rolled.missing,
       });
+      setErrorDetail(`roll_prize · ${rolled.code ?? "unreachable"}`);
       // The code is now burned and the server refused to roll for it: say so
       // plainly instead of leaving a silent dead end.
       setErrorKind(rolled.refused ? "prize_missing" : "roll_failed");
@@ -483,9 +498,14 @@ export default function DailyDrop() {
                                 : errorKind === "prize_missing"
                                   ? "הקוד אומת, אך מערכת הפרסים לא החזירה פרס לאחר מכן — נסו שוב, ואם זו לא התקלה הראשונה פנו להדרופ"
                                   : errorKind === "server_error"
-                                    ? "תקלה זמנית במערכת הקודים — הקוד לא נבדק, נסו שוב בעוד רגע"
+                                    ? "מערכת הפרסים לא זמינה כרגע — הקוד שלך לא נצרך ולא נשלם; נסו שוב עוד מעט"
                                     : "קוד שגוי – נא לבדוק את הקוד שהתקבל"}
                           </p>
+                          {errorDetail ? (
+                            <p className="mt-1 font-mono text-[10px] text-slate-600" dir="ltr">
+                              {errorDetail}
+                            </p>
+                          ) : null}
                         </div>
                       )}
 
