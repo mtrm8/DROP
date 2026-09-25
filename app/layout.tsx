@@ -1,10 +1,17 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
   title: "MOSHA — הדרוף היומי של קהילת הכדורגל והפוקר",
   description:
     "MOSHA — הדרוף היומי של קהילת הכדורגל והפוקר. סבבו וזכו בבונוס או במתנה בשקלים בהפקדה הבאה. כניסה עם קוד הקהילה מהוואטסאפ.",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
 };
 
 export default function RootLayout({

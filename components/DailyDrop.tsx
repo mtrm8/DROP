@@ -174,7 +174,7 @@ export default function DailyDrop() {
                 autoComplete="off"
                 spellCheck={false}
                 dir="ltr"
-                className={`w-full bg-transparent py-3 pl-1 text-left font-mono font-bold text-sm tracking-[0.16em] placeholder:text-slate-600 placeholder:font-sans placeholder:font-normal placeholder:tracking-normal outline-none ${
+                className={`w-full bg-transparent py-3 pl-1 text-left font-mono font-bold text-base tracking-[0.16em] placeholder:text-slate-600 placeholder:font-sans placeholder:font-normal placeholder:tracking-normal outline-none ${
                   unlocked || unlocking ? "text-amber-300" : "text-white"
                 }`}
               />
