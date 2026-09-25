@@ -1,8 +1,6 @@
 "use client";
 
-import { MessageCircle } from "lucide-react";
 import { TrophyIcon } from "./drop/sportsIcons";
-import { WHATSAPP_URL } from "./drop/community";
 
 export default function Navbar() {
   return (
@@ -33,18 +31,6 @@ export default function Navbar() {
             הדרוף היומי
           </a>
         </nav>
-
-        {/* WhatsApp community link */}
-        <a
-          href={WHATSAPP_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="px-4 py-2 rounded-lg text-slate-950 bg-gradient-to-br from-amber-200 via-amber-400 to-amber-600 hover:brightness-110 shadow-[0_0_22px_rgba(228,174,57,0.28)] transition active:scale-95 text-sm font-black flex items-center gap-2"
-        >
-          <MessageCircle size={16} />
-          <span className="hidden sm:inline">הקבוצה שלנו בוואטסאפ</span>
-          <span className="sm:hidden">וואטסאפ</span>
-        </a>
       </div>
     </header>
   );
