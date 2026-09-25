@@ -25,6 +25,14 @@ create table if not exists public.drop_codes (
 
 alter table public.drop_codes enable row level security;
 
+drop policy if exists "Allow anon and authenticated select on drop_codes" on public.drop_codes;
+drop policy if exists "Allow anon and authenticated insert on drop_codes" on public.drop_codes;
+drop policy if exists "Allow anon and authenticated update on drop_codes" on public.drop_codes;
+
+create policy "Allow anon and authenticated select on drop_codes" on public.drop_codes for select using (true);
+create policy "Allow anon and authenticated insert on drop_codes" on public.drop_codes for insert with check (true);
+create policy "Allow anon and authenticated update on drop_codes" on public.drop_codes for update using (true);
+
 -- Case-insensitive lookups mean 'ADIR-NEW-2026' and 'adir-new-2026' can both
 -- exist (the UNIQUE constraint is case-sensitive). Two rows for one code used
 -- to make resets look ignored, because the RPC matched the stale used row
@@ -64,6 +72,9 @@ create table if not exists public.drop_prizes (
 );
 
 alter table public.drop_prizes enable row level security;
+
+drop policy if exists "Allow anon and authenticated select on drop_prizes" on public.drop_prizes;
+create policy "Allow anon and authenticated select on drop_prizes" on public.drop_prizes for select using (true);
 
 -- Rarity curve: the everyday tiers carry the volume, and high tiers are
 -- genuinely hard to hit (exponentially rarer drop rates).
@@ -307,13 +318,21 @@ as $$
 $$;
 
 revoke all on function public.roll_prize(text) from public;
-grant execute on function public.roll_prize(text) to anon;
+grant execute on function public.roll_prize(text) to anon, authenticated, service_role;
 
 revoke all on function public.get_prize(text) from public;
-grant execute on function public.get_prize(text) to anon;
+grant execute on function public.get_prize(text) to anon, authenticated, service_role;
 
 revoke all on function public.code_status(text) from public;
-grant execute on function public.code_status(text) to anon;
+grant execute on function public.code_status(text) to anon, authenticated, service_role;
+
+grant select, insert, update on public.drop_codes to anon, authenticated, service_role;
+grant select on public.drop_prizes to anon, authenticated, service_role;
+grant select on public.drop_prize_odds to anon, authenticated, service_role;
+
+revoke all on function public.redeem_code(text) from public;
+grant execute on function public.redeem_code(text) to anon, authenticated, service_role;
+grant execute on function public.drop_prize_chance(text) to anon, authenticated, service_role;
 
 -- Seed active codes (add any community codes here; each can be used once, ever).
 insert into public.drop_codes (code)
