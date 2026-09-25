@@ -155,6 +155,48 @@ function GoldBurst({ glow }: { glow: string }) {
   );
 }
 
+const EINSTEIN_CONFETTI = ["#052e2b", "#047857", "#10b981", "#2dd4bf", "#d4af37", "#fbbf24", "#ecfdf5"];
+
+function EinsteinConfetti() {
+  return (
+    <div className="pointer-events-none absolute inset-0 z-[60] overflow-hidden" aria-hidden="true">
+      {Array.from({ length: 64 }, (_, i) => {
+        const color = EINSTEIN_CONFETTI[i % EINSTEIN_CONFETTI.length];
+        const drift = ((i * 37) % 181) - 90;
+        const size = 5 + (i % 4) * 2;
+        return (
+          <motion.span
+            key={i}
+            className="absolute -top-8"
+            style={{
+              left: `${(i * 47) % 100}%`,
+              width: i % 5 === 0 ? size + 3 : size,
+              height: i % 5 === 0 ? size + 3 : size * 1.7,
+              borderRadius: i % 4 === 0 ? "50%" : "2px",
+              border: "1px solid rgba(236,253,245,0.28)",
+              backgroundColor: color,
+              boxShadow: `0 0 12px ${color}99`,
+            }}
+            initial={{ opacity: 0, y: "-5vh", x: 0, rotate: 0, scale: 0.6 }}
+            animate={{
+              opacity: [0, 1, 1, 0],
+              y: ["-5vh", "108vh"],
+              x: [0, drift],
+              rotate: [0, (i % 2 ? 1 : -1) * (360 + (i % 5) * 90)],
+              scale: [0.6, 1, 0.8],
+            }}
+            transition={{
+              delay: (i % 16) * 0.035,
+              duration: 2.3 + (i % 5) * 0.2,
+              ease: "easeIn",
+            }}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
 // The deck always contains the server-rolled prize at a random slot; the other
 // cards are purely cosmetic decoys drawn from the same cash pool.
 function buildDeck(prize: BoxItem): DealCard[] {
@@ -247,6 +289,8 @@ export function CardRevealAnimation({ onFinished, onCancel, prize }: CardRevealP
         <div className="absolute bottom-0 left-1/2 h-64 w-[84vw] -translate-x-1/2" style={{ background: "radial-gradient(closest-side, rgba(132,204,22,0.06), transparent 72%)" }} />
         <div className="absolute inset-0" style={{ background: "radial-gradient(120% 90% at 50% 0%, transparent 55%, rgba(0,0,0,0.55) 100%)" }} />
       </div>
+
+      {phase === "reveal" && winnerCard && <EinsteinConfetti key={`confetti-${winnerCard.id}`} />}
 
       {/* header */}
       <div className="relative z-20 flex items-center justify-between border-b border-white/[0.06] px-4 py-3 sm:px-8">
