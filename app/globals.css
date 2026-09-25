@@ -42,7 +42,40 @@ body {
     radial-gradient(900px 420px at 88% 0%, rgba(124, 58, 237, 0.07), transparent 55%);
   background-size: 10px 10px, 10px 10px, 10px 10px, 10px 10px, 100% 100%, 100% 100%;
   background-position: 0 0, 0 0, 5px 5px, 5px 5px, 0 0, 0 0;
-  background-attachment: fixed;
+  background-attachment: scroll;
+}
+
+/* GPU-composited falling MOSHA card loop (no JS/RAF, runs off the main thread) */
+@keyframes fall-card {
+  0% {
+    transform: translate3d(0, -6vh, 0) rotate(var(--rot, 0deg));
+    opacity: 0;
+  }
+  12% {
+    opacity: 0.85;
+  }
+  82% {
+    opacity: 0.85;
+  }
+  100% {
+    transform: translate3d(var(--sway, 0px), var(--fall, 46vh), 0) rotate(calc(var(--rot, 0deg) + var(--rot-mid, 12deg)));
+    opacity: 0;
+  }
+}
+
+.animate-fall-card {
+  animation: fall-card linear infinite;
+  will-change: transform, opacity;
+}
+
+/* Gentle bob for the hero scroll hint */
+@keyframes bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(8px); }
+}
+
+.animate-bob {
+  animation: bob 1.6s ease-in-out infinite;
 }
 
 /* Brushed metallic sheen for premium surfaces */

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { motion, useMotionTemplate, useMotionValue, useScroll, useSpring, useTransform } from "framer-motion";
+import { motion, useMotionTemplate, useMotionValue, useSpring } from "framer-motion";
 import { ArrowLeft, ChevronDown, ShieldCheck, Sparkles } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import CommunityFooter from "@/components/CommunityFooter";
@@ -47,11 +47,7 @@ function HeroCard3D() {
   }
 
   return (
-    <motion.div
-      className="relative"
-      animate={{ y: [0, -12, 0] }}
-      transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
-    >
+    <div className="relative animate-float">
       <div className="[perspective:1400px]">
         <motion.div
           role="button"
@@ -89,39 +85,41 @@ function HeroCard3D() {
           </div>
         </motion.div>
       </div>
-    </motion.div>
+    </div>
   );
 }
 
 const CARDS = [
-  { left: "6%", top: "24%", w: 54, h: 76, rot: -18, dur: 16, delay: 0 },
-  { left: "70%", top: "16%", w: 62, h: 88, rot: 14, dur: 18, delay: 1.5 },
-  { left: "84%", top: "62%", w: 50, h: 72, rot: 20, dur: 15, delay: 3 },
-  { left: "20%", top: "72%", w: 58, h: 82, rot: -10, dur: 17, delay: 2 },
+  { left: "6%", top: "24%", w: 54, h: 76, rot: -18, rotMid: 10, dur: 16, delay: 0, sway: -30, fall: "52vh" },
+  { left: "70%", top: "16%", w: 62, h: 88, rot: 14, rotMid: -8, dur: 18, delay: 1.5, sway: 26, fall: "58vh" },
+  { left: "84%", top: "62%", w: 50, h: 72, rot: 20, rotMid: 12, dur: 15, delay: 3, sway: -18, fall: "44vh" },
+  { left: "20%", top: "72%", w: 58, h: 82, rot: -10, rotMid: 14, dur: 17, delay: 2, sway: 22, fall: "48vh" },
 ];
 
 function FallingField() {
-  const { scrollYProgress } = useScroll();
-  const parallax = useTransform(scrollYProgress, [0, 1], [0, -160]);
-
   return (
-    <motion.div
-      aria-hidden
-      className="pointer-events-none absolute inset-0 z-0 overflow-hidden"
-      style={{ y: parallax }}
-    >
+    <div aria-hidden className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
       {CARDS.map((c, i) => (
-        <motion.div
+        <div
           key={`card-${i}`}
-          className="absolute"
-          style={{ left: c.left, top: c.top }}
-          animate={{ y: [0, c.h * 3.2], rotate: [c.rot, c.rot + 8, c.rot], opacity: [0.25, 0.85, 0.25] }}
-          transition={{ duration: c.dur, delay: c.delay, repeat: Infinity, ease: "easeInOut" }}
+          className="animate-fall-card absolute"
+          style={
+            {
+              left: c.left,
+              top: c.top,
+              "--rot": `${c.rot}deg`,
+              "--rot-mid": `${c.rotMid}deg`,
+              "--sway": `${c.sway}px`,
+              "--fall": c.fall,
+              animationDuration: `${c.dur}s`,
+              animationDelay: `${c.delay}s`,
+            } as React.CSSProperties
+          }
         >
           <FloatingCard w={c.w} h={c.h} rot={c.rot} />
-        </motion.div>
+        </div>
       ))}
-    </motion.div>
+    </div>
   );
 }
 
@@ -185,13 +183,11 @@ export default function LandingPage() {
           </div>
         </div>
 
-        <motion.div
-          className="absolute bottom-6 left-1/2 z-10 hidden -translate-x-1/2 sm:block"
-          animate={{ y: [0, 8, 0] }}
-          transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
-        >
-          <ChevronDown size={22} className="text-amber-400/60" />
-        </motion.div>
+        <div className="pointer-events-none absolute bottom-6 left-1/2 z-10 hidden -translate-x-1/2 sm:block">
+          <div className="animate-bob">
+            <ChevronDown size={22} className="text-amber-400/60" />
+          </div>
+        </div>
       </section>
 
       {/* how it works */}

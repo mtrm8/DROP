@@ -55,7 +55,9 @@ export default function DailyDrop() {
     const value = code.trim();
     setCodeError(false);
     setCodeUsedError(false);
+    setUnlocking(true);
     const result = await redeemCode(value);
+    setUnlocking(false);
     if (result.status === "invalid") {
       setCodeError(true);
       return;
@@ -64,12 +66,8 @@ export default function DailyDrop() {
       setCodeUsedError(true);
       return;
     }
-    setUnlocking(true);
-    window.setTimeout(() => {
-      setUnlocked(true);
-      setUnlocking(false);
-      setCode(value);
-    }, 450);
+    setUnlocked(true);
+    setCode(value);
   };
 
   return (

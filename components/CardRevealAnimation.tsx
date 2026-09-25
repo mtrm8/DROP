@@ -424,7 +424,7 @@ export function CardRevealAnimation({ onFinished, onCancel }: CardRevealProps) {
                     const tossRot = (i % 2 === 0 ? -1 : 1) * (16 + i * 4);
                     const delay = i * 0.13;
                     return (
-                      <motion.div key={c.id} className="absolute left-1/2 top-1/2 h-32 w-24 -ml-12 -mt-16 [transform-style:preserve-3d]" style={{ zIndex: isWinner ? 40 : 5 }}>
+                      <motion.div key={c.id} className="absolute left-1/2 top-1/2 h-32 w-24 -ml-12 -mt-16 [transform-style:preserve-3d]" style={{ zIndex: isWinner ? 40 : 5, willChange: "transform" }}>
                         <motion.div
                           className="relative h-full w-full [transform-style:preserve-3d]"
                           initial={
