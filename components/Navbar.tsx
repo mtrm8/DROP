@@ -4,7 +4,7 @@ import Link from "next/link";
 import { BrainCircuit, MessageCircle } from "lucide-react";
 import { WHATSAPP_URL } from "./drop/community";
 
-export default function Navbar() {
+export default function Navbar({ hebrewBrand = false }: { hebrewBrand?: boolean }) {
   return (
     <header className="sticky top-0 z-50 premium-hairline border-b border-white/[0.06] texture-metal bg-[#07111b]/90 backdrop-blur-md px-4 lg:px-8">
       <div className="max-w-7xl mx-auto h-16 flex items-center justify-between gap-6">
@@ -16,7 +16,7 @@ export default function Navbar() {
           </div>
           <div className="leading-tight">
             <span className="text-lg font-black tracking-tight text-white">
-              Einstein <span className="bg-gradient-to-l from-cyan-200 via-cyan-400 to-lime-300 bg-clip-text text-transparent">Drop</span>
+              {hebrewBrand ? "איינשטיין" : "Einstein"} <span className="bg-gradient-to-l from-cyan-200 via-cyan-400 to-lime-300 bg-clip-text text-transparent">{hebrewBrand ? "דרופ" : "Drop"}</span>
             </span>
             <p className="text-[9px] font-semibold text-slate-500 tracking-[0.34em] uppercase leading-tight">
               חכמה · קלפים · קהילה
