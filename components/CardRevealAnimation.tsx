@@ -8,6 +8,15 @@ import { BOX_ITEMS, BoxItem, ItemIcon, RARITIES, pickWeighted } from "./drop/box
 const CARDS_COUNT = 10;
 const SELECT_COUNT = 5;
 
+// Stage layout + safety envelope. The collect/shuffle/reveal animations
+// translate cards up to ~±220px sideways and ~-280px above the card tray, so
+// the stage reserves that room and `fit` scales against the envelope — the
+// whole animation stays fully visible and centered, never clipped at the edge.
+const STAGE_W = 380;
+const STAGE_H = 1040; /* 280 entry headroom + 760 content */
+const ENV_W = 440; /* covers the widest sideways fan-out */
+const ENTRY_PAD = 280;
+
 type Phase = "grid" | "collect" | "revealSelection" | "shuffle" | "suspense" | "reveal" | "done";
 
 interface DealCard {
@@ -151,8 +160,8 @@ export function CardRevealAnimation({ onFinished, onCancel }: CardRevealProps) {
     const compute = () => {
       const vw = window.innerWidth;
       const vh = window.innerHeight;
-      const scale = Math.min(1, (vh - 78) / 760, (vw - 24) / 380);
-      setFit(Math.max(0.5, scale));
+      const scale = Math.min(1, (vh - 70) / STAGE_H, (vw - 16) / ENV_W);
+      setFit(Math.max(0.3, scale));
     };
     compute();
     let timer: ReturnType<typeof setTimeout>;
@@ -209,7 +218,7 @@ export function CardRevealAnimation({ onFinished, onCancel }: CardRevealProps) {
       {/* pure black & gold ambience */}
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute left-1/2 top-1/4 h-[44vw] w-[74vw] -translate-x-1/2" style={{ background: "radial-gradient(closest-side, rgba(228,174,57,0.09), transparent 72%)" }} />
-        <div className="absolute bottom-0 left-1/2 h-64 w-[84vw] -translate-x-1/2 rounded-full bg-amber-400/[0.03] blur-[130px]" />
+        <div className="absolute bottom-0 left-1/2 h-64 w-[84vw] -translate-x-1/2" style={{ background: "radial-gradient(closest-side, rgba(228,174,57,0.05), transparent 72%)" }} />
         <div className="absolute inset-0" style={{ background: "radial-gradient(120% 90% at 50% 0%, transparent 55%, rgba(0,0,0,0.55) 100%)" }} />
       </div>
 
@@ -235,10 +244,10 @@ export function CardRevealAnimation({ onFinished, onCancel }: CardRevealProps) {
         )}
       </div>
 
-      <div className="relative z-10 flex min-h-0 flex-1 items-center justify-center overflow-hidden px-3">
+      <div className="relative z-10 flex min-h-0 flex-1 items-center justify-center overflow-visible px-3">
         <div
           className="flex flex-col items-center justify-center"
-          style={{ height: 760 * fit, width: 380 * fit, transform: `scale(${fit})`, transformOrigin: "center center" }}
+          style={{ width: STAGE_W, height: STAGE_H, transform: `scale(${fit})`, transformOrigin: "center center" }}
         >
         <AnimatePresence mode="wait">
           {phase === "grid" ? (
@@ -336,6 +345,7 @@ export function CardRevealAnimation({ onFinished, onCancel }: CardRevealProps) {
             <motion.div
               key="machine"
               className="flex w-full flex-col items-center"
+              style={{ paddingTop: ENTRY_PAD }}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 0.4 }}

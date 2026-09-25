@@ -48,9 +48,11 @@ export async function redeemCode(rawInput: string): Promise<RedeemResult> {
         error?: "not_found" | "already_redeemed" | string;
       };
       if (data.success === true) {
-        // The RPC atomically sets used=true in the same transaction, so the
-        // burn is permanent in Supabase; the next attempt returns
-        // "already_redeemed" below, on every device.
+        // The RPC atomically sets used = true / used_at = now() in the same
+        // transaction, so the burn is permanent in Supabase; the next attempt
+        // returns "already_redeemed" on every device. Mark it locally as well
+        // so even this browser can never re-enter it after a reload.
+        burnCode(value);
         return { status: "ok", mode: "server" };
       }
       // Code known on the client but not yet seeded in the DB (e.g. the
