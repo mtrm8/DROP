@@ -6,6 +6,14 @@
 -- attempt a redeem (never read code hashes or other rows). atomic single-use
 -- is enforced by the UPDATE ... WHERE used = false guard inside a transaction
 -- (the WHERE clause makes concurrent redeems safe: exactly one wins).
+--
+-- IMPORTANT: if roll_prize / get_prize already exist with a DIFFERENT return
+-- type, `create or replace` cannot change it — drop them first:
+--   drop function if exists public.roll_prize(text);
+--   drop function if exists public.get_prize(text);
+-- (Those functions must accept a redeemed code: by the time a prize is rolled
+-- the code is already used=true — that is the entire point of a single-use code.
+-- A version that rejects used codes burns the code and then fails the roll.)
 
 create table if not exists public.drop_codes (
   id uuid primary key default gen_random_uuid(),
@@ -16,6 +24,26 @@ create table if not exists public.drop_codes (
 );
 
 alter table public.drop_codes enable row level security;
+
+-- Case-insensitive lookups mean 'ADIR-NEW-2026' and 'adir-new-2026' can both
+-- exist (the UNIQUE constraint is case-sensitive). Two rows for one code used
+-- to make resets look ignored, because the RPC matched the stale used row
+-- first. Keep one row per code (prefer an unused one), then forbid duplicates.
+delete from public.drop_codes
+ where id in (
+   select id from (
+     select id,
+            row_number() over (
+              partition by lower(code)
+              order by used asc nulls first, created_at asc, id asc
+            ) as rn
+       from public.drop_codes
+   ) t
+   where t.rn > 1
+ );
+
+create unique index if not exists drop_codes_code_lower_key
+  on public.drop_codes (lower(code));
 
 -- Prize assignment columns (idempotent upgrades for existing installs).
 alter table public.drop_codes add column if not exists prize_id text;
@@ -64,6 +92,8 @@ begin
   select * into v_row
     from public.drop_codes
    where lower(code) = lower(trim(p_code))
+   order by used asc nulls first, created_at asc, id asc
+   limit 1
    for update;
 
   if not found then
@@ -109,13 +139,26 @@ begin
   select * into v_code
     from public.drop_codes
    where lower(code) = lower(trim(p_code))
+   order by used asc nulls first, created_at asc, id asc
+   limit 1
    for update;
 
   if not found or not v_code.used then
     raise exception 'code_not_redeemed';
   end if;
 
-  if v_code.prize_id is null then
+  -- The stored prize counts only if it belongs to the CURRENT redemption. If a
+  -- code was reset (used_at bumped on the next redeem) and re-redeemed, the old
+  -- prize is stale and gets rolled fresh — so "reset the code" really resets
+  -- the whole drop instead of replaying the previous amount.
+  if v_code.prize_id is not null
+     and v_code.prize_rolled_at is not null
+     and v_code.used_at is not null
+     and v_code.prize_rolled_at >= v_code.used_at then
+    select * into v_prize
+      from public.drop_prizes
+     where id = v_code.prize_id;
+  else
     select * into v_prize
       from public.drop_prizes
      order by -ln(random()) / greatest(weight, 0.0001)
@@ -129,10 +172,6 @@ begin
        set prize_id = v_prize.id,
            prize_rolled_at = now()
      where id = v_code.id;
-  else
-    select * into v_prize
-      from public.drop_prizes
-     where id = v_code.prize_id;
   end if;
 
   return query
@@ -153,7 +192,37 @@ as $$
     from public.drop_codes c
     join public.drop_prizes p on p.id = c.prize_id
    where lower(c.code) = lower(trim(p_code))
-     and c.used = true;
+     and c.used = true
+   order by c.used_at desc nulls last, c.created_at asc
+   limit 1;
+$$;
+
+-- Read-only diagnostics: exact stored state of a code (never burns anything),
+-- so a reset can be verified without redeeming. Returns the row as stored, the
+-- live used/prize flags and a flag telling you when several case-variants of
+-- the same code exist (the classic "I reset it but it says used" cause).
+create or replace function public.code_status(p_code text)
+returns json
+language sql
+security definer
+set search_path = public
+as $$
+  with matches as (
+    select * from public.drop_codes
+     where lower(code) = lower(trim(p_code))
+     order by used asc nulls first, created_at asc, id asc
+  ), target as (
+    select * from matches limit 1
+  )
+  select json_build_object(
+    'exists', (select count(*) > 0 from matches),
+    'matches', (select count(*) from matches),
+    'code', (select code from target),
+    'used', (select used from target),
+    'used_at', (select used_at from target),
+    'prize_id', (select prize_id from target),
+    'prize_rolled_at', (select prize_rolled_at from target)
+  );
 $$;
 
 revoke all on function public.roll_prize(text) from public;
@@ -161,6 +230,9 @@ grant execute on function public.roll_prize(text) to anon;
 
 revoke all on function public.get_prize(text) from public;
 grant execute on function public.get_prize(text) to anon;
+
+revoke all on function public.code_status(text) from public;
+grant execute on function public.code_status(text) to anon;
 
 -- Seed active codes (add any community codes here; each can be used once, ever).
 insert into public.drop_codes (code)

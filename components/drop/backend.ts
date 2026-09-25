@@ -35,6 +35,8 @@ export async function redeemCode(rawInput: string): Promise<RedeemResult> {
   try {
     const res = await fetch(`${base}/rest/v1/rpc/redeem_code`, {
       method: "POST",
+      // a code check must always hit the database, never a cached answer
+      cache: "no-store",
       headers: {
         "Content-Type": "application/json",
         apikey: key,
@@ -67,7 +69,8 @@ export async function redeemCode(rawInput: string): Promise<RedeemResult> {
 
 export type PrizeResult =
   | { status: "ok"; prize: BoxItem } // prize decided & persisted by the server
-  | { status: "unavailable" }; // RPC missing / errored / backend off -> no roll
+  | { status: "empty" } // server answered cleanly: no prize on record (yet)
+  | { status: "error"; code?: string; message?: string }; // RPC missing / raised / offline
 
 type PrizeRow = {
   prize_id?: string | null;
@@ -94,19 +97,23 @@ function toPrize(row: PrizeRow | null | undefined): BoxItem | null {
   };
 }
 
+// A server-side FAILURE must never be reported as "no prize on record" — the
+// two states mean very different things to the user (a real empty answer vs a
+// broken/incompatible RPC), so they stay distinct all the way to the UI.
 async function callPrizeRpc(
   rpc: "roll_prize" | "get_prize",
-  rawInput: string,
-  returnsArray: boolean
-): Promise<BoxItem | null> {
-  if (!BACKEND_ENABLED) return null;
+  rawInput: string
+): Promise<PrizeResult> {
+  if (!BACKEND_ENABLED) return { status: "error", message: "backend_disabled" };
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
-  if (!url || !key) return null;
+  if (!url || !key) return { status: "error", message: "backend_disabled" };
   const base = url.replace(/\/+$/, "");
   try {
     const res = await fetch(`${base}/rest/v1/rpc/${rpc}`, {
       method: "POST",
+      // never let a proxy/browser reuse a stale code-verification answer
+      cache: "no-store",
       headers: {
         "Content-Type": "application/json",
         apikey: key,
@@ -114,26 +121,36 @@ async function callPrizeRpc(
       },
       body: JSON.stringify({ p_code: rawInput.trim() }),
     });
-    if (!res.ok) return null;
-    const data = (await res.json().catch(() => null)) as PrizeRow | PrizeRow[] | null;
-    if (returnsArray) {
-      const first = Array.isArray(data) ? data[0] : null;
-      return toPrize(first);
+    const data = (await res.json().catch(() => null)) as
+      | PrizeRow
+      | PrizeRow[]
+      | { code?: string; message?: string }
+      | null;
+    if (!res.ok) {
+      const err = (data ?? {}) as { code?: string; message?: string };
+      return { status: "error", code: err.code, message: err.message };
     }
-    return toPrize(Array.isArray(data) ? data[0] : data);
+    const first = Array.isArray(data) ? data[0] : (data as PrizeRow | null);
+    const prize = toPrize(first);
+    if (prize) return { status: "ok", prize };
+    if (Array.isArray(data) && data.length === 0) return { status: "empty" };
+    return { status: "error", message: "unexpected_prize_response" };
   } catch {
-    return null;
+    return { status: "error", message: "network" };
   }
 }
 
-// Rolls (or returns the already-rolled) prize for a freshly redeemed code.
+// Asks the server to roll (or return the already-rolled) prize for a code.
+// Safe to call first: on a redeemed-but-unrolled code it completes the roll
+// (self-healing), and on a fresh code the server either rolls it outright or
+// refuses cleanly without consuming anything.
 export async function rollPrize(rawInput: string): Promise<PrizeResult> {
-  const prize = await callPrizeRpc("roll_prize", rawInput, false);
-  return prize ? { status: "ok", prize } : { status: "unavailable" };
+  return callPrizeRpc("roll_prize", rawInput);
 }
 
-// Read-only: the persisted prize for an already-used code, or null. Used to
-// resume an interrupted drop — it can never produce a new roll.
-export async function getRolledPrize(rawInput: string): Promise<BoxItem | null> {
-  return callPrizeRpc("get_prize", rawInput, true);
+// Read-only: the persisted prize for an already-used code. `empty` means the
+// code is genuinely used with no prize on record; `error` means the server
+// itself is unhappy — callers must not treat that as "used".
+export async function getRolledPrize(rawInput: string): Promise<PrizeResult> {
+  return callPrizeRpc("get_prize", rawInput);
 }

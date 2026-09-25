@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { KeyRound, Lock, Sparkles } from "lucide-react";
 import { CardRevealAnimation } from "./CardRevealAnimation";
@@ -133,10 +133,14 @@ export default function DailyDrop() {
   const [unlocked, setUnlocked] = useState(false);
   const [stage, setStage] = useState<"idle" | "cinematic">("idle");
   const [code, setCode] = useState("");
-  const [errorKind, setErrorKind] = useState<null | "invalid" | "already_used" | "roll_failed">(null);
+  const [errorKind, setErrorKind] = useState<null | "invalid" | "already_used" | "roll_failed" | "server_error">(null);
   const [unlocking, setUnlocking] = useState(false);
   const [completed, setCompleted] = useState<CompletedRecord | null>(null);
   const [prize, setPrize] = useState<BoxItem | null>(null);
+  const [resumed, setResumed] = useState(false);
+  // Guards against a double-click / Enter+click firing two redeems for the same
+  // code, which would burn it and then report a bogus "already used".
+  const submitGuard = useRef(false);
 
   // Purge the legacy local burn registry from earlier builds — the server is
   // now the only source of truth and no local record should shadow it. Also
@@ -184,45 +188,75 @@ export default function DailyDrop() {
     setCode("");
     setErrorKind(null);
     setPrize(null);
+    setResumed(false);
   };
 
   const handleCodeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (unlocking) return;
+    if (submitGuard.current) return;
     const value = code.trim();
+    if (!value) return;
+    submitGuard.current = true;
     setErrorKind(null);
     setUnlocking(true);
+    const settle = () => {
+      submitGuard.current = false;
+      setUnlocking(false);
+    };
+    const enter = (won: BoxItem, resumed: boolean) => {
+      setPrize(won);
+      setUnlocked(true);
+      setResumed(resumed);
+      setCode(value);
+      settle();
+    };
+
+    // Ask the server for the prize FIRST. This is safe in every state: it rolls
+    // a fresh prize when the server owns validation, completes a redeemed-but-
+    // unrolled drop (self-heal after any earlier failure), and never burns a
+    // code by itself. A refusal is just a normal "continue to validation".
+    let rolled = await rollPrize(value);
+    if (rolled.status === "ok") {
+      enter(rolled.prize, false);
+      return;
+    }
+
     const result = await redeemCode(value);
     if (result.status === "invalid") {
-      setUnlocking(false);
+      settle();
       setErrorKind("invalid");
       return;
     }
     if (result.status === "already_used") {
-      // A redeemed code whose prize was already rolled can be RESUMED (same
-      // code, same server prize) — this never produces a fresh roll, so a
-      // leaked/burned code still gets nothing.
+      // Only an explicit, clean EMPTY answer from the server proves the code is
+      // burned with nothing on record. A server-side error is reported as a
+      // temporary system failure — never mislabelled as "already used".
       const existing = await getRolledPrize(value);
-      setUnlocking(false);
-      if (!existing) {
+      if (existing.status === "ok") {
+        enter(existing.prize, true);
+        return;
+      }
+      settle();
+      if (existing.status === "empty") {
         setErrorKind("already_used");
         return;
       }
-      setPrize(existing);
-      setUnlocked(true);
-      setCode(value);
+      console.warn("[drop] get_prize failed:", existing.code, existing.message);
+      setErrorKind("server_error");
       return;
     }
+
     // Redeemed — now let the SERVER roll the weighted cash prize.
-    const rolled = await rollPrize(value);
-    setUnlocking(false);
-    if (rolled.status !== "ok") {
-      setErrorKind("roll_failed");
+    rolled = await rollPrize(value);
+    if (rolled.status === "ok") {
+      enter(rolled.prize, false);
       return;
     }
-    setPrize(rolled.prize);
-    setUnlocked(true);
-    setCode(value);
+    settle();
+    if (rolled.status === "error") {
+      console.warn("[drop] roll_prize failed:", rolled.code, rolled.message);
+    }
+    setErrorKind("roll_failed");
   };
 
   if (completed) {
@@ -332,7 +366,9 @@ export default function DailyDrop() {
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.28, duration: 0.3 }}
                     >
-                      הקוד אומת — הגישה מאושרת
+                      {resumed
+                        ? "הקוד כבר אומת בעבר — ממשיכים את הדרופ"
+                        : "הקוד אומת — הגישה מאושרת"}
                     </motion.p>
 
                     <motion.button
@@ -425,8 +461,10 @@ export default function DailyDrop() {
                             {errorKind === "already_used"
                               ? "הקוד כבר נוצל — הקוד הזה כבר הופעל בעבר ולא ניתן להשתמש בו שוב"
                               : errorKind === "roll_failed"
-                                ? "תקלה זמנית במערכת הפרסים — אם כבר אימתתם את הקוד, נסו להמשיך את הדרופ"
-                                : "קוד שגוי – נא לבדוק את הקוד שהתקבל"}
+                                ? "תקלה זמנית במערכת הפרסים — אם כבר אימתתם את הקוד, נסו שוב (אפשר להמשיך את הדרופ)"
+                                : errorKind === "server_error"
+                                  ? "תקלה זמנית במערכת הקודים — הקוד לא נבדק, נסו שוב בעוד רגע"
+                                  : "קוד שגוי – נא לבדוק את הקוד שהתקבל"}
                           </p>
                         </div>
                       )}
