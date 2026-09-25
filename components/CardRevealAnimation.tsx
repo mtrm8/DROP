@@ -155,8 +155,16 @@ export function CardRevealAnimation({ onFinished, onCancel }: CardRevealProps) {
       setFit(Math.max(0.5, scale));
     };
     compute();
-    window.addEventListener("resize", compute);
-    return () => window.removeEventListener("resize", compute);
+    let timer: ReturnType<typeof setTimeout>;
+    const onResize = () => {
+      clearTimeout(timer);
+      timer = setTimeout(compute, 160);
+    };
+    window.addEventListener("resize", onResize);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      clearTimeout(timer);
+    };
   }, []);
 
   // Rule 1 — Selection Lock: once a card is selected it can never be unselected.

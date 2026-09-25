@@ -84,6 +84,19 @@ body {
   contain-intrinsic-size: auto 720px;
 }
 
+/* Respect system preference: silence the decorative infinite loops so animating
+   cards, floats and pings never tax the main thread or battery. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-fall-card,
+  .animate-float,
+  .animate-bob,
+  .animate-ping,
+  .animate-pulse,
+  .animate-pulse-slow {
+    animation: none !important;
+  }
+}
+
 /* Brushed metallic sheen for premium surfaces */
 .texture-metal {
   background-image:

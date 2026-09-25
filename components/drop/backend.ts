@@ -1,4 +1,4 @@
-import { isValidCode } from "./community";
+import { isValidCode, isCodeBurned, burnCode } from "./community";
 
 // Server-authoritative one-time code validation via Supabase (PostgREST RPC).
 // Disabled until these are set (e.g. in .env.local, NEVER committed):
@@ -12,7 +12,7 @@ export const BACKEND_ENABLED =
 
 export type RedeemResult =
   | { status: "ok"; mode: "server" | "client" }
-  | { status: "already_used"; code: string; mode: "server" }
+  | { status: "already_used"; code: string; mode: "server" | "client" }
   | { status: "invalid"; mode: "client" };
 
 export async function redeemCode(rawInput: string): Promise<RedeemResult> {
@@ -20,7 +20,14 @@ export async function redeemCode(rawInput: string): Promise<RedeemResult> {
   if (!isValidCode(value)) {
     return { status: "invalid", mode: "client" };
   }
+  // Single-use guard runs even before the network: a code accepted in fallback
+  // mode is burned locally, so reusing it in a loop fails instantly.
+  if (isCodeBurned(value)) {
+    return { status: "already_used", code: value, mode: "client" };
+  }
   if (!BACKEND_ENABLED) {
+    // Legacy mode: burn locally so the code can't be replayed in loops.
+    burnCode(value);
     return { status: "ok", mode: "client" };
   }
   const base = (process.env.NEXT_PUBLIC_SUPABASE_URL as string).replace(/\/+$/, "");
@@ -41,21 +48,32 @@ export async function redeemCode(rawInput: string): Promise<RedeemResult> {
         error?: "not_found" | "already_redeemed" | string;
       };
       if (data.success === true) {
+        // The RPC atomically sets used=true in the same transaction, so the
+        // burn is permanent in Supabase; the next attempt returns
+        // "already_redeemed" below, on every device.
         return { status: "ok", mode: "server" };
       }
       // Code known on the client but not yet seeded in the DB (e.g. the
       // schema.sql insert hasn't been run for this code): the client-side
-      // community list is the source of truth, so accept it. This keeps codes
-      // working immediately without manual Supabase SQL. Once the row exists,
-      // the server enforces true single-use ("already_redeemed").
+      // community list is the source of truth, so accept it, and burn it
+      // locally so it can't be replayed in loops. Once the row exists, the
+      // server takes over and enforces true global single-use.
       if (data.error === "not_found") {
+        burnCode(value);
         return { status: "ok", mode: "client" };
       }
       return { status: "already_used", code: value, mode: "server" };
     }
-    // RPC not deployed yet (404) or backend hiccup: degrade to the legacy flow.
+    // RPC endpoint missing (404): no server-side tracking exists for this
+    // code, so the fallback accept must burn locally to keep single-use.
+    if (res.status === 404) {
+      burnCode(value);
+      return { status: "ok", mode: "client" };
+    }
+    // Backend hiccup (5xx / 429): don't consume anything, stay lenient.
     return { status: "ok", mode: "client" };
   } catch {
+    // Offline / network failure: don't consume anything, stay lenient.
     return { status: "ok", mode: "client" };
   }
 }

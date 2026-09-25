@@ -69,8 +69,8 @@ export default function DailyDrop() {
       <section id="drop" className="px-4 lg:px-8 max-w-2xl mx-auto w-full pt-8 pb-4 sm:pt-12">
         <div className="premium-panel relative overflow-hidden rounded-3xl">
           {/* Restrained luxury ambience */}
-          <div className="pointer-events-none absolute -top-28 left-1/2 -translate-x-1/2 w-[420px] h-48 rounded-full bg-amber-400/[0.06] blur-3xl" />
-          <div className="pointer-events-none absolute -bottom-24 -right-16 w-64 h-64 rounded-full bg-white/[0.02] blur-3xl" />
+          <div className="pointer-events-none absolute -top-28 left-1/2 h-48 w-[420px] -translate-x-1/2" style={{ background: "radial-gradient(closest-side, rgba(228,174,57,0.07), transparent 72%)" }} />
+          <div className="pointer-events-none absolute -bottom-24 -right-16 h-64 w-64" style={{ background: "radial-gradient(closest-side, rgba(255,255,255,0.025), transparent 70%)" }} />
 
           <div className="relative px-6 sm:px-10 py-8 sm:py-10 flex flex-col items-center text-center">
             {/* Badge + status */}
