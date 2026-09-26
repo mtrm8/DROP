@@ -30,9 +30,9 @@ try {
   try { previous = JSON.parse(await readFile(target, "utf8")); } catch { /* no published report yet */ }
   if (retainableTodayReport(previous, new Date(), timeZone)) {
     console.error("Keeping today's completed scan; this run failed:", error);
-    return;
+  } else {
+    console.error("Today's provider data is unavailable; publishing a dated status instead of stale picks:", error);
+    await publish(unavailableInput(new Date(), timeZone, UNAVAILABLE_STATUS_MESSAGE, String(error?.message ?? error)));
+    console.log("Published a dated unavailable status for today.");
   }
-  console.error("Today's provider data is unavailable; publishing a dated status instead of stale picks:", error);
-  await publish(unavailableInput(new Date(), timeZone, UNAVAILABLE_STATUS_MESSAGE, String(error?.message ?? error)));
-  console.log("Published a dated unavailable status for today.");
 }
