@@ -103,7 +103,7 @@ function PickCard({ pick, index, reduced }: { pick: AnalystPick; index: number; 
   </motion.article>;
 }
 
-export default function AnalystBunker() {
+export default function AnalystBunker({ embedded = false }: { embedded?: boolean }) {
   const reduced = Boolean(useReducedMotion());
   const [now, setNow] = useState<number | null>(null);
   useEffect(() => {
@@ -113,15 +113,14 @@ export default function AnalystBunker() {
     return () => window.clearInterval(interval);
   }, []);
   const upcoming = now === null ? report.picks : report.picks.filter((pick) => Date.parse(pick.kickoff) > now);
+  const Heading = embedded ? "h2" : "h1";
 
-  return <main className="min-h-screen overflow-x-clip">
-    <Navbar />
-    <div className="mx-auto w-full max-w-6xl space-y-6 px-4 py-8 sm:px-8 sm:py-12">
+  const content = <div className="mx-auto w-full max-w-6xl space-y-6 px-4 py-8 sm:px-8 sm:py-12">
       <header className="relative overflow-hidden rounded-[1.7rem] border border-emerald-300/20 bg-gradient-to-br from-[#0c2018] via-[#081416] to-[#0a0d14] p-6 shadow-[0_25px_85px_rgba(0,0,0,.3)] sm:p-10">
         <div className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-emerald-400/[0.08] blur-[90px]" />
         <div className="relative">
           <span className="inline-flex items-center gap-2 rounded-full border border-emerald-300/25 bg-emerald-300/[0.08] px-3 py-1.5 text-[10px] font-black text-emerald-100"><ClipboardList size={14} /> דוח אנליסט אנושי · בחירות ידניות</span>
-          <h1 className="mt-5 text-3xl font-black text-white sm:text-5xl">בנקר האנליסט</h1>
+          <Heading className="mt-5 text-3xl font-black text-white sm:text-5xl">בנקר האנליסט</Heading>
           <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-300">הבחירות, הנתונים והנימוקים כאן נכתבים ומוזנים ידנית על ידי {report.analyst}. דוח זה נפרד ממנוע ה־AI האוטומטי.</p>
           <p className="mt-3 text-xs text-emerald-200/80">{report.asOf ? `נערך לאחרונה: ${formatDate(report.asOf)}` : "ממתינים לפרסום בחירות אנליסט מאומתות."}</p>
         </div>
@@ -133,7 +132,14 @@ export default function AnalystBunker() {
           <h2 className="mt-4 text-xl font-black text-white">{report.picks.length ? "כל הבחירות שפורסמו כבר יצאו לדרך" : "בחירות האנליסט טרם פורסמו"}</h2>
           <p className="mx-auto mt-3 max-w-xl text-sm leading-7 text-slate-400">{report.picks.length ? "כשיועלו בחירות ידניות חדשות, הניתוח המלא יופיע כאן לאחר פרסום האתר." : "הצוות יעלה לכאן בחירות שנבדקו ידנית, כולל יחסים, נתוני כושר, הסברים וגרפים. אין כאן בחירות ממנוע ה־AI."}</p>
         </section>}
-    </div>
+    </div>;
+
+  // Embedded variant drops the page chrome so the section can sit directly in
+  // the landing page's scroll flow beneath the Community Drops block.
+  if (embedded) return content;
+  return <main className="min-h-screen overflow-x-clip">
+    <Navbar />
+    {content}
     <CommunityFooter />
   </main>;
 }

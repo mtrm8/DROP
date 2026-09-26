@@ -2,9 +2,10 @@
 
 import { motion, useMotionValue, useSpring, useTransform } from "framer-motion";
 import Link from "next/link";
-import { Atom, ArrowLeft, Bot, BrainCircuit, ChartNoAxesCombined, ChevronDown, Layers3, ShieldCheck, Sparkles } from "lucide-react";
+import { Atom, ArrowLeft, BrainCircuit, ChevronDown, LockKeyhole, ShieldCheck, Sparkles } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import CommunityFooter from "@/components/CommunityFooter";
+import AnalystBunker from "@/components/AnalystBunker";
 import { DROP_TITLE, DROP_PRIZE_COPY } from "@/components/drop/copy";
 
 const DROP_URL = `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/drop/`;
@@ -209,26 +210,6 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Three independent experiences: community drop, human picks and AI preview. */}
-      <section className="cv-auto relative w-full px-4 py-12 sm:px-6" aria-labelledby="site-sections-title">
-        <div className="mx-auto max-w-6xl">
-          <p className="text-center text-[10px] font-black tracking-widest text-cyan-200">EINSTEIN DROP · שלושה אזורים</p>
-          <h2 id="site-sections-title" className="mt-2 text-center text-2xl font-black text-white sm:text-3xl">בחרו את החוויה שלכם</h2>
-          <div className="mt-7 grid gap-4 md:grid-cols-3">
-            {[
-              { href: "/drop", title: "דרופים קהילתיים", description: "הדרופ החי של קהילת הכדורגל והפוקר: קוד גישה, קלפים ופרס כספי.", icon: Layers3, tag: "פעיל" },
-              { href: "/bunker", title: "בנקר האנליסט", description: "בחירות יומיות שהוזנו ידנית בידי אנליסט, עם הסברים, נתונים וגרפים.", icon: ChartNoAxesCombined, tag: "ניתוח אנושי" },
-              { href: "/ai-bunker", title: "בנקר AI", description: "מנוע ניתוח אוטומטי מבוסס נתוני API. תצוגה מוקדמת עם קוד גישה לחברים.", icon: Bot, tag: "בפיתוח · גישת חברים" },
-            ].map(({ href, title, description, icon: Icon, tag }) => <Link key={href} href={href} className="group flex min-h-56 flex-col rounded-2xl border border-cyan-300/15 bg-gradient-to-br from-[#101c21] via-[#0b1218] to-[#0a0d12] p-5 shadow-[0_18px_50px_rgba(0,0,0,.25)] transition hover:-translate-y-1 hover:border-cyan-300/35 sm:p-6">
-              <div className="flex items-center justify-between gap-3"><Icon size={25} className="text-cyan-200" /><span className="rounded-full border border-amber-200/20 bg-amber-200/[0.06] px-2.5 py-1 text-[10px] font-bold text-amber-100">{tag}</span></div>
-              <h3 className="mt-5 text-lg font-black text-white">{title}</h3>
-              <p className="mt-2 flex-1 text-xs leading-6 text-slate-400">{description}</p>
-              <span className="mt-4 inline-flex items-center gap-2 text-xs font-black text-cyan-200">כניסה לאזור <ArrowLeft size={14} className="transition group-hover:-translate-x-1" /></span>
-            </Link>)}
-          </div>
-        </div>
-      </section>
-
       {/* how it works */}
       <section className="cv-auto relative w-full px-6 pb-4" style={{ backgroundColor: "#05060a" }}>
         <div className="mx-auto max-w-4xl">
@@ -267,6 +248,16 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* Analyst Bunker sits directly beneath the Community Drops block, so the
+          scroll continues from the drop straight into the human picks. */}
+      <section aria-label="בנקר האנליסט" className="cv-auto relative w-full border-t border-white/[0.06] bg-[#060a0f] px-4 pt-10 sm:px-6">
+        <div className="mx-auto max-w-6xl">
+          <p className="text-center text-[10px] font-black tracking-widest text-emerald-200">EINSTEIN DROP · המשך ישיר מההדרוף</p>
+          <p className="mt-2 text-center text-xs text-slate-500">ההדרוף ננעל? גללו לבחירות האנליסט האנושי של היום.</p>
+        </div>
+        <AnalystBunker embedded />
+      </section>
+
       {/* closing CTA */}
       <section className="cv-auto relative w-full overflow-hidden px-6 py-20 text-center" style={{ backgroundColor: "#05060a" }}>
         <div className="pointer-events-none absolute left-1/2 top-1/2 h-[44vh] w-[78vw] -translate-x-1/2 -translate-y-1/2" style={{ background: "radial-gradient(closest-side, rgba(245,158,11,0.10), transparent 70%)" }} />
@@ -290,6 +281,9 @@ export default function LandingPage() {
             בחרו את הקלפים שלכם
             <ArrowLeft size={20} className="transition-transform group-hover:-translate-x-1" />
           </a>
+          <Link href="/ai-bunker" className="mt-6 inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 transition hover:text-amber-200">
+            <LockKeyhole size={13} /> כניסת חברי בנקר AI · גישה בקוד · בפיתוח
+          </Link>
         </motion.div>
       </section>
 
