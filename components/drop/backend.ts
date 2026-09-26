@@ -75,6 +75,7 @@ export async function redeemCode(rawInput: string): Promise<RedeemResult> {
     const res = await fetch(`${base}/rest/v1/rpc/redeem_code`, {
       method: "POST",
       cache: "no-store",
+      signal: AbortSignal.timeout(5000),
       headers: {
         "Content-Type": "application/json",
         apikey: key,
@@ -272,78 +273,58 @@ async function callPrizeRpc(
   const base = url.replace(/\/+$/, "");
   const endpoint = `${base}/rest/v1/rpc/${rpc}`;
   const body = JSON.stringify({ p_code: value });
-  let last: PrizeResult = { status: "error", message: "network" };
+  try {
+    const res = await fetch(endpoint, {
+      method: "POST",
+      // never let a proxy/browser reuse a stale code-verification answer
+      cache: "no-store",
+      signal: AbortSignal.timeout(5000),
+      headers: {
+        "Content-Type": "application/json",
+        apikey: key,
+        Authorization: `Bearer ${key}`,
+      },
+      body,
+    });
 
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    try {
-      const res = await fetch(endpoint, {
-        method: "POST",
-        // never let a proxy/browser reuse a stale code-verification answer
-        cache: "no-store",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: key,
-          Authorization: `Bearer ${key}`,
-        },
-        body,
-      });
-
-      const rawData = await parseJsonRes(res);
-      // Handle array, single object, wrapped array, or nested structure from PostgREST gracefully
-      let dataRow: any = rawData;
-      if (Array.isArray(rawData)) {
-        dataRow = rawData[0];
-      } else if (rawData && typeof rawData === "object" && "data" in rawData && Array.isArray((rawData as any).data)) {
-        dataRow = (rawData as any).data[0];
-      }
-
-      if (!res.ok) {
-        const err = classify(res, dataRow);
-        // a definitive 4xx answer about the code itself is final; a missing RPC
-        // or a server hiccup is not — give it exactly one more try
-        if (!err.missing && !err.refused && attempt === 0) {
-          last = { status: "error", ...err };
-          await new Promise((r) => setTimeout(r, 400));
-          continue;
-        }
-        if (isCommunity) {
-          return { status: "ok", prize: pickWeighted(BOX_ITEMS) };
-        }
-        return { status: "error", ...err };
-      }
-
-      const prize = toPrize(dataRow);
-      if (prize) return { status: "ok", prize };
-
-      if (Array.isArray(rawData) && rawData.length === 0) {
-        if (isCommunity && rpc === "roll_prize") {
-          return { status: "ok", prize: pickWeighted(BOX_ITEMS) };
-        }
-        return { status: "empty" };
-      }
-
-      if (isCommunity) {
-        return { status: "ok", prize: pickWeighted(BOX_ITEMS) };
-      }
-
-      return { status: "error", message: "unexpected_prize_response" };
-    } catch {
-      if (attempt === 0) {
-        last = { status: "error", message: "network" };
-        await new Promise((r) => setTimeout(r, 400));
-        continue;
-      }
-      if (isCommunity) {
-        return { status: "ok", prize: pickWeighted(BOX_ITEMS) };
-      }
-      return { status: "error", message: "network" };
+    const rawData = await parseJsonRes(res);
+    // Handle array, single object, wrapped array, or nested structure from PostgREST gracefully
+    let dataRow: any = rawData;
+    if (Array.isArray(rawData)) {
+      dataRow = rawData[0];
+    } else if (rawData && typeof rawData === "object" && "data" in rawData && Array.isArray((rawData as any).data)) {
+      dataRow = (rawData as any).data[0];
     }
-  }
 
-  if (isCommunity) {
-    return { status: "ok", prize: pickWeighted(BOX_ITEMS) };
+    if (!res.ok) {
+      const err = classify(res, dataRow);
+      if (isCommunity) {
+        return { status: "ok", prize: pickWeighted(BOX_ITEMS) };
+      }
+      return { status: "error", ...err };
+    }
+
+    const prize = toPrize(dataRow);
+    if (prize) return { status: "ok", prize };
+
+    if (Array.isArray(rawData) && rawData.length === 0) {
+      if (isCommunity && rpc === "roll_prize") {
+        return { status: "ok", prize: pickWeighted(BOX_ITEMS) };
+      }
+      return { status: "empty" };
+    }
+
+    if (isCommunity) {
+      return { status: "ok", prize: pickWeighted(BOX_ITEMS) };
+    }
+
+    return { status: "error", message: "unexpected_prize_response" };
+  } catch {
+    if (isCommunity) {
+      return { status: "ok", prize: pickWeighted(BOX_ITEMS) };
+    }
+    return { status: "error", message: "network" };
   }
-  return last;
 }
 
 // Asks the server to roll (or return the already-rolled) prize for a code.
