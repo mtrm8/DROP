@@ -1,0 +1,24 @@
+{
+  "mode": "demo",
+  "source": "נתוני הדגמה סינתטיים — אינם תוצאות משחק אמיתיות",
+  "asOf": "2026-09-26T12:00:00Z",
+  "combinedOdds": 2.32,
+  "picks": [
+    { "id": "01", "home": "אוסטריה", "away": "ישראל", "homeCode": "AUT", "awayCode": "ISR", "homeFlag": "austria", "awayFlag": "israel", "odds": 1.56 },
+    { "id": "02", "home": "הולנד", "away": "גרמניה", "homeCode": "NED", "awayCode": "GER", "homeFlag": "netherlands", "awayFlag": "germany", "odds": 1.49 }
+  ],
+  "results": [
+    { "date": "2026-09-01", "home": "אוסטריה", "away": "יריבה א", "homeGoals": 2, "awayGoals": 1 },
+    { "date": "2026-09-03", "home": "אוסטריה", "away": "יריבה ב", "homeGoals": 1, "awayGoals": 1 },
+    { "date": "2026-09-05", "home": "אוסטריה", "away": "יריבה ג", "homeGoals": 3, "awayGoals": 1 },
+    { "date": "2026-09-02", "home": "יריבה ד", "away": "ישראל", "homeGoals": 2, "awayGoals": 1 },
+    { "date": "2026-09-04", "home": "יריבה ה", "away": "ישראל", "homeGoals": 1, "awayGoals": 1 },
+    { "date": "2026-09-06", "home": "יריבה ו", "away": "ישראל", "homeGoals": 3, "awayGoals": 2 },
+    { "date": "2026-09-01", "home": "הולנד", "away": "יריבה ז", "homeGoals": 2, "awayGoals": 0 },
+    { "date": "2026-09-03", "home": "הולנד", "away": "יריבה ח", "homeGoals": 3, "awayGoals": 1 },
+    { "date": "2026-09-05", "home": "הולנד", "away": "יריבה ט", "homeGoals": 1, "awayGoals": 1 },
+    { "date": "2026-09-02", "home": "יריבה י", "away": "גרמניה", "homeGoals": 1, "awayGoals": 2 },
+    { "date": "2026-09-04", "home": "יריבה יא", "away": "גרמניה", "homeGoals": 2, "awayGoals": 2 },
+    { "date": "2026-09-06", "home": "יריבה יב", "away": "גרמניה", "homeGoals": 0, "awayGoals": 1 }
+  ]
+}

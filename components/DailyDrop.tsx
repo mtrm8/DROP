@@ -612,7 +612,6 @@ export default function DailyDrop() {
             <CardRevealAnimation
               prize={prize}
               onFinished={handleDropFinished}
-              onCancel={() => setStage("idle")}
             />
           </motion.div>
         )}
