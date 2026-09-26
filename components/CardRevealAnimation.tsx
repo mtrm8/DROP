@@ -4,20 +4,15 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, Lock, Sparkles } from "lucide-react";
 import { BOX_ITEMS, BoxItem, ItemIcon, RARITIES, pickWeighted } from "./drop/boxItems";
+import { DROP_COMMUNITY, DROP_PRIZE_COPY, DROP_TITLE } from "./drop/copy";
 
 const CARDS_COUNT = 10;
 const SELECT_COUNT = 5;
 
-// Stage layout + safety envelope. The collect/shuffle/reveal animations
-// translate cards up to ~±240px sideways and ~-300px above the card tray, so
-// the machine stage reserves that room and `fit` scales against the envelope —
-// the whole animation stays fully visible and centered, never clipped at the
-// edge. The selection grid gets its own (shorter) height budget so the cards
-// can be as large as the screen allows instead of being shrunk to fit room the
-// selection view never uses.
-const STAGE_W = 960;
+// Only the animated machine needs a fixed design canvas. The selection grid is
+// real responsive layout: scaling a fixed 960px grid after flex has already
+// shrunk it on mobile makes every card tiny and the tray impossibly narrow.
 const MACHINE_STAGE_W = 668; /* 620px body plus 24px glow on each side */
-const GRID_H = 880;
 const MACHINE_H = 1140; /* animated entry headroom + machine + result */
 const ENTRY_PAD = 260;
 const ACTIVE_KEY = "drop-in-progress";
@@ -78,10 +73,10 @@ const shuffleZ = (i: number) => {
 };
 const shuffleScale = () => [1, 1.04, 1.1, 1.14, 1.02, 1.1, 1.12, 1.02, 1, 1, 1, 1];
 
-function CardBackFace() {
+function CardBackFace({ compact = false }: { compact?: boolean }) {
   return (
     <div
-      className="absolute inset-0 flex flex-col items-center justify-between overflow-hidden rounded-2xl border-2 border-cyan-400/50 bg-gradient-to-br from-slate-900 via-slate-950 to-black p-3.5"
+      className={`absolute inset-0 flex flex-col items-center justify-between overflow-hidden rounded-2xl border-2 border-cyan-400/50 bg-gradient-to-br from-slate-900 via-slate-950 to-black ${compact ? "p-2 sm:p-3.5" : "p-3.5"}`}
       style={{ boxShadow: "0 0 35px rgba(34,211,238,0.24), inset 0 0 22px rgba(34,211,238,0.08)" }}
     >
       <div className="pointer-events-none absolute inset-0" style={{ background: "radial-gradient(ellipse at center, rgba(34,211,238,0.12), transparent 62%)" }} />
@@ -92,11 +87,11 @@ function CardBackFace() {
         <span>♠</span>
       </div>
       <div className="flex flex-col items-center gap-1">
-        <span className="text-3xl leading-none">♛</span>
-        <span className="font-serif font-black tracking-wider text-cyan-300 text-xl" style={{ textShadow: "0 0 12px rgba(34,211,238,0.65)" }}>
+        <span className={`leading-none ${compact ? "text-2xl sm:text-3xl" : "text-3xl"}`}>♛</span>
+        <span className={`font-serif font-black tracking-wider text-cyan-300 ${compact ? "text-sm sm:text-xl" : "text-xl"}`} style={{ textShadow: "0 0 12px rgba(34,211,238,0.65)" }}>
           EINSTEIN
         </span>
-        <span className="text-[8px] font-extrabold uppercase tracking-[0.28em] text-amber-400/60">הדרוף היומי</span>
+        <span className="text-[8px] font-extrabold uppercase tracking-[0.28em] text-amber-400/60">הדרופ היומי</span>
       </div>
       <div className="flex w-full rotate-180 justify-between text-xs font-black text-cyan-300">
         <span>K</span>
@@ -106,7 +101,7 @@ function CardBackFace() {
   );
 }
 
-function CardFront({ item }: { item: BoxItem }) {
+function CardFront({ item, compact = false }: { item: BoxItem; compact?: boolean }) {
   const rarity = RARITIES[item.rarity];
   return (
     <div
@@ -118,22 +113,22 @@ function CardFront({ item }: { item: BoxItem }) {
       }}
     >
       <div className="absolute inset-x-4 top-0 h-1" style={{ background: `linear-gradient(90deg, transparent, ${rarity.color}, transparent)` }} />
-      <div className="flex h-full flex-col items-center justify-between px-3 py-3.5">
-        <span className="rounded-full px-3.5 py-1 text-xs font-extrabold" style={{ background: rarity.bg, color: rarity.color, border: `1px solid ${rarity.border}` }}>
+      <div className={`flex h-full flex-col items-center justify-between ${compact ? "px-2 py-2 sm:px-3 sm:py-3.5" : "px-3 py-3.5"}`}>
+        <span className={`rounded-full py-1 font-extrabold ${compact ? "px-2 text-[10px] sm:px-3.5 sm:text-xs" : "px-3.5 text-xs"}`} style={{ background: rarity.bg, color: rarity.color, border: `1px solid ${rarity.border}` }}>
           {item.chance}
         </span>
         <div
-          className="flex h-24 w-24 items-center justify-center rounded-full border-2"
+          className={`flex items-center justify-center rounded-full border-2 ${compact ? "h-12 w-12 sm:h-24 sm:w-24" : "h-24 w-24"}`}
           style={{ borderColor: rarity.color, background: "radial-gradient(circle at 35% 28%, rgba(255,255,255,0.15), rgba(15,17,24,0.98) 78%)", boxShadow: `0 0 35px ${rarity.glow}` }}
         >
           <span
-            className="leading-none drop-shadow-[0_0_16px_rgba(255,214,102,0.5)] text-5xl"
+            className={`leading-none drop-shadow-[0_0_16px_rgba(255,214,102,0.5)] ${compact ? "text-3xl sm:text-5xl" : "text-5xl"}`}
             aria-hidden="true"
           >
             {item.emoji}
           </span>
         </div>
-        <div className="line-clamp-2 font-black leading-tight text-base" style={{ color: rarity.color, textShadow: `0 0 16px ${rarity.glow}` }}>
+        <div className={`line-clamp-2 font-black leading-tight ${compact ? "text-sm sm:text-base" : "text-base"}`} style={{ color: rarity.color, textShadow: `0 0 16px ${rarity.glow}` }}>
           {item.name}
         </div>
       </div>
@@ -225,16 +220,14 @@ export function CardRevealAnimation({ onFinished, prize }: CardRevealProps) {
     }
   }, [cards, prize.id]);
 
-  // Scale the whole game to fit the viewport — never scrolls, never clipped, and
-  // the selection grid only pays for the height it actually uses.
+  // Keep the machine's animation envelope inside the viewport. Card selection
+  // uses a full-width scrollable grid below, without any viewport scaling.
   const [fit, setFit] = useState(1);
   useLayoutEffect(() => {
     const compute = () => {
       const vw = window.visualViewport?.width ?? window.innerWidth;
       const vh = window.visualViewport?.height ?? window.innerHeight;
-      const needed = phase === "grid" ? GRID_H : MACHINE_H;
-      const width = phase === "grid" ? STAGE_W : MACHINE_STAGE_W;
-      const scale = Math.min(1, (vh - 72) / needed, (vw - 16) / width);
+      const scale = Math.min(1, (vh - 72) / MACHINE_H, (vw - 16) / MACHINE_STAGE_W);
       setFit(Math.max(0.1, scale));
     };
     compute();
@@ -250,7 +243,7 @@ export function CardRevealAnimation({ onFinished, prize }: CardRevealProps) {
       window.visualViewport?.removeEventListener("resize", onResize);
       window.cancelAnimationFrame(frame);
     };
-  }, [phase]);
+  }, []);
 
   // Rule 1 — Selection Lock: once a card is selected it can never be unselected.
   // The machine lock is checked here too, so a click that lands after the run
@@ -316,22 +309,22 @@ export function CardRevealAnimation({ onFinished, prize }: CardRevealProps) {
       </div>
 
       {/* header */}
-      <div className="relative z-20 flex items-center justify-between border-b border-white/[0.06] px-4 py-3 sm:px-8">
-        <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-cyan-400/40 bg-gradient-to-br from-[#102431] to-[#0c0f16] shadow-[0_0_16px_rgba(34,211,238,0.2)]">
+      <div className="relative z-20 flex shrink-0 items-center justify-between border-b border-white/[0.06] px-4 py-3 sm:px-8">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-cyan-400/40 bg-gradient-to-br from-[#102431] to-[#0c0f16] shadow-[0_0_16px_rgba(34,211,238,0.2)]">
             <span className="text-base text-cyan-300">∑</span>
           </div>
-          <div>
+          <div className="min-w-0">
             <p className="text-[10px] uppercase tracking-[0.25em] text-cyan-300/80">Einstein Drop Lab</p>
-            <p className="text-sm font-bold text-white leading-tight">איינשטיין דרופ — מעבדת הקלפים</p>
+            <p className="text-sm font-bold leading-tight text-white">{DROP_TITLE}</p>
           </div>
         </div>
       </div>
 
-      <div className="relative z-10 flex min-h-0 flex-1 items-center justify-center overflow-visible px-3">
+      <div className={`relative z-10 flex min-h-0 flex-1 ${phase === "grid" ? "w-full items-start justify-start overflow-y-auto overscroll-contain px-4 py-6 sm:py-8" : "items-center justify-center overflow-visible px-3"}`}>
         <div
-          className="relative flex flex-col items-center justify-center"
-          style={{ width: phase === "grid" ? STAGE_W : MACHINE_STAGE_W, height: phase === "grid" ? GRID_H : MACHINE_H, transform: `scale(${fit})`, transformOrigin: "center center" }}
+          className={phase === "grid" ? "mx-auto flex w-full min-w-0 max-w-5xl flex-col items-center" : "relative flex shrink-0 flex-col items-center justify-center"}
+          style={phase === "grid" ? undefined : { width: MACHINE_STAGE_W, height: MACHINE_H, transform: `scale(${fit})`, transformOrigin: "center center" }}
         >
         {/* The machine overlays the selection grid instead of waiting for its
             exit to finish, so the run always begins on the click that started
@@ -344,16 +337,15 @@ export function CardRevealAnimation({ onFinished, prize }: CardRevealProps) {
               exit={{ opacity: 0, y: 24 }}
               transition={{ duration: 0.3 }}
             >
-              <p className="mb-4 max-w-lg text-center text-[15px] leading-relaxed text-slate-300">
-                <span className="font-bold text-amber-300">10 קלפים</span> לפניכם — כל אחד מסתיר פרס אמיתי. בחרו בדיוק{" "}
-                <span className="font-bold text-amber-300">{SELECT_COUNT}</span> והמכונה תערבב אותם כדי לחשוף את המזל.
+              <p className="mb-4 max-w-lg text-center text-sm leading-relaxed text-slate-300 sm:text-[15px]">
+                {DROP_COMMUNITY}: <span className="font-bold text-amber-300">10 קלפים</span> לפניכם. {DROP_PRIZE_COPY}
               </p>
               <p className="mb-5 flex items-center gap-1.5 rounded-full border border-amber-400/20 bg-amber-400/[0.06] px-3.5 py-1.5 text-xs font-semibold text-amber-300/90">
                 <Lock size={12} />
                 בחירה נעולה — קלף שנבחר לא ניתן לביטול
               </p>
 
-              <div className="mb-7 flex items-center gap-3.5">
+              <div className="mb-7 flex flex-wrap items-center justify-center gap-3.5">
                 <span
                   className={`rounded-full border px-4 py-1.5 text-sm font-bold transition ${
                     isComplete ? "border-amber-400/40 bg-amber-400/10 text-amber-300" : "border-white/10 bg-white/[0.04] text-slate-300"
@@ -373,7 +365,7 @@ export function CardRevealAnimation({ onFinished, prize }: CardRevealProps) {
                 </div>
               </div>
 
-              <div className="grid w-full max-w-[960px] grid-cols-5 place-items-center gap-4 sm:gap-6">
+              <div className="grid w-full max-w-[960px] grid-cols-2 gap-3 min-[380px]:grid-cols-3 sm:grid-cols-5 sm:gap-6">
                 {cards.map((c) => {
                   const picked = c.selected;
                   return (
@@ -385,7 +377,7 @@ export function CardRevealAnimation({ onFinished, prize }: CardRevealProps) {
                       whileTap={picked ? undefined : { scale: 0.97 }}
                       transition={{ type: "spring", stiffness: 400, damping: 22 }}
                       disabled={picked || isComplete}
-                      className={`relative aspect-[5/7] w-full select-none appearance-none border-0 bg-transparent p-0 [perspective:600px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-300 ${picked ? "cursor-default" : "cursor-pointer"}`}
+                      className={`relative aspect-[5/7] min-h-11 w-full select-none appearance-none border-0 bg-transparent p-0 [perspective:600px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-300 ${picked ? "cursor-default" : "cursor-pointer"}`}
                       aria-pressed={picked}
                     >
                       <motion.div
@@ -394,10 +386,10 @@ export function CardRevealAnimation({ onFinished, prize }: CardRevealProps) {
                         transition={{ type: "spring", stiffness: 300, damping: 24 }}
                       >
                         <div className="absolute inset-0 [backface-visibility:hidden]">
-                          <CardBackFace />
+                          <CardBackFace compact />
                         </div>
                         <div className="absolute inset-0 [backface-visibility:hidden]" style={{ transform: "rotateY(180deg)" }}>
-                          <CardFront item={c.item} />
+                          <CardFront item={c.item} compact />
                         </div>
                       </motion.div>
                       {picked && (
@@ -426,7 +418,7 @@ export function CardRevealAnimation({ onFinished, prize }: CardRevealProps) {
                 {isComplete ? (
                   <>
                     <Sparkles size={19} className="transition-transform group-hover:rotate-12" />
-                    הפעל את מכונת ההדרוף
+                    הפעל את מכונת הדרופ
                   </>
                 ) : (
                   `בחרו עוד ${SELECT_COUNT - selectedCount} קלפים`
@@ -632,7 +624,7 @@ export function CardRevealAnimation({ onFinished, prize }: CardRevealProps) {
                           ? "רגע האמת... המכונה בוחרת את הקלף הזוכה"
                           : phase === "reveal"
                             ? "המזל נבחר!"
-                            : "ההדרוף הושלם"}
+                            : "הדרופ הושלם"}
                 </p>
               </div>
 
@@ -678,7 +670,7 @@ export function CardRevealAnimation({ onFinished, prize }: CardRevealProps) {
                           איסוף
                         </>
                       ) : (
-                        "רגע — סוגרים את ההדרוף..."
+                        "רגע — סוגרים את הדרופ..."
                       )}
                     </button>
                   </motion.div>

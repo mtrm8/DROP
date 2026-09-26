@@ -4,6 +4,7 @@ import { motion, useMotionValue, useSpring, useTransform } from "framer-motion";
 import { Atom, ArrowLeft, BrainCircuit, ChevronDown, ShieldCheck, Sparkles } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import CommunityFooter from "@/components/CommunityFooter";
+import { DROP_TITLE, DROP_PRIZE_COPY } from "@/components/drop/copy";
 
 const DROP_URL = `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/drop/`;
 
@@ -180,10 +181,9 @@ export default function LandingPage() {
             </span>
           </h1>
 
-          <p className="mx-auto mt-6 max-w-md text-sm text-slate-400 leading-relaxed sm:text-base">
-            <BrainCircuit className="mb-1 inline text-cyan-300" size={16} /> חוכמה, אינטואיציה וקצת מזל.
-            בחרו <span className="font-bold text-cyan-300">5 קלפים</span>, המכונה תערבב את החפיסה
-            ותחשוף את הפרס — בונוס או מתנה בשקלים שיופיעו בהפקדה הבאה שלכם.
+          <p className="mx-auto mt-5 max-w-md text-sm font-bold text-cyan-100 sm:text-base">{DROP_TITLE}</p>
+          <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-slate-400 sm:text-base">
+            <BrainCircuit className="mb-1 inline text-cyan-300" size={16} /> חוכמה, אינטואיציה וקצת מזל. {DROP_PRIZE_COPY}
           </p>
 
           <div className="mt-9 flex flex-col items-center gap-4">

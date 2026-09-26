@@ -11,6 +11,7 @@ import { BACKEND_ENABLED, getRolledPrize, isValidCommunityCode, redeemCode, roll
 import { prepareBunkerEntry } from "./drop/bunkerEntry";
 import { ItemIcon, RARITIES, BOX_ITEMS, pickWeighted } from "./drop/boxItems";
 import type { BoxItem } from "./drop/boxItems";
+import { DROP_PRIZE_COPY, DROP_TITLE } from "./drop/copy";
 import { useFreshPageView } from "./useFreshPageView";
 
 function CardEmblem() {
@@ -52,7 +53,7 @@ const ACTIVE_KEY = "drop-in-progress";
 function CompletedView({ record, onStartNew, onEnterBunker, entryError }: { record: CompletedRecord; onStartNew: () => void; onEnterBunker: (event: React.MouseEvent<HTMLAnchorElement>) => void; entryError: boolean }) {
   const rarity = RARITIES[record.item.rarity];
   return (
-    <section className="mx-auto w-full max-w-7xl px-2 pb-4 pt-4 sm:px-5 sm:pt-6 lg:px-8">
+    <section className="mx-auto w-full max-w-7xl px-4 pb-4 pt-4 sm:px-5 sm:pt-6 lg:px-8">
       <motion.div
         className="premium-panel relative overflow-hidden rounded-3xl"
         initial={{ opacity: 0, y: 16, scale: 0.98 }}
@@ -92,7 +93,7 @@ function CompletedView({ record, onStartNew, onEnterBunker, entryError }: { reco
             </div>
           </motion.div>
 
-          <h2 className="mt-5 text-xl sm:text-2xl font-black text-white tracking-tight">ההדרוף הושלם — מזל טוב!</h2>
+          <h2 className="mt-5 text-xl sm:text-2xl font-black text-white tracking-tight">הדרופ הושלם — מזל טוב!</h2>
 
           <motion.p
             className="mt-2 text-[11px] font-bold uppercase tracking-[0.18em]"
@@ -114,7 +115,7 @@ function CompletedView({ record, onStartNew, onEnterBunker, entryError }: { reco
           </motion.h3>
 
           <p className="text-xs text-slate-400 mt-4 max-w-sm leading-relaxed">
-            הפרס יופיע במלואו בהפקדה הבאה. שמרו את פרטי הקבוצה לידכם — הזכייה תוכרז ותועבר בקרוב.
+            הפרס הכספי יופיע בהפקדה הבאה. שמרו את פרטי הקהילה לידכם — הזכייה תוכרז ותועבר בקרוב.
           </p>
 
           <p className="flex items-center justify-center gap-1.5 text-[11px] text-slate-500 mt-4">
@@ -127,7 +128,7 @@ function CompletedView({ record, onStartNew, onEnterBunker, entryError }: { reco
             className="group relative mt-7 flex min-h-14 w-full max-w-2xl items-center justify-center gap-2.5 rounded-xl bg-gradient-to-br from-amber-300 via-amber-400 to-amber-500 py-3.5 text-base font-black text-slate-950 shadow-[0_0_35px_rgba(245,158,11,0.3)] transition hover:brightness-110 active:scale-[0.99] focus-visible:ring-2 focus-visible:ring-amber-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0c13] sm:text-lg"
           >
             <Sparkles size={19} className="transition-transform group-hover:rotate-12" />
-            התחל הדרוף חדש
+            התחל דרופ חדש
           </button>
 
           <div className="mt-7 w-full max-w-2xl">
@@ -137,12 +138,12 @@ function CompletedView({ record, onStartNew, onEnterBunker, entryError }: { reco
             <Link
               href="/bunker"
               onClick={onEnterBunker}
-              className="group relative flex min-h-[76px] w-full items-center justify-center gap-3 overflow-hidden rounded-2xl border-2 border-cyan-100/70 bg-gradient-to-br from-cyan-200 via-cyan-400 to-lime-300 px-6 py-5 text-xl font-black text-slate-950 shadow-[0_0_24px_rgba(34,211,238,0.65),0_0_70px_rgba(34,211,238,0.32)] ring-4 ring-cyan-300/15 transition duration-300 hover:scale-[1.02] hover:brightness-110 hover:shadow-[0_0_34px_rgba(34,211,238,0.8),0_0_90px_rgba(34,211,238,0.42)] active:scale-[0.99]"
+              className="group relative flex min-h-[76px] w-full flex-wrap items-center justify-center gap-x-3 gap-y-1 overflow-hidden rounded-2xl border-2 border-cyan-100/70 bg-gradient-to-br from-cyan-200 via-cyan-400 to-lime-300 px-3 py-4 text-base font-black text-slate-950 shadow-[0_0_24px_rgba(34,211,238,0.65),0_0_70px_rgba(34,211,238,0.32)] ring-4 ring-cyan-300/15 transition duration-300 hover:scale-[1.02] hover:brightness-110 hover:shadow-[0_0_34px_rgba(34,211,238,0.8),0_0_90px_rgba(34,211,238,0.42)] active:scale-[0.99] sm:flex-nowrap sm:px-6 sm:py-5 sm:text-xl"
             >
               <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/55 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
               <Atom size={27} className="relative transition-transform duration-500 group-hover:rotate-90" />
               <span className="relative">כניסה לבנקר</span>
-              <span className="relative text-xs font-extrabold uppercase tracking-[0.18em]">ENTER THE BUNKER</span>
+              <span className="relative text-[10px] font-extrabold uppercase tracking-[0.12em] sm:text-xs sm:tracking-[0.18em]">ENTER THE BUNKER</span>
               <Sparkles size={19} className="relative animate-pulse" />
             </Link>
             {entryError && <p className="mt-3 text-sm text-rose-200" role="alert">לא ניתן לפתוח מעבר מאובטח במכשיר הזה. אפשרו אחסון בדפדפן ונסו שוב.</p>}
@@ -357,7 +358,7 @@ export default function DailyDrop() {
 
   return (
     <>
-    <section id="drop" className="mx-auto w-full max-w-7xl px-2 pb-4 pt-4 sm:px-5 sm:pt-6 lg:px-8">
+    <section id="drop" className="mx-auto w-full max-w-7xl px-4 pb-4 pt-4 sm:px-5 sm:pt-6 lg:px-8">
         <div className="premium-panel relative flex min-h-[calc(100svh-13rem)] flex-col justify-center overflow-hidden rounded-3xl">
           {/* Restrained luxury ambience */}
           <div className="pointer-events-none absolute -top-28 left-1/2 h-48 w-[420px] -translate-x-1/2" style={{ background: "radial-gradient(closest-side, rgba(34,211,238,0.09), transparent 72%)" }} />
@@ -398,13 +399,13 @@ export default function DailyDrop() {
               <CardEmblem />
             </div>
 
-            <h2 className="mt-8 text-2xl font-black leading-snug tracking-tight text-white sm:mt-10 sm:text-3xl lg:text-4xl">
-              הדרוף היומי של קהילת הכדורגל והפוקר
+            <h2 className="mt-8 w-full max-w-2xl text-balance text-2xl font-black leading-snug tracking-tight text-white sm:mt-10 sm:text-3xl lg:text-4xl">
+              {DROP_TITLE}
             </h2>
             <p className="mb-6 mt-2 max-w-2xl text-sm leading-relaxed text-slate-400 sm:mb-7 sm:text-base">
               {unlocked
-                ? "בחרו 5 קלפים — המכונה תערבב את החפיסה ותחשוף את הפרס, שיופיע בהפקדה הבאה."
-                : "הדרוף פתוח לחברי הקהילה בלבד — הזינו את קוד הגישה שקיבלתם."}
+                ? DROP_PRIZE_COPY
+                : "הדרופ פתוח לחברי קהילת הכדורגל והפוקר — הזינו את קוד הגישה שקיבלתם."}
             </p>
 
             <AnimatePresence initial={false}>
@@ -471,7 +472,7 @@ export default function DailyDrop() {
                       transition={{ type: "spring", stiffness: 260, damping: 20, delay: 0.42 }}
                     >
                       <Sparkles size={21} className="transition-transform group-hover:rotate-12" />
-                      הפעל את הדרוף
+                      הפעל את הדרופ
                     </motion.button>
 
                     <motion.p
@@ -495,7 +496,7 @@ export default function DailyDrop() {
                       htmlFor="daily-drop-code"
                       className="block text-[11px] font-bold text-slate-400 mb-2"
                     >
-                      קוד גישה לדרוף
+                      קוד גישה לדרופ
                     </label>
                     <div
                       className={`flex items-center gap-2 rounded-xl border bg-white/[0.03] transition ${
@@ -556,7 +557,7 @@ export default function DailyDrop() {
                               : errorKind === "roll_failed"
                                 ? "תקלה זמנית במערכת הפרסים — אם כבר אימתתם את הקוד, נסו שוב (אפשר להמשיך את הדרופ)"
                                 : errorKind === "prize_missing"
-                                  ? "הקוד אומת, אך מערכת הפרסים לא החזירה פרס לאחר מכן — נסו שוב, ואם זו לא התקלה הראשונה פנו להדרופ"
+                                  ? "הקוד אומת, אך מערכת הפרסים לא החזירה פרס לאחר מכן — נסו שוב, ואם זו לא התקלה הראשונה פנו לצוות הדרופ"
                                   : errorKind === "server_error"
                                     ? "מערכת הפרסים לא זמינה כרגע — הקוד שלך לא נצרך ולא נשלם; נסו שוב עוד מעט"
                                     : "קוד שגוי – נא לבדוק את הקוד שהתקבל"}
