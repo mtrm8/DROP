@@ -154,8 +154,40 @@ export function analyze(input) {
       const goalsFor = number(value.goalsFor, `${label}.goalsFor`, 0, 150);
       const goalsAgainst = number(value.goalsAgainst, `${label}.goalsAgainst`, 0, 150);
       assert([games, overTwo, goalsFor, goalsAgainst].every(Number.isInteger), `${label} counts must be integers`);
-      return { games, overTwo, goalsFor, goalsAgainst };
+      const recentTotals = value.recentTotals ?? [];
+      assert(Array.isArray(recentTotals) && (recentTotals.length === 0 || recentTotals.length === games) &&
+        recentTotals.every((goals) => Number.isInteger(goals) && goals >= 0 && goals <= 60),
+      `${label}.recentTotals must match the venue sample`);
+      return { games, overTwo, goalsFor, goalsAgainst, recentTotals };
     };
+    const lineup = (value) => {
+      if (value === null || value === undefined) return null;
+      const side = (entry, label) => {
+        assert(entry && ["confirmed", "projected", "unavailable"].includes(entry.status), `${label} requires a labelled lineup`);
+        const starters = number(entry.starters, `${label}.starters`, 0, 11);
+        const changes = optional(entry.changes, `${label}.changes`, 0, 11);
+        assert(Number.isInteger(starters) && (changes === null || Number.isInteger(changes)), `${label} counts must be integers`);
+        assert(entry.formation == null || (typeof entry.formation === "string" && /^\d(-\d){2,4}$/.test(entry.formation)), `${label}.formation is invalid`);
+        assert(Array.isArray(entry.keyPlayers) && entry.keyPlayers.length <= 3, `${label}.keyPlayers must be a short list`);
+        return { status: entry.status, starters, changes, formation: entry.formation ?? null,
+          keyPlayers: entry.keyPlayers.map((name, n) => text(name, `${label}.keyPlayers[${n}]`)) };
+      };
+      return { home: side(value.home, `watchlist[${i}].lineup.home`), away: side(value.away, `watchlist[${i}].lineup.away`) };
+    };
+    const meetings = item.headToHead ?? [];
+    assert(Array.isArray(meetings) && meetings.length <= 5, `watchlist[${i}].headToHead must have at most five meetings`);
+    const headToHead = meetings.map((row, n) => {
+      const label = `watchlist[${i}].headToHead[${n}]`;
+      assert(typeof row?.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(row.date) &&
+        Number.isFinite(Date.parse(`${row.date}T00:00:00Z`)) &&
+        new Date(`${row.date}T00:00:00Z`).toISOString().slice(0, 10) === row.date &&
+        Date.parse(`${row.date}T00:00:00Z`) < asOf,
+      `${label} must precede the scan`);
+      const homeGoals = number(row.homeGoals, `${label}.homeGoals`, 0, 30);
+      const awayGoals = number(row.awayGoals, `${label}.awayGoals`, 0, 30);
+      assert(Number.isInteger(homeGoals) && Number.isInteger(awayGoals), `${label} scores must be integers`);
+      return { date: row.date, homeGoals, awayGoals };
+    });
     const probability = optional(item.probability, `watchlist[${i}].probability`, 0.001, 1);
     const quote = optional(item.odds, `watchlist[${i}].odds`, 1.01, 10000);
     // A live price is real data and is kept even when the fixture never reached
@@ -169,6 +201,9 @@ export function analyze(input) {
       awayLogo: logo(item.awayLogo, `watchlist[${i}].awayLogo`),
       homeForm: form(item.homeForm, `watchlist[${i}].homeForm`),
       awayForm: form(item.awayForm, `watchlist[${i}].awayForm`),
+      lineup: lineup(item.lineup), headToHead,
+      priorityLabel: item.priorityLabel == null ? null : text(item.priorityLabel, `watchlist[${i}].priorityLabel`),
+      round: item.round == null ? null : text(item.round, `watchlist[${i}].round`),
       competition: text(item.competition, `watchlist[${i}].competition`),
       bookmaker: item.bookmaker === null || item.bookmaker === undefined
         ? null
@@ -189,7 +224,7 @@ export function analyze(input) {
     mode: input.mode, source, asOf: input.asOf, timeZone, picks, combinedOdds, productOdds,
     status: picks.length === 0 ? (input.status === "unavailable" ? "unavailable" : "no-picks") : "ready",
     statusMessage: input.status === "unavailable" ? text(input.statusMessage ?? "טרם התקבל דוח מאומת להיום", "statusMessage") : null,
-    watchlist: picks.length === 0 ? watchlist : [],
+    watchlist,
     scanNote,
     breakEven: 1 / combinedOdds, jointProbability,
     jointFairOdds: jointProbability && jointProbability > 0 ? 1 / jointProbability : null,

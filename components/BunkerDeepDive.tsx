@@ -18,7 +18,7 @@ import {
   Target,
 } from "lucide-react";
 import { GoalLaboratory, RiskReward } from "./bunker/ReportSections";
-import type { Pick, Report, VenueForm, WatchItem } from "./bunker/reportData";
+import type { LineupEvidence, Meeting, Pick, Report, VenueForm, WatchItem } from "./bunker/reportData";
 import { evaluateReport, statusHeadline } from "./bunker/reportStatus";
 import type { ReportStatus } from "./bunker/reportStatus";
 
@@ -194,9 +194,58 @@ function FormSnapshot({ team, venue, form, reduced }: { team: string; venue: str
           <motion.div className="h-full rounded-full bg-gradient-to-l from-cyan-300 to-emerald-400" initial={reduced ? false : { width: 0 }} whileInView={{ width: `${form.overTwo / form.games * 100}%` }} viewport={{ once: true }} transition={{ duration: reduced ? 0 : 0.8, ease: "easeOut" }} />
         </div>
         <p className="mt-2 text-[10px] text-slate-400">שערים למשחק: כבשה <bdi dir="ltr" className="font-mono text-slate-200">{(form.goalsFor / form.games).toFixed(1)}</bdi> · ספגה <bdi dir="ltr" className="font-mono text-slate-200">{(form.goalsAgainst / form.games).toFixed(1)}</bdi></p>
+        {form.recentTotals?.length > 0 && <div className="mt-3 flex h-8 items-end gap-1" dir="ltr" role="img" aria-label={`סך השערים במשחקים האחרונים, מהישן לחדש: ${[...form.recentTotals].reverse().join(", ")}`}>
+          {[...form.recentTotals].reverse().map((goals, index) => <div key={index} className="flex h-full flex-1 items-end rounded-sm bg-white/[0.04]">
+            <motion.div className={`w-full rounded-sm ${goals >= 3 ? "bg-gradient-to-t from-cyan-700 to-emerald-300" : "bg-slate-500"}`} initial={reduced ? false : { height: 0 }} whileInView={{ height: `${Math.max(10, Math.min(goals, 6) / 6 * 100)}%` }} viewport={{ once: true }} transition={{ duration: reduced ? 0 : 0.6, delay: index * 0.07 }} />
+          </div>)}
+        </div>}
+        {form.recentTotals?.length > 0 && <p className="mt-1 text-[9px] text-slate-500">רצף שערים במשחק · ישן → חדש · 6+ בראש הסקאלה</p>}
       </> : <p className="mt-2 text-[11px] leading-5 text-slate-500">לא התקבל מדגם {venue} להצגה.</p>}
     </div>
   );
+}
+
+function HeadToHead({ meetings, home, away, reduced }: { meetings: Meeting[]; home: string; away: string; reduced: boolean }) {
+  const homeWins = meetings.filter((row) => row.homeGoals > row.awayGoals).length;
+  const draws = meetings.filter((row) => row.homeGoals === row.awayGoals).length;
+  const awayWins = meetings.length - homeWins - draws;
+  return (
+    <div className="relative mt-5 rounded-2xl border border-white/[0.08] bg-white/[0.025] p-4">
+      <p className="flex items-center gap-2 text-xs font-black text-white"><Activity size={15} className="text-cyan-300" /> היסטוריית מפגשים · ראש בראש</p>
+      {meetings.length ? <>
+        <div className="mt-3 flex flex-wrap justify-between gap-2 text-[10px] text-slate-300">
+          <span>{home}: <bdi className="font-mono text-emerald-200">{homeWins}</bdi> ניצחונות</span>
+          <span>תיקו: <bdi className="font-mono">{draws}</bdi></span>
+          <span>{away}: <bdi className="font-mono text-cyan-200">{awayWins}</bdi> ניצחונות</span>
+        </div>
+        <div className="mt-3 flex h-2 overflow-hidden rounded-full bg-white/[0.07]" role="img" aria-label={`${homeWins} ניצחונות ל${home}, ${draws} תיקו, ${awayWins} ניצחונות ל${away}`}>
+          {[
+            { key: "home", count: homeWins, color: "bg-emerald-400" },
+            { key: "draw", count: draws, color: "bg-slate-400" },
+            { key: "away", count: awayWins, color: "bg-cyan-400" },
+          ].filter((segment) => segment.count > 0).map((segment) => <motion.div key={segment.key} className={segment.color} initial={reduced ? false : { width: 0 }} whileInView={{ width: `${segment.count / meetings.length * 100}%` }} viewport={{ once: true }} transition={{ duration: reduced ? 0 : 0.75 }} />)}
+        </div>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {meetings.map((row, index) => <div key={`${row.date}-${index}`} className="rounded-lg border border-white/[0.07] bg-black/20 px-2.5 py-1.5 text-center">
+            <p className="font-mono text-[9px] text-slate-500" dir="ltr">{row.date}</p>
+            <p className="mt-0.5 font-mono text-xs font-black text-white" dir="ltr">{row.homeGoals} : {row.awayGoals}</p>
+          </div>)}
+        </div>
+        <p className="mt-2 text-[10px] text-slate-500">התוצאות מוצגות מנקודת המבט של {home}; מפגשים קודמים אינם תחזית לתוצאה הבאה.</p>
+      </> : <p className="mt-2 text-[11px] leading-5 text-slate-400">לא פורסמו מפגשים קודמים מאומתים בין הנבחרות / הקבוצות במקור הנתונים.</p>}
+    </div>
+  );
+}
+
+function SquadSnapshot({ team, evidence }: { team: string; evidence: LineupEvidence | null }) {
+  const status = evidence?.status === "confirmed" ? "הרכב מאושר" : evidence?.status === "projected" ? "על בסיס המשחק הקודם" : "הרכב לא פורסם";
+  return <div className="rounded-xl border border-white/[0.07] bg-black/20 p-3.5">
+    <p className="text-xs font-black text-white">{team}</p>
+    <p className={`mt-2 text-[11px] font-bold ${evidence?.status === "confirmed" ? "text-emerald-200" : "text-amber-200"}`}>{status} · {evidence?.starters ?? 0}/11 שחקנים</p>
+    {evidence?.formation && <p className="mt-1 text-[10px] text-slate-300">מערך {evidence.status === "confirmed" ? "שפורסם" : "מהמשחק הקודם"}: <bdi dir="ltr" className="font-mono text-cyan-200">{evidence.formation}</bdi></p>}
+    {evidence?.changes != null && <p className="mt-1 text-[10px] text-slate-400">{evidence.changes} שינויים מההרכב האחרון במדגם</p>}
+    {evidence?.keyPlayers?.length ? <p className="mt-2 text-[10px] leading-5 text-slate-400">שמות בהרכב {evidence.status === "confirmed" ? "שפורסם" : "הקודם"}: {evidence.keyPlayers.join(" · ")}</p> : <p className="mt-2 text-[10px] text-slate-500">לא סופקו שמות שחקנים להרכב זה.</p>}
+  </div>;
 }
 
 function WatchlistCard({ item, index, timeZone }: { item: WatchItem; index: number; timeZone: string }) {
@@ -220,6 +269,8 @@ function WatchlistCard({ item, index, timeZone }: { item: WatchItem; index: numb
             <div>
               <p className="font-mono text-[10px] font-bold tracking-[0.18em] text-cyan-200/75" dir="ltr">MATCH {String(index + 1).padStart(2, "0")}</p>
               <p className="mt-1 text-xs font-semibold text-slate-400">{item.competition}</p>
+              {item.priorityLabel && <p className="mt-2 inline-flex rounded-md border border-emerald-300/20 bg-emerald-300/[0.07] px-2 py-1 text-[10px] font-black text-emerald-100">{item.priorityLabel}</p>}
+              {item.round && <p className="mt-1 text-[10px] text-slate-500">{item.round}</p>}
             </div>
             <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[10px] font-bold ${hasModel ? "border-cyan-300/25 bg-cyan-300/[0.08] text-cyan-100" : "border-amber-200/25 bg-amber-200/[0.07] text-amber-100"}`}>
               <motion.span className={`h-1.5 w-1.5 rounded-full ${hasModel ? "bg-cyan-300 shadow-[0_0_10px_rgba(103,232,249,.8)]" : "bg-amber-200 shadow-[0_0_10px_rgba(253,230,138,.7)]"}`} animate={reduced ? undefined : { opacity: [0.6, 1, 0.6], scale: [1, 1.3, 1] }} transition={{ duration: 2.3, repeat: Infinity }} />
@@ -272,14 +323,44 @@ function WatchlistCard({ item, index, timeZone }: { item: WatchItem; index: numb
             <p className="mt-2 text-[10px] leading-5 text-slate-500">מדגם תוצאות בלבד; אינו מותאם לרמת היריבה או להרכבים.</p>
           </div>
 
+          <HeadToHead meetings={item.headToHead ?? []} home={item.home} away={item.away} reduced={Boolean(reduced)} />
+
+          <div className="relative mt-5">
+            <p className="mb-3 flex items-center gap-2 text-xs font-black text-white"><ShieldCheck size={15} className="text-emerald-300" /> תמונת סגל · מערכים והרכבים</p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <SquadSnapshot team={item.home} evidence={item.lineup?.home ?? null} />
+              <SquadSnapshot team={item.away} evidence={item.lineup?.away ?? null} />
+            </div>
+          </div>
+
           <div className="relative mt-5 flex items-start gap-2 rounded-xl border border-amber-200/15 bg-amber-200/[0.04] p-3.5 text-xs leading-6 text-slate-300">
             <Info size={15} className="mt-1 shrink-0 text-amber-200" />
-            <div><p className="font-black text-amber-100">למה המשחק במעקב?</p><p className="mt-1">{item.note || (hasModel ? `המודל מעריך ${percent(item.probability!)} לשלושה שערים ומעלה, לעומת סף איזון של ${percent(marketThreshold!)} לפי המחיר. לא נמצא צבר שעומד בתנאי הבחירה.` : "אין מספיק נתונים לחישוב פער מבוסס.")} למעקב בלבד · לא המלצה.</p></div>
+            <div>
+              <p className="font-black text-amber-100">ניתוח לפני המשחק · למה הוא במעקב?</p>
+              <p className="mt-1">{item.priorityLabel ? `${item.priorityLabel} ${item.round ? `· ${item.round}` : ""} · ` : ""}{item.note || (hasModel ? `המודל מעריך ${percent(item.probability!)} לשלושה שערים ומעלה, לעומת סף איזון של ${percent(marketThreshold!)} לפי המחיר. לא נמצא צבר שעומד בתנאי הבחירה.` : "אין מספיק נתונים לחישוב פער מבוסס.")}</p>
+              {item.homeForm && item.awayForm && <p className="mt-2 text-slate-400">במדגם המקום שנאסף, {item.home} כבשה בממוצע {(item.homeForm.goalsFor / item.homeForm.games).toFixed(1)} בבית ו־{item.away} ספגה {(item.awayForm.goalsAgainst / item.awayForm.games).toFixed(1)} בחוץ; זו תמונת שערים היסטורית, לא ניתוח של לחץ או איכות יריבה.</p>}
+              <p className="mt-2 text-amber-100/80">מידע למעקב בלבד · לא המלצה.</p>
+            </div>
           </div>
         </motion.article>
       </Reveal>
     </li>
   );
+}
+
+function DailyWatchlist({ watch, timeZone, title }: { watch: WatchItem[]; timeZone: string; title: string }) {
+  return <div className="relative mt-8 border-t border-white/[0.08] pt-6">
+    <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <p className="font-mono text-[10px] font-bold tracking-[0.22em] text-cyan-300/70" dir="ltr">DAILY WATCHLIST / {String(watch.length).padStart(2, "0")}</p>
+        <h3 className="mt-1 text-xl font-black text-white">{title}</h3>
+      </div>
+      <span className="inline-flex items-center gap-2 rounded-full border border-amber-200/20 bg-amber-200/[0.06] px-3 py-1.5 text-[10px] font-bold text-amber-100"><Activity size={13} /> מידע למעקב · לא המלצה</span>
+    </div>
+    <ul className="grid gap-4 lg:grid-cols-2">
+      {watch.map((item, index) => <WatchlistCard key={`${item.home}-${item.away}-${item.kickoff}`} item={item} index={index} timeZone={timeZone} />)}
+    </ul>
+  </div>;
 }
 
 export default function BunkerDeepDive({ report }: { report: Report }) {
@@ -317,20 +398,7 @@ export default function BunkerDeepDive({ report }: { report: Report }) {
           <h2 className="mt-3 text-2xl font-black leading-tight text-white sm:text-3xl">{title}</h2>
           <p className="mt-3 text-sm leading-7 text-slate-300">{body}</p>
         </div>
-        {watch.length > 0 ? (
-          <div className="relative mt-8 border-t border-white/[0.08] pt-6">
-            <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="font-mono text-[10px] font-bold tracking-[0.22em] text-cyan-300/70" dir="ltr">DAILY WATCHLIST / {String(watch.length).padStart(2, "0")}</p>
-                <h3 className="mt-1 text-xl font-black text-white">משחקים למעקב היום</h3>
-              </div>
-              <span className="inline-flex items-center gap-2 rounded-full border border-amber-200/20 bg-amber-200/[0.06] px-3 py-1.5 text-[10px] font-bold text-amber-100"><Activity size={13} /> מידע למעקב · לא המלצה</span>
-            </div>
-            <ul className="grid gap-4 lg:grid-cols-2">
-              {watch.map((item, index) => <WatchlistCard key={`${item.home}-${item.away}-${item.kickoff}`} item={item} index={index} timeZone={status.timeZone} />)}
-            </ul>
-          </div>
-        ) : null}
+        {watch.length > 0 && <DailyWatchlist watch={watch} timeZone={status.timeZone} title="משחקים למעקב היום" />}
         {report.scanNote && <p className="relative mt-5 border-t border-white/[0.07] pt-4 text-xs leading-6 text-slate-400">{report.scanNote}</p>}
       </section>
     );
@@ -373,6 +441,13 @@ export default function BunkerDeepDive({ report }: { report: Report }) {
       <div className="grid gap-4 lg:grid-cols-2">
         {PICKS.map((pick, index) => <MatchAnalysis key={pick.id} pick={pick} index={index} />)}
       </div>
+
+      {status.isToday && report.watchlist?.length > 0 && <Reveal>
+        <section className="rounded-[1.7rem] border border-cyan-300/20 bg-[#070e11]/95 p-5 shadow-[0_18px_70px_rgba(0,0,0,.28)] sm:p-7">
+          <p className="text-xs leading-6 text-slate-300">בנוסף לבחירות שאומתו, משחקי צמרת שלא השלימו את תנאי המודל נשארים גלויים כאן למעקב. הם אינם חלק מהטופס.</p>
+          <DailyWatchlist watch={report.watchlist} timeZone={status.timeZone} title="משחקי צמרת נוספים למעקב" />
+        </section>
+      </Reveal>}
 
       <Reveal>
         <section className="rounded-[1.7rem] border border-cyan-300/20 bg-[#070e11]/95 p-5 shadow-[0_18px_70px_rgba(0,0,0,.28)] sm:p-7">

@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import { strict as assert } from "node:assert";
 import { analyze, assertPublishable } from "./bunker-model.mjs";
-import { createProvider, gatherLiveInput, selectValuePicks, todayInZone, unavailableInput } from "./fetch-live-bunker.mjs";
+import { createProvider, DEFAULT_LEAGUES, gatherLiveInput, matchPriority, selectValuePicks, todayInZone, unavailableInput } from "./fetch-live-bunker.mjs";
 
 const now = new Date("2026-09-26T12:00:00Z");
 const team = (id, name) => ({ id, name, code: name.slice(0, 3).toUpperCase(), logo: `https://media.api-sports.io/football/teams/${id}.png` });
@@ -20,6 +20,14 @@ const laterFixtures = [
   build({ id: 400, home: team(7, "Eta"), away: team(8, "Theta") }, "2026-09-26T20:00:00Z"),
   build({ id: 500, home: team(9, "Iota"), away: team(10, "Kappa") }, "2026-09-26T22:00:00Z"),
 ];
+const marquee = {
+  ...build({ id: 600, home: team(11, "Spain"), away: team(12, "England") }, "2026-09-26T19:00:00Z"),
+  league: { id: 5, name: "UEFA Nations League", season: 2026, round: "League A - 2" },
+};
+const minor = {
+  ...build({ id: 700, home: team(13, "Small FC"), away: team(14, "Other FC") }, "2026-09-26T12:45:00Z"),
+  league: { id: 89, name: "Eerste Divisie", season: 2026 },
+};
 const history = new Map();
 for (const match of [...fixtures, ...laterFixtures]) {
   for (let i = 1; i <= 3; i++) {
@@ -31,15 +39,19 @@ for (const match of [...fixtures, ...laterFixtures]) {
     history.set(match.teams.away.id, [...(history.get(match.teams.away.id) ?? []), away]);
   }
 }
-const lineup = (teamId) => ({ team: { id: teamId }, startXI: Array.from({ length: 11 }, (_, n) => ({ player: { id: teamId * 100 + n } })) });
+const lineup = (teamId) => ({ team: { id: teamId }, formation: "4-3-3", startXI: Array.from({ length: 11 }, (_, n) => ({ player: { id: teamId * 100 + n, name: `Starter ${teamId}-${n}` } })) });
 
-function mockProvider({ missingLineups = false, otherBook = false, missingPlayers = false, staleOdds = false, tomorrow = false, manyFixtures = false } = {}) {
-  const listed = manyFixtures ? [...fixtures, ...laterFixtures] : fixtures;
+function mockProvider({ missingLineups = false, otherBook = false, missingPlayers = false, staleOdds = false, tomorrow = false, manyFixtures = false, marqueeMatch = false, minorMatch = false } = {}) {
+  const listed = [...fixtures, ...(manyFixtures ? laterFixtures : []), ...(marqueeMatch ? [marquee] : []), ...(minorMatch ? [minor] : [])];
   return async (url) => {
     const path = url.pathname;
     const fixtureId = Number(url.searchParams.get("fixture"));
     let response;
     if (path === "/fixtures" && url.searchParams.has("date")) response = tomorrow ? listed.map((item) => ({ ...item, fixture: { ...item.fixture, date: "2026-09-27T13:00:00Z" } })) : listed;
+    else if (path === "/fixtures/headtohead") response = url.searchParams.get("h2h") === "1-2" ? [{
+      fixture: { date: "2025-09-20T13:00:00Z", status: { short: "FT" } },
+      teams: { home: team(2, "Beta"), away: team(1, "Alpha") }, goals: { home: 2, away: 1 },
+    }] : [];
     else if (path === "/fixtures") response = history.get(Number(url.searchParams.get("team"))) ?? [];
     else if (path === "/fixtures/lineups") {
       const match = listed.find((item) => item.fixture.id === fixtureId);
@@ -115,6 +127,13 @@ test("today respects the chosen timezone across the UTC date boundary", () => {
   assert.equal(todayInZone(new Date("2026-09-26T22:00:00Z"), "UTC"), "2026-09-26");
 });
 
+test("major competitions lead the default pool, without Dutch second-division fixtures", () => {
+  assert.ok(DEFAULT_LEAGUES.includes(5));
+  assert.ok([39, 140, 78, 135, 61].every((id) => DEFAULT_LEAGUES.includes(id)));
+  assert.ok(!DEFAULT_LEAGUES.includes(89));
+  assert.ok(matchPriority(5, "League A - 2", "Spain", "England") > matchPriority(39, "Regular Season", "Arsenal", "Chelsea"));
+});
+
 const leg = (id, book, edge, extra = {}) => ({
   fixtureId: id, bookmaker: { id: book, name: `Book${book}` }, edge,
   // Keep the fixture self-consistent: the accumulator maths uses probability x
@@ -150,6 +169,15 @@ test("legs are never mixed across bookmakers", () => {
   assert.deepEqual([...new Set(chosen.picks.map((pick) => pick.bookmaker))], ["Book9"]);
 });
 
+test("qualified marquee legs beat lower-tier legs without bypassing the value gate", () => {
+  const legs = [
+    leg(1, 7, 0.03, { leagueId: 5 }), leg(2, 7, 0.03, { leagueId: 5 }),
+    leg(3, 7, 0.12, { leagueId: 89 }), leg(4, 7, 0.12, { leagueId: 89 }),
+  ];
+  assert.deepEqual(selectValuePicks(legs, now).picks.map((pick) => pick.home), ["Home 1", "Home 2"]);
+  assert.equal(selectValuePicks([leg(1, 7, -0.02, { leagueId: 5 }), leg(2, 7, -0.02, { leagueId: 5 })], now).picks.length, 0);
+});
+
 test("a losing day publishes an honest watchlist instead of a bare empty report", () => {
   const report = analyze(selectValuePicks([leg(1, 7, -0.03), leg(2, 7, -0.05), leg(3, 7, -0.08)], now));
   assert.equal(report.status, "no-picks");
@@ -163,10 +191,10 @@ test("a losing day publishes an honest watchlist instead of a bare empty report"
   assert.deepEqual(report.watchlist.map((item) => item.away), ["Away 1", "Away 2", "Away 3"]);
 });
 
-test("a report with picks never carries a watchlist", () => {
-  const chosen = selectValuePicks([leg(1, 7, 0.2), leg(2, 7, 0.2), leg(3, 7, -0.2)], now);
+test("a report with picks can spotlight other headline matches without repeating selected fixtures", () => {
+  const chosen = selectValuePicks([leg(1, 7, 0.2, { leagueId: 5 }), leg(2, 7, 0.2, { leagueId: 5 }), leg(3, 7, -0.2, { leagueId: 5 })], now);
   assert.equal(chosen.picks.length, 2);
-  assert.equal(chosen.watchlist, undefined);
+  assert.deepEqual(chosen.watchlist.map((item) => item.home), ["Home 3"]);
 });
 
 test("the scan reports what it covered so an empty day is explainable", async () => {
@@ -191,8 +219,8 @@ test("when every data gate drops the day, the top upcoming fixtures still publis
   assert.equal(kickoffs[0], "2026-09-26T13:00:00Z");
   assert.equal(report.watchlist[0].homeLogo, "https://media.api-sports.io/football/teams/1.png");
   assert.equal(report.watchlist[0].awayLogo, "https://media.api-sports.io/football/teams/2.png");
-  assert.deepEqual(report.watchlist[0].homeForm, { games: 3, overTwo: 3, goalsFor: 9, goalsAgainst: 3 });
-  assert.deepEqual(report.watchlist[0].awayForm, { games: 3, overTwo: 3, goalsFor: 6, goalsAgainst: 6 });
+  assert.deepEqual(report.watchlist[0].homeForm, { games: 3, overTwo: 3, goalsFor: 9, goalsAgainst: 3, recentTotals: [4, 4, 4] });
+  assert.deepEqual(report.watchlist[0].awayForm, { games: 3, overTwo: 3, goalsFor: 6, goalsAgainst: 6, recentTotals: [4, 4, 4] });
 });
 
 test("the watchlist falls back to fixtures that only reached the price stage", async () => {
@@ -212,8 +240,61 @@ test("modelled near-misses retain official crests and real home/away samples", a
   const report = analyze(await gatherLiveInput({ key: "test-key", now, request: mockProvider({ otherBook: true }) }));
   assert.equal(report.watchlist.length, 2);
   assert.equal(report.watchlist[0].homeLogo, "https://media.api-sports.io/football/teams/1.png");
-  assert.deepEqual(report.watchlist[0].homeForm, { games: 3, overTwo: 3, goalsFor: 9, goalsAgainst: 3 });
+  assert.deepEqual(report.watchlist[0].homeForm, { games: 3, overTwo: 3, goalsFor: 9, goalsAgainst: 3, recentTotals: [4, 4, 4] });
   assert.ok(report.watchlist[0].probability > 0);
+  assert.deepEqual(report.watchlist[0].headToHead, [{ date: "2025-09-20", homeGoals: 1, awayGoals: 2 }]);
+  assert.equal(report.watchlist[0].lineup.home.status, "confirmed");
+  assert.equal(report.watchlist[0].lineup.home.starters, 11);
+  assert.equal(report.watchlist[0].lineup.home.formation, "4-3-3");
+  assert.deepEqual(report.watchlist[0].lineup.home.keyPlayers, ["Starter 1-0", "Starter 1-1", "Starter 1-2"]);
+});
+
+test("Spain vs England Nations League leads even when top-league matches have more evidence", async () => {
+  const base = mockProvider({ otherBook: true, marqueeMatch: true, minorMatch: true });
+  const input = await gatherLiveInput({ key: "test-key", now, leagues: [89], request: async (url) => {
+    if (url.pathname === "/odds" && url.searchParams.get("fixture") === "600") {
+      return { ok: true, json: async () => ({ response: [], paging: { total: 1 }, errors: [] }) };
+    }
+    return base(url);
+  } });
+  const report = analyze(input);
+  assert.equal(report.status, "no-picks");
+  assert.equal(report.watchlist[0].home, "Spain");
+  assert.equal(report.watchlist[0].away, "England");
+  assert.equal(report.watchlist[0].priorityLabel, "UEFA Nations League");
+  assert.equal(report.watchlist[0].probability, null);
+  assert.ok(report.watchlist.some((item) => item.probability !== null));
+  assert.ok(report.watchlist.every((item) => item.competition !== "Eerste Divisie"));
+});
+
+test("a marquee match remains visible when other matches qualify as picks", async () => {
+  const base = mockProvider({ marqueeMatch: true });
+  const report = analyze(await gatherLiveInput({ key: "test-key", now, request: async (url) => {
+    if (url.pathname === "/odds" && url.searchParams.get("fixture") === "600") {
+      return { ok: true, json: async () => ({ response: [], paging: { total: 1 }, errors: [] }) };
+    }
+    return base(url);
+  } }));
+  assert.equal(report.status, "ready");
+  assert.equal(report.picks.length, 2);
+  assert.deepEqual(report.watchlist.map((item) => item.home), ["Spain"]);
+});
+
+test("default scan omits the Eerste Divisie even when it starts earlier", async () => {
+  const report = analyze(await gatherLiveInput({ key: "test-key", now, request: mockProvider({ staleOdds: true, marqueeMatch: true, minorMatch: true }) }));
+  assert.equal(report.watchlist[0].home, "Spain");
+  assert.ok(report.watchlist.every((item) => item.competition !== "Eerste Divisie"));
+});
+
+test("configured secondary leagues fill genuinely empty headline days", async () => {
+  const base = mockProvider({ minorMatch: true });
+  const report = analyze(await gatherLiveInput({ key: "test-key", now, leagues: [89], request: async (url) => {
+    const response = await base(url);
+    if (url.pathname !== "/fixtures" || !url.searchParams.has("date")) return response;
+    const body = await response.json();
+    return { ok: true, json: async () => ({ ...body, response: body.response.filter((match) => match.league.id === 89) }) };
+  } }));
+  assert.equal(report.watchlist[0].competition, "Eerste Divisie");
 });
 
 test("only the provider's own team crests are published", async () => {

@@ -46,7 +46,19 @@ export type VenueForm = {
   overTwo: number;
   goalsFor: number;
   goalsAgainst: number;
+  /** Total goals per venue fixture, newest first. */
+  recentTotals: number[];
 };
+
+export type LineupEvidence = {
+  status: "confirmed" | "projected" | "unavailable";
+  starters: number;
+  changes: number | null;
+  formation: string | null;
+  keyPlayers: string[];
+};
+
+export type Meeting = { date: string; homeGoals: number; awayGoals: number };
 
 export type WatchItem = {
   home: string;
@@ -55,6 +67,10 @@ export type WatchItem = {
   awayLogo: string | null;
   homeForm: VenueForm | null;
   awayForm: VenueForm | null;
+  lineup: { home: LineupEvidence; away: LineupEvidence } | null;
+  headToHead: Meeting[];
+  priorityLabel: string | null;
+  round: string | null;
   competition: string;
   bookmaker: string | null;
   kickoff: string;
