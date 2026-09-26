@@ -272,7 +272,10 @@ export default function DailyDrop() {
       settle();
     };
 
-    if (!isValidCommunityCode(value)) {
+    // Offline demo mode only: when Supabase is configured every code must be
+    // verified server-side by the redeem_code RPC (matching code, used = false),
+    // so the local allowlist must never reject it here first.
+    if (!BACKEND_ENABLED && !isValidCommunityCode(value)) {
       setErrorKind("invalid");
       settle();
       return;
