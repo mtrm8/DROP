@@ -1,6 +1,6 @@
-import { writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { UNAVAILABLE_STATUS_MESSAGE } from "./bunker-model.mjs";
-import { gatherLiveInput, unavailableInput } from "./fetch-live-bunker.mjs";
+import { gatherLiveInput, retainableTodayReport, unavailableInput } from "./fetch-live-bunker.mjs";
 
 const leagues = process.env.BUNKER_LEAGUES?.split(",").map(Number);
 if (leagues && (!leagues.length || leagues.some((id) => !Number.isInteger(id) || id <= 0))) {
@@ -23,6 +23,15 @@ try {
   // the dated status keeps the failure visible and self-clearing on the next
   // successful daily scan; local runs still fail loudly by default.
   if (process.env.BUNKER_ALLOW_UNAVAILABLE !== "1") throw error;
+  // A later failed retry must not overwrite an already-completed scan for
+  // today: that used to replace real, still-upcoming matches with a waiting
+  // fallback state even though the data had already been fetched and verified.
+  let previous = null;
+  try { previous = JSON.parse(await readFile(target, "utf8")); } catch { /* no published report yet */ }
+  if (retainableTodayReport(previous, new Date(), timeZone)) {
+    console.error("Keeping today's completed scan; this run failed:", error);
+    return;
+  }
   console.error("Today's provider data is unavailable; publishing a dated status instead of stale picks:", error);
   await publish(unavailableInput(new Date(), timeZone, UNAVAILABLE_STATUS_MESSAGE, String(error?.message ?? error)));
   console.log("Published a dated unavailable status for today.");

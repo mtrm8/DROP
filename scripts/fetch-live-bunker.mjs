@@ -117,7 +117,10 @@ export function startingPlayerStats(rows, lineupIds, leagueId, season) {
   const byId = new Map(rows.map((row) => [row.player?.id, row]));
   const players = lineupIds.map((id) => {
     const row = byId.get(id);
-    const stats = row?.statistics?.find((entry) => entry.league?.id === leagueId && entry.league?.season === season);
+    // Providers have answered with the season as either a number or a string;
+    // a strict match used to drop every starter and fail the whole day's ticket.
+    const stats = row?.statistics?.find((entry) =>
+      Number(entry.league?.id) === Number(leagueId) && Number(entry.league?.season) === Number(season));
     const minutes = stats?.games?.minutes;
     if (!row?.player?.name || !Number.isFinite(minutes) || minutes < 90) return null;
     const rating = stats.games?.rating == null ? null : Number(stats.games.rating);
@@ -329,6 +332,29 @@ export function unavailableInput(now = new Date(), timeZone = "Asia/Jerusalem", 
     picks: [],
     results: [],
   };
+}
+
+/**
+ * A previously published report that can still serve today's page.
+ * A failed retry must never overwrite it with an unavailable status: the site
+ * would drop verified, still-upcoming matches back to the waiting fallback.
+ */
+export function retainableTodayReport(previous, now = new Date(), timeZone = "Asia/Jerusalem") {
+  if (!previous || previous.mode !== "live" || previous.status === "unavailable") return false;
+  if (!Number.isFinite(Date.parse(previous.asOf)) || !Array.isArray(previous.picks)) return false;
+  const hasContent = previous.picks.length > 0 || (Array.isArray(previous.watchlist) && previous.watchlist.length > 0);
+  if (!hasContent) return false;
+  return todayInZone(new Date(previous.asOf), timeZone) === todayInZone(now, timeZone);
+}
+
+/**
+ * Final gate on the exact payload to publish: every selected leg still needs a
+ * model with a positive edge, and the accumulator needs its joint edge.
+ */
+export function passesFinalValidation(report) {
+  if (report.picks.length === 0) return true;
+  return report.jointEdge != null && report.jointEdge >= 0.04 &&
+    report.picks.every((pick) => pick.model && pick.model.edge > 0);
 }
 
 export async function gatherLiveInput({ key, leagues = DEFAULT_LEAGUES, timeZone = "Asia/Jerusalem", now = new Date(), request = fetch }) {
@@ -616,9 +642,16 @@ export async function gatherLiveInput({ key, leagues = DEFAULT_LEAGUES, timeZone
     }
   }
   // Validate the exact payload that will be published, not just intermediate estimates.
-  const report = analyze(input);
-  if (report.picks.length > 0 && (!report.picks.every((pick) => pick.model && pick.model.edge > 0) || report.jointEdge < 0.04)) {
-    throw new Error("Selected value failed final report validation");
+  let report = analyze(input);
+  if (!passesFinalValidation(report)) {
+    // The verified watchlist is still today's real data. A ticket that fails
+    // the final check degrades the report to no-picks instead of failing the
+    // whole scan, which used to push the site onto an unavailable fallback
+    // even though the day's fixtures, prices and lineups had all been fetched.
+    console.warn("Selected value failed final report validation; publishing the day's watchlist without a ticket.");
+    input.picks = [];
+    input.combinedOdds = 1.01;
+    report = analyze(input);
   }
   input.scanNote = scanNote(scan, dropped, candidates.length, report.picks.length);
   return input;

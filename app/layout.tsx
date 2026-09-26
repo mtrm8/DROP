@@ -4,7 +4,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Einstein Drop | איינשטיין דרופ",
   description:
-    "Einstein Drop — דרופים לקהילת הכדורגל, בנקר אנליסט לבחירות ידניות ובנקר AI ניסיוני בגישת חברים.",
+    "Einstein Drop — דרופים לקהילת הכדורגל, בנקר אנליסט לבחירות ידניות ובנקר AI ניסיוני.",
   applicationName: "Einstein Drop",
   openGraph: {
     title: "Einstein Drop | איינשטיין דרופ",

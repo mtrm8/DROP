@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import { strict as assert } from "node:assert";
 import { analyze, assertPublishable, UNAVAILABLE_STATUS_MESSAGE } from "./bunker-model.mjs";
-import { createProvider, DEFAULT_LEAGUES, gatherLiveInput, matchPriority, selectValuePicks, todayInZone, unavailableInput } from "./fetch-live-bunker.mjs";
+import { createProvider, DEFAULT_LEAGUES, gatherLiveInput, matchPriority, passesFinalValidation, retainableTodayReport, selectValuePicks, startingPlayerStats, todayInZone, unavailableInput } from "./fetch-live-bunker.mjs";
 
 const now = new Date("2026-09-26T12:00:00Z");
 const team = (id, name) => ({ id, name, code: name.slice(0, 3).toUpperCase(), logo: `https://media.api-sports.io/football/teams/${id}.png` });
@@ -515,4 +515,34 @@ test("a failed scan still publishes today's dated status instead of stale picks"
   assert.equal(assertPublishable(report, now), report);
   // ...but it can never masquerade as a later day's completed scan.
   assert.throws(() => assertPublishable(report, new Date("2026-09-27T09:00:00Z")), /current day/);
+});
+
+test("player statistics match even when the provider sends the season as text", () => {
+  const rows = (season) => Array.from({ length: 11 }, (_, n) => ({
+    player: { id: 100 + n, name: `Starter ${n}` },
+    statistics: [{ league: { id: 39, season }, games: { minutes: 900 } }],
+  }));
+  const ids = rows(2026).map((row) => row.player.id);
+  assert.equal(startingPlayerStats(rows("2026"), ids, 39, 2026)?.length, 11, "a string season still matches the fixture");
+  assert.equal(startingPlayerStats(rows(2026), ids, 39, 2026)?.length, 11);
+  assert.equal(startingPlayerStats(rows("2026"), ids, 5, 2026), null, "another league never borrows stats");
+});
+
+test("a failed final check degrades the day to no-picks instead of failing the scan", () => {
+  assert.equal(passesFinalValidation({ picks: [], jointEdge: null }), true, "an empty ticket is a valid no-picks day");
+  assert.equal(passesFinalValidation({ picks: [{ model: { edge: 0.1 } }, { model: { edge: 0.08 } }], jointEdge: 0.06 }), true);
+  assert.equal(passesFinalValidation({ picks: [{ model: { edge: -0.02 } }], jointEdge: 0.1 }), false, "a negative edge never publishes");
+  assert.equal(passesFinalValidation({ picks: [{ model: null }], jointEdge: null }), false, "an unmodelled leg is withheld");
+  assert.equal(passesFinalValidation({ picks: [{ model: { edge: 0.1 } }], jointEdge: 0.02 }), false, "the accumulator must clear the joint edge");
+});
+
+test("a failed retry does not overwrite a completed scan for today", () => {
+  const today = { mode: "live", status: "no-picks", asOf: "2026-09-26T11:00:00Z", picks: [], watchlist: [{ kickoff: "2026-09-26T18:00:00Z" }] };
+  const now = new Date("2026-09-26T12:00:00Z");
+  assert.equal(retainableTodayReport(today, now), true, "today's watchlist stays published");
+  assert.equal(retainableTodayReport({ ...today, picks: [{ id: "01" }] }, now), true);
+  assert.equal(retainableTodayReport({ ...today, status: "unavailable" }, now), false, "an unavailable status is replaced");
+  assert.equal(retainableTodayReport({ ...today, asOf: "2026-09-25T11:00:00Z" }, now), false, "yesterday's data is stale, not preserved");
+  assert.equal(retainableTodayReport({ ...today, watchlist: [] }, now), false, "an empty report has nothing to keep");
+  assert.equal(retainableTodayReport(null, now), false);
 });

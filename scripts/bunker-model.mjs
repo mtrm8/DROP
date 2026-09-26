@@ -11,7 +11,7 @@ const number = (value, label, minimum, maximum) => {
   return value;
 };
 
-export const UNAVAILABLE_STATUS_MESSAGE = "טרם התקבל דוח מאומת להיום - ספק הנתונים מושעה או לא זמין";
+export const UNAVAILABLE_STATUS_MESSAGE = "טרם התקבל דוח מאומת להיום - עדכון נתוני הספק לא הושלם";
 
 export function overTwo(mean) {
   return 1 - Math.exp(-mean) * (1 + mean + mean * mean / 2);

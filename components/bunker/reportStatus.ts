@@ -129,7 +129,7 @@ export function statusHeadline(status: ReportStatus, report: Report): { title: s
       // one fixed, professional message and the next scheduled attempt instead.
       return {
         title: `סריקת ${day} טרם הושלמה`,
-        body: `טרם התקבל דוח מאומת להיום - ספק הנתונים מושעה או לא זמין, ולכן הדוח לא פורסם. המערכת תנסה שוב אוטומטית בסריקה הבאה ב־${next}.`,
+        body: `טרם התקבל דוח מאומת להיום - עדכון נתוני הספק לא הושלם, ולכן הדוח לא פורסם. המערכת תנסה שוב אוטומטית בסריקה הבאה ב־${next}.`,
       };
     case "no-picks": {
       const near = report.watchlist?.length ?? 0;
