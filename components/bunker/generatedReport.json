@@ -8,6 +8,8 @@
   "productOdds": 1,
   "status": "unavailable",
   "statusMessage": "טרם התקבלה סריקת משחקים מאומתת להיום.",
+  "watchlist": [],
+  "scanNote": null,
   "breakEven": 0.9900990099009901,
   "jointProbability": null,
   "jointFairOdds": null,

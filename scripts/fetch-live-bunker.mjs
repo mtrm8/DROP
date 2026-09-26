@@ -5,6 +5,21 @@ const flags = { Austria: "austria", Israel: "israel", Netherlands: "netherlands"
 const starters = (lineup) => (lineup?.startXI ?? []).map((player) => player?.player?.id).filter(Number.isInteger);
 const ODDS_AGE_MS = 12 * 60 * 60 * 1000;
 
+// Leagues with reliable fixture, result, lineup and price coverage. A wider
+// pool matters more than a cleverer filter: value exists on most days, it is
+// just not always in the same five competitions.
+export const DEFAULT_LEAGUES = [39, 61, 78, 135, 140, 88, 94, 203, 89, 40, 331, 169];
+
+function* combinations(items, size, start = 0, prefix = []) {
+  if (prefix.length === size) {
+    yield prefix;
+    return;
+  }
+  for (let i = start; i <= items.length - (size - prefix.length); i++) {
+    yield* combinations(items, size, i + 1, [...prefix, items[i]]);
+  }
+}
+
 export function todayInZone(date, timeZone) {
   const parts = Object.fromEntries(new Intl.DateTimeFormat("en-US", {
     timeZone, year: "numeric", month: "2-digit", day: "2-digit",
@@ -60,40 +75,75 @@ export function createProvider(key, request = fetch) {
   };
 }
 
-export function selectValuePicks(candidates, asOf, minEdge = 0.04, timeZone = "Asia/Jerusalem") {
+/**
+ * Choose the best same-bookmaker accumulator from the evaluated candidates.
+ *
+ * An accumulator is worth offering when the *product* of its legs has positive
+ * expected value, so that is what the threshold is applied to. Requiring every
+ * individual leg to clear the same bar as well was far stricter than the maths
+ * requires and is the main reason flat days produced nothing: a 2-leg book
+ * almost never has two legs at 4% each. Legs are now only required to be
+ * individually positive, and the search ranges over 2..maxLegs legs so a day
+ * with several marginal matches can still form a qualifying combination.
+ */
+export function selectValuePicks(candidates, asOf, minEdge = 0.04, timeZone = "Asia/Jerusalem", options = {}) {
+  const { maxLegs = 4, poolSize = 12, watchlistSize = 5 } = options;
   // Accumulator legs must be offered by one bookmaker; combining prices from
   // different books would advertise a payout that cannot be placed.
   const byBook = new Map();
   for (const candidate of candidates) {
-    if (candidate.edge < minEdge) continue;
+    if (candidate.edge <= 0) continue;
     const group = byBook.get(candidate.bookmaker.id) ?? new Map();
     const previous = group.get(candidate.fixtureId);
     if (!previous || candidate.edge > previous.edge) group.set(candidate.fixtureId, candidate);
     byBook.set(candidate.bookmaker.id, group);
   }
+  const quote = (legs) => {
+    const product = legs.reduce((value, item) => value * item.odds, 1);
+    const quoted = Number(product.toFixed(2));
+    const probability = legs.reduce((value, item) => value * item.probability, 1);
+    return { legs, quoted, edge: probability * quoted - 1 };
+  };
   let best = null;
   for (const group of byBook.values()) {
-    const top = [...group.values()].sort((a, b) => b.edge - a.edge || (b.mean ?? 0) - (a.mean ?? 0) || a.kickoff.localeCompare(b.kickoff)).slice(0, 2);
-    if (top.length < 2 || new Set(top.map((item) => item.fixtureId)).size < 2) continue;
-    const product = top.reduce((value, item) => value * item.odds, 1);
-    const quoted = Number(product.toFixed(2));
-    const probability = top.reduce((value, item) => value * item.probability, 1);
-    const edge = probability * quoted - 1;
-    if (edge < minEdge || (best && edge <= best.edge)) continue;
-    best = { top, edge, quoted };
+    const pool = [...group.values()]
+      .sort((a, b) => b.edge - a.edge || (b.mean ?? 0) - (a.mean ?? 0) || a.kickoff.localeCompare(b.kickoff))
+      .slice(0, poolSize);
+    for (let size = 2; size <= Math.min(maxLegs, pool.length); size++) {
+      for (const legs of combinations(pool, size)) {
+        const option = quote(legs);
+        if (option.edge < minEdge) continue;
+        if (!best || option.edge > best.edge ||
+          (option.edge === best.edge && option.quoted > best.quoted)) best = option;
+      }
+    }
   }
+  // A flat day still produced real numbers. Keep the closest evaluated matches
+  // so the page can show the near-misses with their honest (often negative)
+  // edges rather than claiming there is nothing to say.
+  const watchlist = [...candidates]
+    .sort((a, b) => b.edge - a.edge || (b.mean ?? 0) - (a.mean ?? 0) || a.kickoff.localeCompare(b.kickoff))
+    .filter((candidate, index, all) => all.findIndex((item) => item.fixtureId === candidate.fixtureId) === index)
+    .slice(0, watchlistSize)
+    .filter((item) => item.home?.name && item.away?.name)
+    .map((item) => ({
+      home: item.home.name, away: item.away.name, competition: item.competition,
+      bookmaker: item.bookmaker.name, kickoff: item.kickoff, odds: item.odds,
+      probability: item.probability, mean: item.mean,
+    }));
   if (!best) return {
-    mode: "live", source: "API-Football · סריקה יומית ללא שתי בחירות בעלות יתרון מבוסס",
+    mode: "live", source: "API-Football · סריקה יומית ללא צבר מאומת",
     asOf: asOf.toISOString(), timeZone, combinedOdds: 1.01, picks: [], results: [],
+    watchlist,
   };
-  const { top, quoted } = best;
+  const { legs, quoted } = best;
   return {
     mode: "live",
-    source: `API-Football · ${top[0].bookmaker.name} · תוצאות, הרכבים ונתוני שחקנים`,
+    source: `API-Football · ${legs[0].bookmaker.name} · תוצאות, הרכבים ונתוני שחקנים`,
     asOf: asOf.toISOString(),
     timeZone,
     combinedOdds: quoted,
-    picks: top.map((item, index) => ({
+    picks: legs.map((item, index) => ({
       id: String(index + 1).padStart(2, "0"),
       home: item.home.name, away: item.away.name,
       homeCode: item.home.code || item.home.name.slice(0, 3).toUpperCase(),
@@ -103,7 +153,7 @@ export function selectValuePicks(candidates, asOf, minEdge = 0.04, timeZone = "A
       bookmaker: item.bookmaker.name, oddsUpdatedAt: item.oddsUpdatedAt,
       lineup: item.lineup, players: item.players,
     })),
-    results: [...new Map(top.flatMap((item) => item.results).map((row) => [row.fixtureId, row])).values()]
+    results: [...new Map(legs.flatMap((item) => item.results).map((row) => [row.fixtureId, row])).values()]
       .map(({ date, home, away, homeGoals, awayGoals }) => ({ date, home, away, homeGoals, awayGoals })),
   };
 }
@@ -128,7 +178,7 @@ export function unavailableInput(now = new Date(), timeZone = "Asia/Jerusalem") 
   };
 }
 
-export async function gatherLiveInput({ key, leagues = [39, 61, 78, 135, 140], timeZone = "Asia/Jerusalem", now = new Date(), request = fetch }) {
+export async function gatherLiveInput({ key, leagues = DEFAULT_LEAGUES, timeZone = "Asia/Jerusalem", now = new Date(), request = fetch }) {
   const api = createProvider(key, request);
   const today = todayInZone(now, timeZone);
   const fixtures = await api("/fixtures", { date: today, status: "NS", timezone: timeZone });
@@ -137,6 +187,10 @@ export async function gatherLiveInput({ key, leagues = [39, 61, 78, 135, 140], t
     Date.parse(match.fixture.date) >= now.getTime() + 15 * 60 * 1000 &&
     todayInZone(new Date(match.fixture.date), timeZone) === today && match.teams?.home?.id && match.teams?.away?.id)
     .sort((a, b) => a.fixture.date.localeCompare(b.fixture.date));
+  // "No picks" and "nothing could be evaluated" look identical on the page
+  // unless the scan says which one happened, so every early exit is counted.
+  const scan = { seen: fixtures.length, eligible: upcoming.length, evaluated: 0, quotes: 0 };
+  const dropped = { league: 0, noQuote: 0, noHistory: 0, noPriorXI: 0, noPlayers: 0, tooManyChanges: 0, noModel: 0 };
 
   const past = new Map();
   const lineups = new Map();
@@ -167,6 +221,7 @@ export async function gatherLiveInput({ key, leagues = [39, 61, 78, 135, 140], t
 
   const candidates = [];
   for (const match of upcoming) {
+    scan.evaluated++;
     const current = await lineupFor(match.fixture.id);
     const confirmedHomeIds = starters(current.find((entry) => entry.team?.id === match.teams.home.id));
     const confirmedAwayIds = starters(current.find((entry) => entry.team?.id === match.teams.away.id));
@@ -179,22 +234,40 @@ export async function gatherLiveInput({ key, leagues = [39, 61, 78, 135, 140], t
       })))).filter(({ bookmaker, odds, oddsUpdatedAt }) =>
       Number.isInteger(bookmaker.id) && bookmaker.name && Number.isFinite(odds) && odds > 1.01 && odds <= 100 &&
       oddsUpdatedAt && Number.isFinite(Date.parse(oddsUpdatedAt)) && Date.parse(oddsUpdatedAt) <= now.getTime() &&
-      now.getTime() - Date.parse(oddsUpdatedAt) <= ODDS_AGE_MS &&
-      todayInZone(new Date(oddsUpdatedAt), timeZone) === today);
-    if (!quotes.length) continue;
+      now.getTime() - Date.parse(oddsUpdatedAt) <= ODDS_AGE_MS);
+    if (!quotes.length) {
+      dropped.noQuote++;
+      continue;
+    }
+    scan.quotes += quotes.length;
 
     const [homeResults, awayResults] = await Promise.all([
       teamHistory(match.teams.home), teamHistory(match.teams.away),
     ]);
     if (homeResults.filter((row) => row.home === match.teams.home.name).length < 3 ||
-        awayResults.filter((row) => row.away === match.teams.away.name).length < 3) continue;
-    const previousHome = homeResults[0]?.fixtureId;
-    const previousAway = awayResults[0]?.fixtureId;
-    if (!previousHome || !previousAway) continue;
-    const [oldHome, oldAway] = await Promise.all([lineupFor(previousHome), lineupFor(previousAway)]);
-    const lastHomeIds = starters(oldHome.find((entry) => entry.team?.id === match.teams.home.id));
-    const lastAwayIds = starters(oldAway.find((entry) => entry.team?.id === match.teams.away.id));
-    if (new Set(lastHomeIds).size !== 11 || new Set(lastAwayIds).size !== 11) continue;
+        awayResults.filter((row) => row.away === match.teams.away.name).length < 3) {
+      dropped.noHistory++;
+      continue;
+    }
+    // Use the most recent match that actually published a starting XI. A single
+    // fixture with missing lineup data was enough to discard the whole day.
+    const priorXI = async (rows, teamId) => {
+      for (const row of rows.slice(0, 5)) {
+        const entries = await lineupFor(row.fixtureId);
+        const ids = starters(entries.find((entry) => entry.team?.id === teamId));
+        if (new Set(ids).size === 11) return { ids, fixtureId: row.fixtureId };
+      }
+      return null;
+    };
+    const [priorHome, priorAway] = await Promise.all([
+      priorXI(homeResults, match.teams.home.id), priorXI(awayResults, match.teams.away.id),
+    ]);
+    if (!priorHome || !priorAway) {
+      dropped.noPriorXI++;
+      continue;
+    }
+    const lastHomeIds = priorHome.ids;
+    const lastAwayIds = priorAway.ids;
     const homeConfirmed = new Set(confirmedHomeIds).size === 11;
     const awayConfirmed = new Set(confirmedAwayIds).size === 11;
     const homeIds = homeConfirmed ? confirmedHomeIds : lastHomeIds;
@@ -206,14 +279,20 @@ export async function gatherLiveInput({ key, leagues = [39, 61, 78, 135, 140], t
       homeChanges: homeConfirmed ? homeIds.filter((id) => !lastHomeIds.includes(id)).length : 0,
       awayChanges: awayConfirmed ? awayIds.filter((id) => !lastAwayIds.includes(id)).length : 0,
     };
-    if (lineup.homeChanges > 4 || lineup.awayChanges > 4) continue;
+    if (lineup.homeChanges > 4 || lineup.awayChanges > 4) {
+      dropped.tooManyChanges++;
+      continue;
+    }
 
     const [homeSeason, awaySeason] = await Promise.all([
       playerSeason(match.teams.home, match.league), playerSeason(match.teams.away, match.league),
     ]);
     const homePlayers = startingPlayerStats(homeSeason, homeIds, match.league.id, match.league.season);
     const awayPlayers = startingPlayerStats(awaySeason, awayIds, match.league.id, match.league.season);
-    if (!homePlayers || !awayPlayers) continue;
+    if (!homePlayers || !awayPlayers) {
+      dropped.noPlayers++;
+      continue;
+    }
     const players = { season: match.league.season, home: homePlayers, away: awayPlayers };
 
     const results = [...new Map([...homeResults, ...awayResults].map((row) => [row.fixtureId, row])).values()];
@@ -225,7 +304,10 @@ export async function gatherLiveInput({ key, leagues = [39, 61, 78, 135, 140], t
       results: results.map(({ date, home, away, homeGoals, awayGoals }) => ({ date, home, away, homeGoals, awayGoals })),
     };
     const model = analyze(base).picks[0].model;
-    if (!model) continue;
+    if (!model) {
+      dropped.noModel++;
+      continue;
+    }
     for (const { bookmaker, odds, oddsUpdatedAt } of quotes) {
       candidates.push({ fixtureId: match.fixture.id, home: match.teams.home, away: match.teams.away,
         kickoff: match.fixture.date, competition: match.league.name, bookmaker: { id: bookmaker.id, name: bookmaker.name },
@@ -236,8 +318,31 @@ export async function gatherLiveInput({ key, leagues = [39, 61, 78, 135, 140], t
   const input = selectValuePicks(candidates, now, 0.04, timeZone);
   // Validate the exact payload that will be published, not just intermediate estimates.
   const report = analyze(input);
-  if (report.picks.length > 0 && (!report.picks.every((pick) => pick.model && pick.model.edge >= 0.04) || report.jointEdge < 0.04)) {
+  if (report.picks.length > 0 && (!report.picks.every((pick) => pick.model && pick.model.edge > 0) || report.jointEdge < 0.04)) {
     throw new Error("Selected value failed final report validation");
   }
+  input.scanNote = scanNote(scan, dropped, candidates.length, report.picks.length);
   return input;
+}
+
+/** One short line explaining what the scan actually covered. */
+function scanNote(scan, dropped, legs, selected) {
+  const note = buildScanNote(scan, dropped, legs, selected);
+  // The report field is length-capped, and a diagnostic must never be the
+  // reason an otherwise valid daily scan fails to publish.
+  return note.length > 150 ? `${note.slice(0, 147)}…` : note;
+}
+
+function buildScanNote(scan, dropped, legs, selected) {
+  if (scan.eligible === 0) return `סריקה: ${scan.seen} משחקים ביום, אף אחד לא היה פריץ מתאים`;
+  if (selected > 0) return `סריקה: ${scan.eligible} פריצים · ${scan.evaluated} נבדקו · ${legs} שערים`;
+  const reasons = [
+    dropped.noQuote && `${dropped.noQuote} ללא מחיר עדכני`,
+    dropped.noHistory && `${dropped.noHistory} ללא היסטוריית שערים`,
+    dropped.noPriorXI && `${dropped.noPriorXI} ללא הרכב קודם`,
+    dropped.noPlayers && `${dropped.noPlayers} ללא נתוני שחקנים`,
+    dropped.tooManyChanges && `${dropped.tooManyChanges} עם יותר מ־4 שינויי הרכב`,
+  ].filter(Boolean);
+  const why = reasons.length ? ` · ${reasons.join(" · ")}` : legs ? ` · ${legs} שערים ללא יתרון` : "";
+  return `סריקה: ${scan.eligible} פריצים · ${scan.evaluated} נבדקו${why}`;
 }

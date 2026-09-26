@@ -36,6 +36,22 @@ export type Pick = {
 
 export type PlayerSummary = { name: string; minutes: number; goals: number; assists: number; shots: number | null; shotsOnTarget: number | null; keyPasses: number | null; rating: number | null };
 
+// A match the scan evaluated but did not recommend. Shown only when no
+// accumulator qualified, and always with its real (often negative) edge so a
+// near-miss cannot be mistaken for a recommendation.
+export type WatchItem = {
+  home: string;
+  away: string;
+  competition: string;
+  bookmaker: string;
+  kickoff: string;
+  odds: number;
+  probability: number;
+  mean: number;
+  fairOdds: number;
+  edge: number;
+};
+
 export type Report = {
   mode: "demo" | "live";
   source: string;
@@ -50,6 +66,8 @@ export type Report = {
   jointEdge: number | null;
   status: "ready" | "no-picks" | "unavailable";
   statusMessage: string | null;
+  watchlist: WatchItem[];
+  scanNote: string | null;
   methodology: string;
 };
 

@@ -65,6 +65,7 @@ export default function BunkerExperience() {
         if (!response.ok) return;
         const latest = await response.json() as Report;
         if (active && latest.mode === "live" && Array.isArray(latest.picks) &&
+          (!latest.watchlist || Array.isArray(latest.watchlist)) &&
           ["ready", "no-picks", "unavailable"].includes(latest.status) && Number.isFinite(Date.parse(latest.asOf))) {
           setReport((current) => supersedes(current, latest) ? latest : current);
         }

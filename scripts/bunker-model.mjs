@@ -73,9 +73,13 @@ export function analyze(input) {
       const oddsUpdatedAt = text(pick.oddsUpdatedAt, `picks[${i}].oddsUpdatedAt`);
       assert(Number.isFinite(Date.parse(kickoff)) && Date.parse(kickoff) > asOf &&
         localDate(kickoff) === localDate(asOf), `picks[${i}] must be upcoming today`);
+      // The provider's own update stamps lag the fixture time by hours, so the
+      // bound is a freshness window rather than a same-day calendar check. A
+      // price older than the window cannot be published, but a price stamped
+      // yesterday afternoon for tonight's match is legitimate.
       assert(Number.isFinite(Date.parse(oddsUpdatedAt)) && Date.parse(oddsUpdatedAt) <= asOf &&
-        asOf - Date.parse(oddsUpdatedAt) <= 12 * 60 * 60 * 1000 && localDate(oddsUpdatedAt) === localDate(asOf),
-      `picks[${i}] odds must be updated today`);
+        asOf - Date.parse(oddsUpdatedAt) <= 12 * 60 * 60 * 1000,
+      `picks[${i}] odds must be within 12 hours of the report`);
       assert(pick.lineup && pick.lineup.homeStarters === 11 && pick.lineup.awayStarters === 11 &&
         ["confirmed", "projected"].includes(pick.lineup.homeKind) &&
         ["confirmed", "projected"].includes(pick.lineup.awayKind) &&
@@ -123,10 +127,36 @@ export function analyze(input) {
   assert(picks.length === 0 || Math.abs(productOdds - combinedOdds) / productOdds <= 0.01, "combinedOdds differs from leg product by more than 1%");
   const complete = picks.length > 0 && picks.every((pick) => pick.model !== null);
   const jointProbability = complete ? picks.reduce((product, pick) => product * pick.model.probability, 1) : null;
+  // A flat day is not an empty day. When no accumulator clears the bar, carry
+  // the closest evaluated matches through as a clearly-labelled watchlist so the
+  // page can show what was actually near-miss instead of a bare "no picks".
+  // Edges are reported with their real sign: these are not recommendations.
+  const watchlist = (Array.isArray(input.watchlist) ? input.watchlist : []).slice(0, 5).map((item, i) => {
+    assert(item && typeof item === "object", `watchlist[${i}] must be an object`);
+    const probability = number(item.probability, `watchlist[${i}].probability`, 0.001, 1);
+    const quote = number(item.odds, `watchlist[${i}].odds`, 1.01, 10000);
+    return {
+      home: text(item.home, `watchlist[${i}].home`),
+      away: text(item.away, `watchlist[${i}].away`),
+      competition: text(item.competition, `watchlist[${i}].competition`),
+      bookmaker: text(item.bookmaker, `watchlist[${i}].bookmaker`),
+      kickoff: text(item.kickoff, `watchlist[${i}].kickoff`),
+      odds: quote,
+      probability,
+      mean: number(item.mean, `watchlist[${i}].mean`, 0, 12),
+      fairOdds: 1 / probability,
+      edge: probability * quote - 1,
+    };
+  });
+  const scanNote = input.scanNote === undefined || input.scanNote === null
+    ? null
+    : text(input.scanNote, "scanNote");
   return {
     mode: input.mode, source, asOf: input.asOf, timeZone, picks, combinedOdds, productOdds,
     status: picks.length === 0 ? (input.status === "unavailable" ? "unavailable" : "no-picks") : "ready",
     statusMessage: input.status === "unavailable" ? text(input.statusMessage ?? "טרם התקבל דוח מאומת להיום", "statusMessage") : null,
+    watchlist: picks.length === 0 ? watchlist : [],
+    scanNote,
     breakEven: 1 / combinedOdds, jointProbability,
     jointFairOdds: jointProbability && jointProbability > 0 ? 1 / jointProbability : null,
     jointEdge: jointProbability === null ? null : jointProbability * combinedOdds - 1,

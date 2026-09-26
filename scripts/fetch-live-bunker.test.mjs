@@ -87,7 +87,7 @@ test("live model rejects stale prices, departed fixtures, and unconfirmed starti
   const input = await gatherLiveInput({ key: "test-key", now, request: mockProvider() });
   assert.throws(() => analyze({ ...input, picks: [{ ...input.picks[0], kickoff: "2026-09-26T11:00:00Z" }, input.picks[1]] }), /upcoming today/);
   assert.throws(() => analyze({ ...input, picks: [{ ...input.picks[0], kickoff: "2026-09-27T13:00:00Z" }, input.picks[1]] }), /upcoming today/);
-  assert.throws(() => analyze({ ...input, picks: [{ ...input.picks[0], oddsUpdatedAt: "2026-09-25T10:00:00Z" }, input.picks[1]] }), /odds must be updated today/);
+  assert.throws(() => analyze({ ...input, picks: [{ ...input.picks[0], oddsUpdatedAt: "2026-09-25T10:00:00Z" }, input.picks[1]] }), /within 12 hours/);
   assert.throws(() => analyze({ ...input, picks: [{ ...input.picks[0], lineup: { ...input.picks[0].lineup, awayStarters: 10 } }, input.picks[1]] }), /verified or explicitly projected/);
   assert.throws(() => analyze({ ...input, picks: [{ ...input.picks[0], players: { ...input.picks[0].players, home: [] } }, input.picks[1]] }), /player statistics/);
 });
@@ -101,6 +101,65 @@ test("selector never combines prices from different books or duplicates one fixt
 test("today respects the chosen timezone across the UTC date boundary", () => {
   assert.equal(todayInZone(new Date("2026-09-26T22:00:00Z"), "Asia/Jerusalem"), "2026-09-27");
   assert.equal(todayInZone(new Date("2026-09-26T22:00:00Z"), "UTC"), "2026-09-26");
+});
+
+const leg = (id, book, edge, extra = {}) => ({
+  fixtureId: id, bookmaker: { id: book, name: `Book${book}` }, edge,
+  // Keep the fixture self-consistent: the accumulator maths uses probability x
+  // odds, so derive the probability from the edge the test wants to assert.
+  odds: 1.9, probability: (1 + edge) / 1.9, mean: 2.7,
+  kickoff: "2026-09-26T16:00:00Z", competition: "Premier League",
+  home: { name: `Home ${id}` }, away: { name: `Away ${id}` },
+  oddsUpdatedAt: "2026-09-26T12:00:00Z", lineup: null, players: null, results: [], ...extra,
+});
+const jointEdgeOf = (candidates) => candidates
+  .reduce((value, item) => value * item.probability * item.odds, 1) - 1;
+
+test("a qualifying accumulator no longer needs every leg at 4% on its own", () => {
+  // Each leg is only 2.2% positive, which is how a real book looks, but the
+  // pair compounds past the 4% bar. The old rule rejected both legs.
+  const legs = [leg(1, 7, 0.022), leg(2, 7, 0.022)];
+  const chosen = selectValuePicks(legs, now);
+  assert.equal(chosen.picks.length, 2);
+  assert.ok(legs.every((item) => item.edge < 0.04), "no single leg clears 4%");
+  assert.ok(jointEdgeOf(legs) >= 0.04, `joint edge ${jointEdgeOf(legs)}`);
+});
+
+test("the selector searches wider combinations when no pair qualifies", () => {
+  // Every pair sits under the bar, so only a three-leg search can find value.
+  const legs = [leg(1, 7, 0.0135), leg(2, 7, 0.0135), leg(3, 7, 0.0135)];
+  assert.ok(jointEdgeOf(legs.slice(0, 2)) < 0.04, "no pair qualifies");
+  assert.ok(jointEdgeOf(legs) >= 0.04, "the triple qualifies");
+  assert.equal(selectValuePicks(legs, now).picks.length, 3);
+});
+
+test("legs are never mixed across bookmakers", () => {
+  const chosen = selectValuePicks([leg(1, 7, 0.2), leg(2, 9, 0.2), leg(3, 9, 0.2)], now);
+  assert.deepEqual([...new Set(chosen.picks.map((pick) => pick.bookmaker))], ["Book9"]);
+});
+
+test("a losing day publishes an honest watchlist instead of a bare empty report", () => {
+  const report = analyze(selectValuePicks([leg(1, 7, -0.03), leg(2, 7, -0.05), leg(3, 7, -0.08)], now));
+  assert.equal(report.status, "no-picks");
+  assert.equal(report.picks.length, 0);
+  assert.equal(report.watchlist.length, 3);
+  // Edges keep their real sign. A near-miss must never read as a recommendation.
+  assert.ok(report.watchlist.every((item) => item.edge < 0));
+  assert.ok(report.watchlist.every((item) => item.fairOdds > 0 && Number.isFinite(item.mean)));
+  // Ordered by how close each match came to qualifying.
+  assert.ok(report.watchlist[0].edge >= report.watchlist[2].edge);
+  assert.deepEqual(report.watchlist.map((item) => item.away), ["Away 1", "Away 2", "Away 3"]);
+});
+
+test("a report with picks never carries a watchlist", () => {
+  const chosen = selectValuePicks([leg(1, 7, 0.2), leg(2, 7, 0.2), leg(3, 7, -0.2)], now);
+  assert.equal(chosen.picks.length, 2);
+  assert.equal(chosen.watchlist, undefined);
+});
+
+test("the scan reports what it covered so an empty day is explainable", async () => {
+  const report = analyze(await gatherLiveInput({ key: "test-key", now, request: mockProvider() }));
+  assert.match(report.scanNote, /סריקה: \d+ פריצים/);
 });
 
 test("the daily build publishes a long scan of the current day and refuses older ones", async () => {

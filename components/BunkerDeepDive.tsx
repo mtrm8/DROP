@@ -197,10 +197,36 @@ export default function BunkerDeepDive({ report }: { report: Report }) {
 
   if (status.state === "stale" || status.state === "started" || PICKS.length === 0) {
     const { title, body } = statusHeadline(status, report);
+    const watch = report.watchlist ?? [];
     return (
       <section className="rounded-2xl border border-cyan-300/20 bg-slate-950 p-7 text-sm leading-7 text-slate-200">
         <h2 className="text-xl font-black text-white">{title}</h2>
         <p className="mt-2">{body}</p>
+        {report.scanNote ? <p className="mt-3 text-xs text-slate-500">{report.scanNote}</p> : null}
+        {watch.length > 0 ? (
+          <div className="mt-6">
+            <p className="text-xs font-black text-amber-200/90">
+              {watch.length} המשוערים שהתקרבו הכי לסף — אין בהם המלצה, והפער מוצג באמת
+            </p>
+            <ul className="mt-3 divide-y divide-white/[0.06]">
+              {watch.map((item) => (
+                <li key={`${item.home}-${item.away}`} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-3">
+                  <span className="font-bold text-white">{item.home} – {item.away}</span>
+                  <span className="text-xs text-slate-500">{item.competition} · {item.bookmaker}</span>
+                  <span className="w-full text-xs text-slate-400 sm:w-auto">
+                    Over 2.5 בשער {item.odds.toFixed(2)} · המודל {item.probability.toFixed(3)} · שער הוגן {item.fairOdds.toFixed(2)} ·{" "}
+                    <span className={item.edge >= 0 ? "text-emerald-300" : "text-rose-300"}>
+                      פער {(item.edge * 100).toFixed(1)}%
+                    </span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-3 text-xs text-slate-500">
+              הצבר אינו מתקבל כאשר הפער המצטבר אינו עומד בסף של 4%. המשוערים למעלה נבדקו ונמצאו חסרים.
+            </p>
+          </div>
+        ) : null}
       </section>
     );
   }
