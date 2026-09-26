@@ -4,7 +4,7 @@ import { analyze, assertPublishable } from "./bunker-model.mjs";
 import { createProvider, gatherLiveInput, selectValuePicks, todayInZone, unavailableInput } from "./fetch-live-bunker.mjs";
 
 const now = new Date("2026-09-26T12:00:00Z");
-const team = (id, name) => ({ id, name, code: name.slice(0, 3).toUpperCase() });
+const team = (id, name) => ({ id, name, code: name.slice(0, 3).toUpperCase(), logo: `https://media.api-sports.io/football/teams/${id}.png` });
 const build = (item, kickoff) => ({
   fixture: { id: item.id, date: kickoff },
   league: { id: 39, name: "Test league", season: 2026 },
@@ -189,6 +189,10 @@ test("when every data gate drops the day, the top upcoming fixtures still publis
   const kickoffs = report.watchlist.map((item) => item.kickoff);
   assert.deepEqual(kickoffs, [...kickoffs].sort());
   assert.equal(kickoffs[0], "2026-09-26T13:00:00Z");
+  assert.equal(report.watchlist[0].homeLogo, "https://media.api-sports.io/football/teams/1.png");
+  assert.equal(report.watchlist[0].awayLogo, "https://media.api-sports.io/football/teams/2.png");
+  assert.deepEqual(report.watchlist[0].homeForm, { games: 3, overTwo: 3, goalsFor: 9, goalsAgainst: 3 });
+  assert.deepEqual(report.watchlist[0].awayForm, { games: 3, overTwo: 3, goalsFor: 6, goalsAgainst: 6 });
 });
 
 test("the watchlist falls back to fixtures that only reached the price stage", async () => {
@@ -201,6 +205,50 @@ test("the watchlist falls back to fixtures that only reached the price stage", a
   assert.ok(dropped.every((item) => item.note && item.note.length > 0), "each unmodelled row explains itself");
   // A price is real data and survives even with no model behind it.
   assert.ok(dropped.every((item) => item.odds === null || item.odds > 1.01));
+  assert.ok(dropped.every((item) => item.homeForm?.games === 3 && item.awayForm?.games === 3));
+});
+
+test("modelled near-misses retain official crests and real home/away samples", async () => {
+  const report = analyze(await gatherLiveInput({ key: "test-key", now, request: mockProvider({ otherBook: true }) }));
+  assert.equal(report.watchlist.length, 2);
+  assert.equal(report.watchlist[0].homeLogo, "https://media.api-sports.io/football/teams/1.png");
+  assert.deepEqual(report.watchlist[0].homeForm, { games: 3, overTwo: 3, goalsFor: 9, goalsAgainst: 3 });
+  assert.ok(report.watchlist[0].probability > 0);
+});
+
+test("only the provider's own team crests are published", async () => {
+  const base = mockProvider({ staleOdds: true });
+  const input = await gatherLiveInput({ key: "test-key", now, request: async (url) => {
+    const response = await base(url);
+    if (url.pathname !== "/fixtures" || !url.searchParams.has("date")) return response;
+    const body = await response.json();
+    const responseRows = [...body.response];
+    responseRows[0] = { ...responseRows[0], teams: {
+      ...responseRows[0].teams,
+      home: { ...responseRows[0].teams.home, logo: "https://example.com/track.png" },
+    } };
+    return { ok: true, json: async () => ({ ...body, response: responseRows }) };
+  } });
+  const report = analyze(input);
+  assert.equal(report.watchlist[0].homeLogo, null);
+  assert.equal(report.watchlist[0].awayLogo, "https://media.api-sports.io/football/teams/2.png");
+  assert.throws(() => analyze({ ...input, watchlist: [{ ...input.watchlist[0], homeLogo: "https://example.com/track.png" }] }), /provider team image URL/);
+});
+
+test("a fixture whose first enrichment request fails still has its crests and a reason", async () => {
+  const base = mockProvider();
+  const input = await gatherLiveInput({ key: "test-key", now, request: async (url) => {
+    if (url.pathname === "/fixtures/lineups" && url.searchParams.get("fixture") === "100") {
+      return { ok: false, status: 403 };
+    }
+    return base(url);
+  } });
+  const report = analyze(input);
+  const first = report.watchlist.find((item) => item.home === "Alpha");
+  assert.ok(first);
+  assert.equal(first.homeLogo, "https://media.api-sports.io/football/teams/1.png");
+  assert.equal(first.probability, null);
+  assert.match(first.note, /נתוני הספק/);
 });
 
 test("the watchlist never repeats a match and is capped", async () => {

@@ -10,6 +10,30 @@ const ODDS_AGE_MS = 12 * 60 * 60 * 1000;
 // just not always in the same five competitions.
 export const DEFAULT_LEAGUES = [39, 61, 78, 135, 140, 88, 94, 203, 89, 40, 331, 169];
 
+// Fixture responses already include the official API-Football team crests.
+// Only pass the provider's public team-image URLs to the browser.
+export function teamLogo(team) {
+  if (!Number.isInteger(team?.id) || typeof team.logo !== "string") return null;
+  try {
+    const url = new URL(team.logo);
+    return url.protocol === "https:" && url.hostname === "media.api-sports.io" &&
+      url.pathname === `/football/teams/${team.id}.png` && !url.search && !url.hash ? url.href : null;
+  } catch {
+    return null;
+  }
+}
+
+function venueForm(rows, teamName, venue) {
+  const recent = rows.filter((row) => row[venue] === teamName).slice(0, 5);
+  if (!recent.length) return null;
+  return {
+    games: recent.length,
+    overTwo: recent.filter((row) => row.homeGoals + row.awayGoals >= 3).length,
+    goalsFor: recent.reduce((total, row) => total + row[venue === "home" ? "homeGoals" : "awayGoals"], 0),
+    goalsAgainst: recent.reduce((total, row) => total + row[venue === "home" ? "awayGoals" : "homeGoals"], 0),
+  };
+}
+
 function* combinations(items, size, start = 0, prefix = []) {
   if (prefix.length === size) {
     yield prefix;
@@ -149,6 +173,8 @@ export function selectValuePicks(candidates, asOf, minEdge = 0.04, timeZone = "A
     .filter((candidate, index, all) => all.findIndex((item) => item.fixtureId === candidate.fixtureId) === index)
     .map((item) => ({
       home: item.home.name, away: item.away.name, competition: item.competition,
+      homeLogo: teamLogo(item.home), awayLogo: teamLogo(item.away),
+      homeForm: item.homeForm ?? null, awayForm: item.awayForm ?? null,
       bookmaker: item.bookmaker.name, kickoff: item.kickoff, odds: item.odds,
       probability: item.probability, mean: item.mean, note: null,
     }));
@@ -159,6 +185,8 @@ export function selectValuePicks(candidates, asOf, minEdge = 0.04, timeZone = "A
     .sort((a, b) => a.kickoff.localeCompare(b.kickoff))
     .map((item) => ({
       home: item.home, away: item.away, competition: item.competition,
+      homeLogo: item.homeLogo ?? null, awayLogo: item.awayLogo ?? null,
+      homeForm: item.homeForm ?? null, awayForm: item.awayForm ?? null,
       bookmaker: item.bookmaker, kickoff: item.kickoff,
       odds: item.odds, probability: item.probability, mean: item.mean, note: item.note,
     }));
@@ -262,6 +290,17 @@ export async function gatherLiveInput({ key, leagues = DEFAULT_LEAGUES, timeZone
   const fixtures_ = [];
   for (const match of upcoming) {
     scan.evaluated++;
+    // Keep the fixture even if its first enrichment request fails. Logos are
+    // carried from the fixture response; form/odds are added only when fetched.
+    const fixture = {
+      home: match.teams.home.name, away: match.teams.away.name,
+      homeLogo: teamLogo(match.teams.home), awayLogo: teamLogo(match.teams.away),
+      homeForm: null, awayForm: null,
+      competition: match.league.name, kickoff: match.fixture.date,
+      odds: null, bookmaker: null,
+      probability: null, mean: null, edge: null, note: null,
+    };
+    fixtures_.push(fixture);
     try {
       const current = await lineupFor(match.fixture.id);
       const confirmedHomeIds = starters(current.find((entry) => entry.team?.id === match.teams.home.id));
@@ -277,15 +316,8 @@ export async function gatherLiveInput({ key, leagues = DEFAULT_LEAGUES, timeZone
         oddsUpdatedAt && Number.isFinite(Date.parse(oddsUpdatedAt)) && Date.parse(oddsUpdatedAt) <= now.getTime() &&
         now.getTime() - Date.parse(oddsUpdatedAt) <= ODDS_AGE_MS);
       const bestQuote = quotes.reduce((best, item) => (!best || item.odds > best.odds ? item : best), null);
-      // A fixture is a candidate for the watchlist from the moment its identity
-      // and kickoff are known; later stages only enrich it.
-      const fixture = {
-        home: match.teams.home.name, away: match.teams.away.name,
-        competition: match.league.name, kickoff: match.fixture.date,
-        odds: bestQuote?.odds ?? null, bookmaker: bestQuote?.bookmaker.name ?? null,
-        probability: null, mean: null, edge: null, note: null,
-      };
-      fixtures_.push(fixture);
+      fixture.odds = bestQuote?.odds ?? null;
+      fixture.bookmaker = bestQuote?.bookmaker.name ?? null;
       const reject = (reason) => {
         fixture.note = reason;
         return reason;
@@ -293,6 +325,15 @@ export async function gatherLiveInput({ key, leagues = DEFAULT_LEAGUES, timeZone
       if (!quotes.length) {
         dropped.noQuote++;
         reject("אין מחיר Over 2.5 עדכני");
+        // Enrich only the first few unpriced matches: these may be all that
+        // reaches today's watchlist, without doubling calls for every fixture.
+        if (fixtures_.length <= 5) {
+          const [home, away] = await Promise.allSettled([
+            teamHistory(match.teams.home), teamHistory(match.teams.away),
+          ]);
+          if (home.status === "fulfilled") fixture.homeForm = venueForm(home.value, fixture.home, "home");
+          if (away.status === "fulfilled") fixture.awayForm = venueForm(away.value, fixture.away, "away");
+        }
         continue;
       }
       scan.quotes += quotes.length;
@@ -300,6 +341,8 @@ export async function gatherLiveInput({ key, leagues = DEFAULT_LEAGUES, timeZone
       const [homeResults, awayResults] = await Promise.all([
         teamHistory(match.teams.home), teamHistory(match.teams.away),
       ]);
+      fixture.homeForm = venueForm(homeResults, fixture.home, "home");
+      fixture.awayForm = venueForm(awayResults, fixture.away, "away");
       if (homeResults.filter((row) => row.home === match.teams.home.name).length < 3 ||
           awayResults.filter((row) => row.away === match.teams.away.name).length < 3) {
         dropped.noHistory++;
@@ -378,13 +421,15 @@ export async function gatherLiveInput({ key, leagues = DEFAULT_LEAGUES, timeZone
         candidates.push({ fixtureId: match.fixture.id, home: match.teams.home, away: match.teams.away,
           kickoff: match.fixture.date, competition: match.league.name, bookmaker: { id: bookmaker.id, name: bookmaker.name },
           oddsUpdatedAt, odds, probability: model.probability, mean: model.mean,
-          edge: model.probability * odds - 1, lineup, players, results });
+          edge: model.probability * odds - 1, lineup, players, results,
+          homeForm: fixture.homeForm, awayForm: fixture.awayForm });
       }
     } catch (error) {
       // One unreachable fixture, a rate-limited odds call or a lineup
       // that never arrived must not throw away the rest of the day. The
       // fixture keeps its place in the watchlist and the scan continues.
       scan.errors++;
+      fixture.note ??= "נתוני הספק למשחק זה לא הושלמו";
       console.warn(`Skipped ${match.teams.home.name} v ${match.teams.away.name}: ${error.message}`);
     }
   }

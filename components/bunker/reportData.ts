@@ -41,9 +41,20 @@ export type PlayerSummary = { name: string; minutes: number; goals: number; assi
 // near-miss cannot be mistaken for a recommendation. A fixture that never
 // reached the model has no probability, edge or fair odds, and `note` says
 // which data gate dropped it.
+export type VenueForm = {
+  games: number;
+  overTwo: number;
+  goalsFor: number;
+  goalsAgainst: number;
+};
+
 export type WatchItem = {
   home: string;
   away: string;
+  homeLogo: string | null;
+  awayLogo: string | null;
+  homeForm: VenueForm | null;
+  awayForm: VenueForm | null;
   competition: string;
   bookmaker: string | null;
   kickoff: string;

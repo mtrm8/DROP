@@ -136,6 +136,26 @@ export function analyze(input) {
     assert(item && typeof item === "object", `watchlist[${i}] must be an object`);
     const optional = (value, label, low, high) =>
       value === null || value === undefined ? null : number(value, label, low, high);
+    const logo = (value, label) => {
+      if (value === null || value === undefined) return null;
+      assert(typeof value === "string", `${label} must be a provider team image URL`);
+      let url;
+      try { url = new URL(value); } catch { throw new Error(`Bunker input: ${label} must be a provider team image URL`); }
+      assert(url.protocol === "https:" && url.hostname === "media.api-sports.io" &&
+        /^\/football\/teams\/[1-9]\d*\.png$/.test(url.pathname) && !url.search && !url.hash,
+      `${label} must be a provider team image URL`);
+      return url.href;
+    };
+    const form = (value, label) => {
+      if (value === null || value === undefined) return null;
+      assert(value && typeof value === "object" && !Array.isArray(value), `${label} must be recent venue results`);
+      const games = number(value.games, `${label}.games`, 1, 5);
+      const overTwo = number(value.overTwo, `${label}.overTwo`, 0, games);
+      const goalsFor = number(value.goalsFor, `${label}.goalsFor`, 0, 150);
+      const goalsAgainst = number(value.goalsAgainst, `${label}.goalsAgainst`, 0, 150);
+      assert([games, overTwo, goalsFor, goalsAgainst].every(Number.isInteger), `${label} counts must be integers`);
+      return { games, overTwo, goalsFor, goalsAgainst };
+    };
     const probability = optional(item.probability, `watchlist[${i}].probability`, 0.001, 1);
     const quote = optional(item.odds, `watchlist[${i}].odds`, 1.01, 10000);
     // A live price is real data and is kept even when the fixture never reached
@@ -145,6 +165,10 @@ export function analyze(input) {
     return {
       home: text(item.home, `watchlist[${i}].home`),
       away: text(item.away, `watchlist[${i}].away`),
+      homeLogo: logo(item.homeLogo, `watchlist[${i}].homeLogo`),
+      awayLogo: logo(item.awayLogo, `watchlist[${i}].awayLogo`),
+      homeForm: form(item.homeForm, `watchlist[${i}].homeForm`),
+      awayForm: form(item.awayForm, `watchlist[${i}].awayForm`),
       competition: text(item.competition, `watchlist[${i}].competition`),
       bookmaker: item.bookmaker === null || item.bookmaker === undefined
         ? null

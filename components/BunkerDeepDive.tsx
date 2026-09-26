@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { motion, useReducedMotion } from "framer-motion";
 import {
   Activity,
@@ -17,7 +18,7 @@ import {
   Target,
 } from "lucide-react";
 import { GoalLaboratory, RiskReward } from "./bunker/ReportSections";
-import type { Pick, Report, WatchItem } from "./bunker/reportData";
+import type { Pick, Report, VenueForm, WatchItem } from "./bunker/reportData";
 import { evaluateReport, statusHeadline } from "./bunker/reportStatus";
 import type { ReportStatus } from "./bunker/reportStatus";
 
@@ -172,19 +173,48 @@ function MatchAnalysis({ pick, index }: { pick: Pick; index: number }) {
   );
 }
 
+function TeamCrest({ name, logo }: { name: string; logo: string | null }) {
+  const [failed, setFailed] = useState(false);
+  return (
+    <div className="flex h-[76px] w-[76px] shrink-0 items-center justify-center rounded-2xl border border-white/15 bg-gradient-to-br from-white/[0.09] to-white/[0.02] p-2.5 shadow-[0_12px_32px_rgba(0,0,0,.3)] sm:h-[88px] sm:w-[88px]">
+      {logo && !failed
+        ? <Image src={logo} alt={`סמל ${name}`} width={68} height={68} unoptimized onError={() => setFailed(true)} className="h-full w-full object-contain drop-shadow-[0_4px_10px_rgba(0,0,0,.4)]" />
+        : <span className="font-mono text-2xl font-black text-cyan-100/80" aria-label={name}>{name.slice(0, 2).toUpperCase()}</span>}
+    </div>
+  );
+}
+
+function FormSnapshot({ team, venue, form, reduced }: { team: string; venue: string; form: VenueForm | null; reduced: boolean }) {
+  return (
+    <div className="rounded-xl border border-white/[0.07] bg-black/20 p-3.5">
+      <p className="text-xs font-bold text-white">{team} <span className="font-normal text-slate-500">· {venue}</span></p>
+      {form ? <>
+        <p className="mt-2 text-[11px] leading-5 text-slate-300">{form.overTwo} מ־{form.games} משחקים הסתיימו עם 3+ שערים</p>
+        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.08]" role="img" aria-label={`${form.overTwo} מתוך ${form.games} משחקים עם שלושה שערים ומעלה`}>
+          <motion.div className="h-full rounded-full bg-gradient-to-l from-cyan-300 to-emerald-400" initial={reduced ? false : { width: 0 }} whileInView={{ width: `${form.overTwo / form.games * 100}%` }} viewport={{ once: true }} transition={{ duration: reduced ? 0 : 0.8, ease: "easeOut" }} />
+        </div>
+        <p className="mt-2 text-[10px] text-slate-400">שערים למשחק: כבשה <bdi dir="ltr" className="font-mono text-slate-200">{(form.goalsFor / form.games).toFixed(1)}</bdi> · ספגה <bdi dir="ltr" className="font-mono text-slate-200">{(form.goalsAgainst / form.games).toFixed(1)}</bdi></p>
+      </> : <p className="mt-2 text-[11px] leading-5 text-slate-500">לא התקבל מדגם {venue} להצגה.</p>}
+    </div>
+  );
+}
+
 function WatchlistCard({ item, index, timeZone }: { item: WatchItem; index: number; timeZone: string }) {
-  const hasModel = item.probability !== null && item.edge !== null;
+  const reduced = useReducedMotion();
+  const hasModel = item.probability != null && item.edge != null;
+  const marketThreshold = item.odds == null ? null : 1 / item.odds;
   const metrics = [
-    { label: "יחס שוק · מעל 2.5", value: item.odds === null ? "—" : item.odds.toFixed(2), color: "text-amber-100" },
-    { label: "הסתברות מודל", value: item.probability === null ? "—" : percent(item.probability), color: "text-cyan-100" },
-    { label: "יחס הוגן במודל", value: item.fairOdds === null ? "—" : item.fairOdds.toFixed(2), color: "text-white" },
-    { label: "פער מול השוק", value: item.edge === null ? "—" : `${item.edge >= 0 ? "+" : ""}${percent(item.edge)}`, color: item.edge === null ? "text-slate-500" : item.edge >= 0 ? "text-emerald-200" : "text-rose-200" },
+    { label: "יחס שוק · מעל 2.5", value: item.odds == null ? "—" : item.odds.toFixed(2), color: "text-amber-100" },
+    { label: "הסתברות מודל", value: item.probability == null ? "—" : percent(item.probability), color: "text-cyan-100" },
+    { label: "יחס הוגן במודל", value: item.fairOdds == null ? "—" : item.fairOdds.toFixed(2), color: "text-white" },
+    { label: "פער מול השוק", value: item.edge == null ? "—" : `${item.edge >= 0 ? "+" : ""}${percent(item.edge)}`, color: item.edge == null ? "text-slate-500" : item.edge >= 0 ? "text-emerald-200" : "text-rose-200" },
   ];
 
   return (
     <li>
       <Reveal delay={index * 0.07}>
-        <article className="relative h-full overflow-hidden rounded-[1.6rem] border border-cyan-300/15 bg-gradient-to-br from-[#101c21] via-[#0a1217] to-[#080d12] p-5 shadow-[0_20px_60px_rgba(0,0,0,.3)] transition-colors hover:border-cyan-300/30 sm:p-6">
+        <motion.article whileHover={reduced ? undefined : { y: -4 }} transition={{ duration: 0.25 }} className="relative h-full overflow-hidden rounded-[1.6rem] border border-cyan-300/15 bg-gradient-to-br from-[#101c21] via-[#0a1217] to-[#080d12] p-5 shadow-[0_20px_60px_rgba(0,0,0,.3)] transition-colors hover:border-cyan-300/35 hover:shadow-[0_24px_75px_rgba(8,145,178,.14)] sm:p-6">
+          <h4 className="sr-only">{item.home} נגד {item.away}</h4>
           <div className="pointer-events-none absolute -left-16 -top-20 h-52 w-52 rounded-full bg-cyan-400/[0.07] blur-[65px]" aria-hidden="true" />
           <div className="relative flex flex-wrap items-start justify-between gap-3 border-b border-white/[0.08] pb-4">
             <div>
@@ -192,20 +222,24 @@ function WatchlistCard({ item, index, timeZone }: { item: WatchItem; index: numb
               <p className="mt-1 text-xs font-semibold text-slate-400">{item.competition}</p>
             </div>
             <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[10px] font-bold ${hasModel ? "border-cyan-300/25 bg-cyan-300/[0.08] text-cyan-100" : "border-amber-200/25 bg-amber-200/[0.07] text-amber-100"}`}>
-              <span className={`h-1.5 w-1.5 rounded-full ${hasModel ? "bg-cyan-300 shadow-[0_0_10px_rgba(103,232,249,.8)]" : "bg-amber-200 shadow-[0_0_10px_rgba(253,230,138,.7)]"}`} />
+              <motion.span className={`h-1.5 w-1.5 rounded-full ${hasModel ? "bg-cyan-300 shadow-[0_0_10px_rgba(103,232,249,.8)]" : "bg-amber-200 shadow-[0_0_10px_rgba(253,230,138,.7)]"}`} animate={reduced ? undefined : { opacity: [0.6, 1, 0.6], scale: [1, 1.3, 1] }} transition={{ duration: 2.3, repeat: Infinity }} />
               {hasModel ? "מודל מחושב" : "מעקב · נתונים חלקיים"}
             </span>
           </div>
 
-          <div className="relative py-5">
-            <h4 className="text-lg font-black leading-snug text-white sm:text-xl">{item.home} <span className="mx-1 font-mono text-sm text-cyan-300/60">×</span> {item.away}</h4>
-            <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-400">
+          <div className="relative border-b border-white/[0.08] py-5">
+            <div className="flex items-center justify-between gap-2 sm:gap-4">
+              <div className="flex min-w-0 flex-1 flex-col items-center gap-2 text-center"><TeamCrest name={item.home} logo={item.homeLogo ?? null} /><p className="text-sm font-black leading-snug text-white sm:text-base">{item.home}</p></div>
+              <span className="rounded-full border border-white/[0.08] bg-white/[0.03] px-2 py-1 font-mono text-xs font-black text-cyan-200/75" aria-hidden="true">VS</span>
+              <div className="flex min-w-0 flex-1 flex-col items-center gap-2 text-center"><TeamCrest name={item.away} logo={item.awayLogo ?? null} /><p className="text-sm font-black leading-snug text-white sm:text-base">{item.away}</p></div>
+            </div>
+            <p className="mt-4 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs text-slate-400">
               <span className="inline-flex items-center gap-1.5"><Clock3 size={13} className="text-cyan-300/70" /> שריקת פתיחה <bdi dir="ltr" className="font-mono text-slate-200">{new Date(item.kickoff).toLocaleString("he-IL", { timeZone, day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</bdi></span>
               {item.bookmaker && <span>יחס מ־{item.bookmaker}</span>}
             </p>
           </div>
 
-          <div className="relative grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div className="relative mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
             {metrics.map((metric) => (
               <div key={metric.label} className="min-w-0 rounded-xl border border-white/[0.07] bg-black/25 px-3 py-3">
                 <p className="text-[10px] font-semibold leading-4 text-slate-400">{metric.label}</p>
@@ -214,11 +248,35 @@ function WatchlistCard({ item, index, timeZone }: { item: WatchItem; index: numb
             ))}
           </div>
 
-          <p className="relative mt-4 flex items-start gap-2 border-t border-white/[0.07] pt-4 text-xs leading-5 text-slate-400">
-            <Info size={14} className="mt-0.5 shrink-0 text-amber-200/75" />
-            <span>{item.note || (hasModel ? "הנתונים חושבו, אך לא נמצא צבר שעומד בסף הבחירה." : "נתוני מודל אינם זמינים למשחק זה.")} למעקב בלבד · לא המלצה.</span>
-          </p>
-        </article>
+          <div className="relative mt-5 rounded-2xl border border-cyan-300/10 bg-cyan-300/[0.025] p-4">
+            <div className="flex items-center justify-between gap-2 text-[11px] font-bold text-cyan-100"><span>מפת הסתברויות · מעל 2.5 שערים</span>{item.mean != null && <span className="font-mono text-cyan-200" dir="ltr">λ {item.mean.toFixed(2)}</span>}</div>
+            {hasModel && marketThreshold != null ? <div className="mt-4 space-y-3">
+              {[
+                { label: "הערכת מודל", value: item.probability!, color: "bg-gradient-to-l from-cyan-300 to-emerald-400" },
+                { label: "סף איזון לפי יחס", value: marketThreshold, color: "bg-gradient-to-l from-amber-200 to-amber-500" },
+              ].map((bar) => <div key={bar.label}>
+                <div className="mb-1.5 flex justify-between text-[10px] text-slate-300"><span>{bar.label}</span><span className="font-mono" dir="ltr">{percent(bar.value)}</span></div>
+                <div className="h-2 overflow-hidden rounded-full bg-white/[0.07]" role="img" aria-label={`${bar.label}: ${percent(bar.value)}`}>
+                  <motion.div className={`h-full rounded-full ${bar.color}`} initial={reduced ? false : { width: 0 }} whileInView={{ width: `${bar.value * 100}%` }} viewport={{ once: true }} transition={{ duration: reduced ? 0 : 0.9, ease: "easeOut" }} />
+                </div>
+              </div>)}
+            </div> : <p className="mt-3 text-[11px] leading-5 text-slate-400">לא חושבה הסתברות עצמאית למשחק זה; אין גרף תחזית ללא נתוני מודל מאומתים.</p>}
+          </div>
+
+          <div className="relative mt-5">
+            <p className="mb-3 flex items-center gap-2 text-xs font-black text-white"><BarChart3 size={15} className="text-emerald-300" /> תמונת כושר · משחקי בית וחוץ אחרונים</p>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <FormSnapshot team={item.home} venue="בבית" form={item.homeForm ?? null} reduced={Boolean(reduced)} />
+              <FormSnapshot team={item.away} venue="בחוץ" form={item.awayForm ?? null} reduced={Boolean(reduced)} />
+            </div>
+            <p className="mt-2 text-[10px] leading-5 text-slate-500">מדגם תוצאות בלבד; אינו מותאם לרמת היריבה או להרכבים.</p>
+          </div>
+
+          <div className="relative mt-5 flex items-start gap-2 rounded-xl border border-amber-200/15 bg-amber-200/[0.04] p-3.5 text-xs leading-6 text-slate-300">
+            <Info size={15} className="mt-1 shrink-0 text-amber-200" />
+            <div><p className="font-black text-amber-100">למה המשחק במעקב?</p><p className="mt-1">{item.note || (hasModel ? `המודל מעריך ${percent(item.probability!)} לשלושה שערים ומעלה, לעומת סף איזון של ${percent(marketThreshold!)} לפי המחיר. לא נמצא צבר שעומד בתנאי הבחירה.` : "אין מספיק נתונים לחישוב פער מבוסס.")} למעקב בלבד · לא המלצה.</p></div>
+          </div>
+        </motion.article>
       </Reveal>
     </li>
   );
