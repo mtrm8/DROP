@@ -20,6 +20,7 @@ const STAGE_W = 960;
 const GRID_H = 880;
 const MACHINE_H = 1450; /* 360 entry headroom + 1090 content */
 const ENTRY_PAD = 360;
+const ACTIVE_KEY = "drop-in-progress";
 
 type Phase = "grid" | "collect" | "revealSelection" | "shuffle" | "suspense" | "reveal" | "done";
 
@@ -167,7 +168,20 @@ function buildDeck(prize: BoxItem): DealCard[] {
 }
 
 export function CardRevealAnimation({ onFinished, prize }: CardRevealProps) {
-  const [cards, setCards] = useState<DealCard[]>(() => buildDeck(prize));
+  const [cards, setCards] = useState<DealCard[]>(() => {
+    try {
+      const saved = JSON.parse(window.localStorage.getItem(ACTIVE_KEY) || "null");
+      if (saved?.prize?.id === prize.id && Array.isArray(saved.cards) && saved.cards.length === CARDS_COUNT &&
+        saved.cards.every((card: DealCard, index: number) => card?.id === index && typeof card.selected === "boolean" && card.item?.id) &&
+        saved.cards.filter((card: DealCard) => card.selected).length <= SELECT_COUNT &&
+        saved.cards.some((card: DealCard) => card.item.id === prize.id)) {
+        return saved.cards;
+      }
+    } catch {
+      // Private browsing may disable storage; generate a fresh in-memory deck.
+    }
+    return buildDeck(prize);
+  });
   const [winnerId, setWinnerId] = useState<number | null>(null);
   const [phase, setPhase] = useState<Phase>("grid");
   const machineStarted = useRef(false);
@@ -177,6 +191,17 @@ export function CardRevealAnimation({ onFinished, prize }: CardRevealProps) {
   const selectedCards = cards.filter((c) => c.selected);
   const winnerCard = cards.find((c) => c.id === winnerId) ?? null;
   const isComplete = selectedCount === SELECT_COUNT;
+
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(window.localStorage.getItem(ACTIVE_KEY) || "null");
+      if (saved?.prize?.id === prize.id) {
+        window.localStorage.setItem(ACTIVE_KEY, JSON.stringify({ ...saved, cards }));
+      }
+    } catch {
+      // The game remains playable if storage is unavailable.
+    }
+  }, [cards, prize.id]);
 
   // Scale the whole game to fit the viewport — never scrolls, never clipped, and
   // the selection grid only pays for the height it actually uses.

@@ -44,6 +44,7 @@ type CompletedRecord = {
 };
 
 const COMPLETED_KEY = "drop-completed";
+const ACTIVE_KEY = "drop-in-progress";
 
 function CompletedView({ record, onStartNew }: { record: CompletedRecord; onStartNew: () => void }) {
   const rarity = RARITIES[record.item.rarity];
@@ -169,7 +170,8 @@ export default function DailyDrop() {
   const submitGuard = useRef(false);
 
   // Keep the completed record only for Bunker access; never restore the UI
-  // after a refresh. The server still controls one-time code redemption.
+  // after a completed refresh. An unfinished drop must resume with its locked
+  // choices so refreshing cannot be used to choose new cards or reroll.
   useEffect(() => {
     try {
       window.localStorage.removeItem("drop-burned");
@@ -183,6 +185,18 @@ export default function DailyDrop() {
           }
         }
       }
+      const active = window.localStorage.getItem(ACTIVE_KEY);
+      if (active) {
+        const pending = JSON.parse(active) as { code?: unknown; prize?: BoxItem };
+        if (typeof pending.code === "string" && pending.prize && typeof pending.prize.id === "string" &&
+          typeof pending.prize.name === "string" && pending.prize.rarity in RARITIES) {
+          setCode(pending.code);
+          setPrize(pending.prize);
+          setStage("cinematic");
+        } else {
+          window.localStorage.removeItem(ACTIVE_KEY);
+        }
+      }
     } catch {
       // ignore private-mode / storage errors
     }
@@ -194,13 +208,23 @@ export default function DailyDrop() {
   }, []);
 
   const startOpening = () => {
+    if (!prize) return;
     setStage("cinematic");
+  };
+
+  const rememberActive = (value: string, won: BoxItem) => {
+    try {
+      window.localStorage.setItem(ACTIVE_KEY, JSON.stringify({ code: value, prize: won }));
+    } catch {
+      // Browser storage may be disabled; the in-memory flow still works.
+    }
   };
 
   const finishDrop = (winner: BoxItem) => {
     const record: CompletedRecord = { code, item: winner };
     try {
       window.localStorage.setItem(COMPLETED_KEY, JSON.stringify(record));
+      window.localStorage.removeItem(ACTIVE_KEY);
     } catch {
       // ignore private-mode / storage errors
     }
@@ -228,6 +252,7 @@ export default function DailyDrop() {
     setShowWinConfetti(false);
     try {
       window.localStorage.removeItem(COMPLETED_KEY);
+      window.localStorage.removeItem(ACTIVE_KEY);
     } catch {
       // ignore private-mode / storage errors
     }
@@ -254,6 +279,7 @@ export default function DailyDrop() {
       setUnlocking(false);
     };
     const enter = (won: BoxItem, resumed: boolean) => {
+      rememberActive(value, won);
       setPrize(won);
       setUnlocked(true);
       setResumed(resumed);
@@ -265,7 +291,9 @@ export default function DailyDrop() {
     // These public community codes intentionally bypass RPC verification so
     // backend availability cannot block the prize-reveal experience.
     if (upperVal === "ADIR-DROP-2026") {
-      setPrize(pickWeighted(BOX_ITEMS));
+      const won = pickWeighted(BOX_ITEMS);
+      rememberActive(value, won);
+      setPrize(won);
       setCode(value);
       settle();
       setAuthorizationConfirmed(true);
