@@ -8,19 +8,20 @@ import EinsteinConfetti from "./EinsteinConfetti";
 import { getRolledPrize, redeemCode, rollPrize } from "./drop/backend";
 import { ItemIcon, RARITIES, BOX_ITEMS, pickWeighted } from "./drop/boxItems";
 import type { BoxItem } from "./drop/boxItems";
+import { useFreshPageView } from "./useFreshPageView";
 
 function CardEmblem() {
   return (
-    <div className="relative flex h-[120px] w-[230px] items-center justify-center" aria-hidden>
+    <div className="relative flex h-[140px] w-[min(85vw,380px)] items-center justify-center sm:h-[190px]" aria-hidden>
       <div className="pointer-events-none absolute inset-0 rounded-full bg-amber-500/[0.07] blur-2xl" />
       {[0, 1, 2].map((i) => (
         <div
           key={i}
           className="absolute rounded-xl border border-amber-400/40 bg-gradient-to-br from-neutral-800 via-zinc-900 to-black"
           style={{
-            width: 70,
-            height: 104,
-            transform: `rotate(${(i - 1) * 12}deg) translateX(${(i - 1) * 30}px)`,
+            width: "clamp(78px, 10vw, 112px)",
+            height: "clamp(116px, 15vw, 168px)",
+            transform: `rotate(${(i - 1) * 12}deg) translateX(${(i - 1) * 52}px)`,
             boxShadow: "0 0 34px rgba(34,211,238,0.16), 0 14px 30px rgba(0,0,0,0.45)",
             backgroundImage: "radial-gradient(ellipse at center, rgba(34,211,238,0.1), transparent 60%)",
           }}
@@ -47,7 +48,7 @@ const COMPLETED_KEY = "drop-completed";
 function CompletedView({ record, onStartNew }: { record: CompletedRecord; onStartNew: () => void }) {
   const rarity = RARITIES[record.item.rarity];
   return (
-    <section className="px-4 lg:px-8 max-w-2xl mx-auto w-full pt-8 pb-4 sm:pt-12">
+    <section className="mx-auto w-full max-w-5xl px-3 pb-6 pt-5 sm:px-6 sm:pt-8 lg:px-8">
       <motion.div
         className="premium-panel relative overflow-hidden rounded-3xl"
         initial={{ opacity: 0, y: 16, scale: 0.98 }}
@@ -57,7 +58,7 @@ function CompletedView({ record, onStartNew }: { record: CompletedRecord; onStar
         <div className="pointer-events-none absolute -top-28 left-1/2 h-48 w-[420px] -translate-x-1/2" style={{ background: "radial-gradient(closest-side, rgba(34,211,238,0.09), transparent 72%)" }} />
         <div className="pointer-events-none absolute -bottom-24 -right-16 h-64 w-64" style={{ background: "radial-gradient(closest-side, rgba(255,255,255,0.025), transparent 70%)" }} />
 
-        <div className="relative px-6 sm:px-10 py-8 sm:py-10 flex flex-col items-center text-center">
+        <div className="relative flex flex-col items-center px-4 py-8 text-center sm:px-10 sm:py-12 lg:py-16">
           <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-emerald-400/[0.1] text-emerald-400 border border-emerald-400/25 uppercase tracking-[0.22em]">
             הדרופ הושלם
           </span>
@@ -119,13 +120,13 @@ function CompletedView({ record, onStartNew }: { record: CompletedRecord; onStar
 
           <button
             onClick={onStartNew}
-            className="group relative mt-7 w-full max-w-sm py-3.5 rounded-xl text-base font-black text-slate-950 flex items-center justify-center gap-2.5 transition outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0c13] bg-gradient-to-br from-amber-300 via-amber-400 to-amber-500 hover:brightness-110 active:scale-[0.99] shadow-[0_0_35px_rgba(245,158,11,0.3)]"
+            className="group relative mt-7 flex min-h-14 w-full max-w-2xl items-center justify-center gap-2.5 rounded-xl bg-gradient-to-br from-amber-300 via-amber-400 to-amber-500 py-3.5 text-base font-black text-slate-950 shadow-[0_0_35px_rgba(245,158,11,0.3)] transition hover:brightness-110 active:scale-[0.99] focus-visible:ring-2 focus-visible:ring-amber-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0c13] sm:text-lg"
           >
             <Sparkles size={19} className="transition-transform group-hover:rotate-12" />
             התחל הדרוף חדש
           </button>
 
-          <div className="mt-7 w-full max-w-lg">
+          <div className="mt-7 w-full max-w-2xl">
             <p className="mb-2 text-center text-[10px] font-black uppercase tracking-[0.3em] text-cyan-200/75">
               ACCESS UNLOCKED · EINSTEIN DROP LAB
             </p>
@@ -147,6 +148,7 @@ function CompletedView({ record, onStartNew }: { record: CompletedRecord; onStar
 }
 
 export default function DailyDrop() {
+  useFreshPageView();
   const [unlocked, setUnlocked] = useState(false);
   const [stage, setStage] = useState<"idle" | "cinematic">("idle");
   const [code, setCode] = useState("");
@@ -161,13 +163,13 @@ export default function DailyDrop() {
   const [authorizationConfirmed, setAuthorizationConfirmed] = useState(false);
   const [showWinConfetti, setShowWinConfetti] = useState(false);
   const winConfettiTimer = useRef<number | null>(null);
+  const authorizationTimer = useRef<number | null>(null);
   // Guards against a double-click / Enter+click firing two redeems for the same
   // code, which would burn it and then report a bogus "already used".
   const submitGuard = useRef(false);
 
-  // Purge the legacy local burn registry from earlier builds — the server is
-  // now the only source of truth and no local record should shadow it. Also
-  // restore a finished drop so a refresh never loops back to a fresh screen.
+  // Keep the completed record only for Bunker access; never restore the UI
+  // after a refresh. The server still controls one-time code redemption.
   useEffect(() => {
     try {
       window.localStorage.removeItem("drop-burned");
@@ -178,8 +180,6 @@ export default function DailyDrop() {
           const savedAmount = Number(String(rec.item.amount ?? rec.item.name).replace(/[^\d.]/g, ""));
           if (savedAmount === 20) {
             window.localStorage.removeItem(COMPLETED_KEY);
-          } else {
-            setCompleted(rec);
           }
         }
       }
@@ -190,6 +190,7 @@ export default function DailyDrop() {
 
   useEffect(() => () => {
     if (winConfettiTimer.current !== null) window.clearTimeout(winConfettiTimer.current);
+    if (authorizationTimer.current !== null) window.clearTimeout(authorizationTimer.current);
   }, []);
 
   const startOpening = () => {
@@ -220,6 +221,10 @@ export default function DailyDrop() {
   const handleStartNew = () => {
     if (winConfettiTimer.current !== null) window.clearTimeout(winConfettiTimer.current);
     winConfettiTimer.current = null;
+    if (authorizationTimer.current !== null) window.clearTimeout(authorizationTimer.current);
+    authorizationTimer.current = null;
+    setAuthorizationConfirmed(false);
+    setStage("idle");
     setShowWinConfetti(false);
     try {
       window.localStorage.removeItem(COMPLETED_KEY);
@@ -264,10 +269,12 @@ export default function DailyDrop() {
       setCode(value);
       settle();
       setAuthorizationConfirmed(true);
-      window.setTimeout(() => {
+      if (authorizationTimer.current !== null) window.clearTimeout(authorizationTimer.current);
+      authorizationTimer.current = window.setTimeout(() => {
         setAuthorizationConfirmed(false);
         setStage("cinematic");
-      }, 2500);
+        authorizationTimer.current = null;
+      }, 650);
       return;
     }
 
@@ -367,15 +374,15 @@ export default function DailyDrop() {
         )}
       </AnimatePresence>
 
-      <section id="drop" className="px-4 lg:px-8 max-w-2xl mx-auto w-full pt-8 pb-4 sm:pt-12">
+      <section id="drop" className="mx-auto w-full max-w-5xl px-3 pb-6 pt-5 sm:px-6 sm:pt-8 lg:px-8">
         <div className="premium-panel relative overflow-hidden rounded-3xl">
           {/* Restrained luxury ambience */}
           <div className="pointer-events-none absolute -top-28 left-1/2 h-48 w-[420px] -translate-x-1/2" style={{ background: "radial-gradient(closest-side, rgba(34,211,238,0.09), transparent 72%)" }} />
           <div className="pointer-events-none absolute -bottom-24 -right-16 h-64 w-64" style={{ background: "radial-gradient(closest-side, rgba(255,255,255,0.025), transparent 70%)" }} />
 
-          <div className="relative px-6 sm:px-10 py-8 sm:py-10 flex flex-col items-center text-center">
+          <div className="relative flex flex-col items-center px-4 py-8 text-center sm:px-10 sm:py-12 lg:py-16">
             {/* Badge + status */}
-            <div className="flex items-center gap-2.5 mb-6 sm:mb-8">
+            <div className="mb-6 flex flex-wrap items-center justify-center gap-2.5 sm:mb-8">
               <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-amber-400/[0.1] text-amber-400 border border-amber-400/25 uppercase tracking-[0.22em]">
                 Einstein Drop · איינשטיין דרופ
               </span>
@@ -408,20 +415,20 @@ export default function DailyDrop() {
               <CardEmblem />
             </div>
 
-            <h2 className="mt-8 sm:mt-10 text-xl sm:text-2xl font-black text-white tracking-tight leading-snug">
+            <h2 className="mt-8 text-2xl font-black leading-snug tracking-tight text-white sm:mt-10 sm:text-3xl lg:text-4xl">
               הדרוף היומי של קהילת הכדורגל והפוקר
             </h2>
-            <p className="text-xs text-slate-400 mt-2 mb-6 sm:mb-7 max-w-sm leading-relaxed">
+            <p className="mb-6 mt-2 max-w-2xl text-sm leading-relaxed text-slate-400 sm:mb-7 sm:text-base">
               {unlocked
                 ? "בחרו 5 קלפים — המכונה תערבב את החפיסה ותחשוף את הפרס, שיופיע בהפקדה הבאה."
                 : "הדרוף פתוח לחברי הקהילה בלבד — הזינו את קוד הגישה שקיבלתם."}
             </p>
 
-            <AnimatePresence mode="wait" initial={false}>
+            <AnimatePresence initial={false}>
                 {unlocked ? (
                   <motion.div
                     key="verified"
-                    className="flex w-full max-w-md flex-col items-center pt-2 pb-1 text-center"
+                    className="flex w-full max-w-2xl flex-col items-center pt-2 pb-1 text-center"
                     initial={{ opacity: 0, y: 12 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.94, y: -8 }}
@@ -475,7 +482,7 @@ export default function DailyDrop() {
 
                     <motion.button
                       onClick={startOpening}
-                      className="group relative mt-6 w-full rounded-2xl py-4 text-lg font-black flex items-center justify-center gap-2.5 transition bg-gradient-to-br from-amber-300 via-amber-400 to-amber-500 text-slate-950 hover:brightness-110 active:scale-[0.99] shadow-[0_0_35px_rgba(245,158,11,0.35)] outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0c13]"
+                      className="group relative mt-6 flex min-h-14 w-full items-center justify-center gap-2.5 rounded-2xl bg-gradient-to-br from-amber-300 via-amber-400 to-amber-500 py-4 text-lg font-black text-slate-950 shadow-[0_0_35px_rgba(245,158,11,0.35)] transition hover:brightness-110 active:scale-[0.99] focus-visible:ring-2 focus-visible:ring-amber-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0c13] sm:text-xl"
                       initial={{ opacity: 0, y: 14 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ type: "spring", stiffness: 260, damping: 20, delay: 0.42 }}
@@ -496,7 +503,7 @@ export default function DailyDrop() {
                 ) : (
                   <motion.div
                     key="locked"
-                    className="w-full max-w-md text-right"
+                    className="w-full max-w-2xl text-right"
                     exit={{ opacity: 0, scale: 0.97, y: 8 }}
                     transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
                   >
@@ -522,6 +529,7 @@ export default function DailyDrop() {
                       />
                       <input
                         id="daily-drop-code"
+                        form="drop-code-form"
                         value={code}
                         onChange={(e) => {
                           setCode(e.target.value);
@@ -538,11 +546,11 @@ export default function DailyDrop() {
                       )}
                     </div>
 
-                    <form onSubmit={handleCodeSubmit} className="mt-4">
+                    <form id="drop-code-form" onSubmit={handleCodeSubmit} className="mt-4">
                       <button
                         type="submit"
                         disabled={unlocking}
-                        className="group relative w-full py-3.5 rounded-xl text-base font-black text-slate-950 flex items-center justify-center gap-2.5 transition outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0c13] bg-gradient-to-br from-amber-300 via-amber-400 to-amber-500 hover:brightness-110 active:scale-[0.99] shadow-[0_0_35px_rgba(245,158,11,0.3)]"
+                        className="group relative flex min-h-14 w-full items-center justify-center gap-2.5 rounded-xl bg-gradient-to-br from-amber-300 via-amber-400 to-amber-500 py-3.5 text-base font-black text-slate-950 shadow-[0_0_35px_rgba(245,158,11,0.3)] transition hover:brightness-110 active:scale-[0.99] focus-visible:ring-2 focus-visible:ring-amber-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0c13] sm:text-lg"
                       >
                         {unlocking ? (
                           <>

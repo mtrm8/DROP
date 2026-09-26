@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, Lock, Sparkles, X } from "lucide-react";
 import { BOX_ITEMS, BoxItem, ItemIcon, RARITIES, pickWeighted } from "./drop/boxItems";
@@ -16,10 +16,9 @@ const SELECT_COUNT = 5;
 // edge. The selection grid gets its own (shorter) height budget so the cards
 // can be as large as the screen allows instead of being shrunk to fit room the
 // selection view never uses.
-const STAGE_W = 1000;
+const STAGE_W = 960;
 const GRID_H = 880;
 const MACHINE_H = 1450; /* 360 entry headroom + 1090 content */
-const ENV_W = 720; /* covers the widest sideways fan-out */
 const ENTRY_PAD = 360;
 
 type Phase = "grid" | "collect" | "revealSelection" | "shuffle" | "suspense" | "reveal" | "done";
@@ -172,6 +171,8 @@ export function CardRevealAnimation({ onFinished, onCancel, prize }: CardRevealP
   const [cards, setCards] = useState<DealCard[]>(() => buildDeck(prize));
   const [winnerId, setWinnerId] = useState<number | null>(null);
   const [phase, setPhase] = useState<Phase>("grid");
+  const machineStarted = useRef(false);
+  const finished = useRef(false);
 
   const selectedCount = cards.filter((c) => c.selected).length;
   const selectedCards = cards.filter((c) => c.selected);
@@ -181,24 +182,26 @@ export function CardRevealAnimation({ onFinished, onCancel, prize }: CardRevealP
   // Scale the whole game to fit the viewport — never scrolls, never clipped, and
   // the selection grid only pays for the height it actually uses.
   const [fit, setFit] = useState(1);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const compute = () => {
-      const vw = window.innerWidth;
-      const vh = window.innerHeight;
+      const vw = window.visualViewport?.width ?? window.innerWidth;
+      const vh = window.visualViewport?.height ?? window.innerHeight;
       const needed = phase === "grid" ? GRID_H : MACHINE_H;
-      const scale = Math.min(1, (vh - 96) / needed, (vw - 16) / Math.max(STAGE_W, ENV_W));
-      setFit(Math.max(0.3, scale));
+      const scale = Math.min(1, (vh - 80) / needed, (vw - 24) / STAGE_W);
+      setFit(Math.max(0.1, scale));
     };
     compute();
-    let timer: ReturnType<typeof setTimeout>;
+    let frame = 0;
     const onResize = () => {
-      clearTimeout(timer);
-      timer = setTimeout(compute, 160);
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(compute);
     };
     window.addEventListener("resize", onResize);
+    window.visualViewport?.addEventListener("resize", onResize);
     return () => {
       window.removeEventListener("resize", onResize);
-      clearTimeout(timer);
+      window.visualViewport?.removeEventListener("resize", onResize);
+      window.cancelAnimationFrame(frame);
     };
   }, [phase]);
 
@@ -213,7 +216,15 @@ export function CardRevealAnimation({ onFinished, onCancel, prize }: CardRevealP
   };
 
   const startMachine = () => {
-    if (isComplete) setPhase("collect");
+    if (!isComplete || machineStarted.current) return;
+    machineStarted.current = true;
+    setPhase("collect");
+  };
+
+  const collectPrize = (item: BoxItem) => {
+    if (finished.current) return;
+    finished.current = true;
+    onFinished(item);
   };
 
   useEffect(() => {
@@ -266,6 +277,7 @@ export function CardRevealAnimation({ onFinished, onCancel, prize }: CardRevealP
         </div>
         {onCancel && (
           <button
+            type="button"
             onClick={onCancel}
             className="rounded-xl border border-white/10 bg-white/[0.03] p-2 text-slate-300 transition outline-none hover:border-amber-400/40 hover:text-amber-200 focus-visible:ring-2 focus-visible:ring-amber-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#05060a]"
             aria-label="סגירה"
@@ -321,14 +333,15 @@ export function CardRevealAnimation({ onFinished, onCancel, prize }: CardRevealP
                 {cards.map((c) => {
                   const picked = c.selected;
                   return (
-                    <motion.div
+                    <motion.button
                       key={c.id}
+                      type="button"
                       onClick={() => toggle(c.id)}
                       whileHover={picked ? undefined : { y: -10, scale: 1.06 }}
                       whileTap={picked ? undefined : { scale: 0.97 }}
                       transition={{ type: "spring", stiffness: 400, damping: 22 }}
-                      className={`relative aspect-[5/7] w-full select-none [perspective:600px] ${picked ? "cursor-default" : "cursor-pointer"}`}
-                      role="button"
+                      disabled={picked || isComplete}
+                      className={`relative aspect-[5/7] w-full select-none appearance-none border-0 bg-transparent p-0 [perspective:600px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-300 ${picked ? "cursor-default" : "cursor-pointer"}`}
                       aria-pressed={picked}
                     >
                       <motion.div
@@ -351,12 +364,13 @@ export function CardRevealAnimation({ onFinished, onCancel, prize }: CardRevealP
                           animate={{ opacity: 1, scale: 1 }}
                         />
                       )}
-                    </motion.div>
+                    </motion.button>
                   );
                 })}
               </div>
 
               <button
+                type="button"
                 onClick={startMachine}
                 disabled={!isComplete}
                 className={`group relative mt-9 mb-4 flex w-full max-w-md items-center justify-center gap-3 rounded-2xl py-4 text-lg font-black transition outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#05060a] ${
@@ -606,7 +620,8 @@ export function CardRevealAnimation({ onFinished, onCancel, prize }: CardRevealP
                       {rarity.label} • {winnerCard.item.chance} • יוכרז בהפקדה הבאה
                     </p>
                     <button
-                      onClick={() => onFinished(winnerCard.item)}
+                      type="button"
+                      onClick={() => collectPrize(winnerCard.item)}
                       disabled={!ready}
                       className={`mt-3 flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-base font-black transition outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0c13] ${
                         ready
