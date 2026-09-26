@@ -23,7 +23,7 @@ jobs:
       - name: Run Bunker Analyst Script
         env:
           API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
-        run: node scripts/bunker-model.mjs
+        run: node bunker-model.mjs
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
