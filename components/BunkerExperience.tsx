@@ -132,8 +132,8 @@ export default function BunkerExperience() {
               <div className="inline-flex items-center gap-2 rounded-full border border-emerald-300/25 bg-emerald-300/[0.07] px-3 py-1.5 text-[10px] font-black text-emerald-200"><ShieldCheck size={13} /> הדרופ הושלם · הדוח פתוח לצפייה</div>
               <p className="mt-5 flex items-center gap-2 text-sm font-bold text-cyan-200"><BrainCircuit size={18} /> איינשטיין דרופ · שולחן האנליסט</p>
               <h1 className="mt-2 text-4xl font-black tracking-tight text-white sm:text-6xl"><span className="bg-gradient-to-l from-cyan-200 via-cyan-400 to-lime-300 bg-clip-text text-transparent">הבנקר</span></h1>
-              <p className="mt-3 text-lg font-bold text-slate-200">{report.picks.length ? `דוח קדם־משחק · ניתוח ${report.picks.length} בחירות שערים` : "דוח קדם־משחק · סריקת משחקי היום"}</p>
-              <p className="mt-2 max-w-xl text-sm leading-7 text-slate-400">{report.picks.length ? `${report.picks.map((pick) => `${pick.home}–${pick.away}`).join(" ו־")}: בחינת קו מעל 2.5 שערים, ספי האיזון והסיכון בטופס משולב.` : "בחירות יופיעו כאן רק לאחר אימות משחקים קרובים, נתוני שחקנים ויחסים עדכניים."} {status ? statusSummary(status, report) : ""}</p>
+              <p className="mt-3 text-lg font-bold text-slate-200">{report.picks.length ? `דוח קדם־משחק · ניתוח ${report.picks.length} בחירות שערים` : status?.state === "no-picks" && report.watchlist?.length ? `מעקב יומי · ${report.watchlist.length} משחקים בסריקת האנליסט` : "דוח קדם־משחק · סריקת משחקי היום"}</p>
+              <p className="mt-2 max-w-xl text-sm leading-7 text-slate-400">{report.picks.length ? `${report.picks.map((pick) => `${pick.home}–${pick.away}`).join(" ו־")}: בחינת קו מעל 2.5 שערים, ספי האיזון והסיכון בטופס משולב.` : status?.state === "no-picks" && report.watchlist?.length ? "משחקי היום מוצגים ככרטיסי מעקב עם מחירי שוק, נתוני מודל כשזמינים, והסבר ברור למידע שטרם אומת." : "בחירות יופיעו כאן רק לאחר אימות משחקים קרובים, נתוני שחקנים ויחסים עדכניים."} {status ? statusSummary(status, report) : ""}</p>
             </div>
             <motion.div
               animate={{ y: [0, -8, 0], rotate: [0, 3, 0] }}

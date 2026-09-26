@@ -157,7 +157,9 @@ export function statusSummary(status: ReportStatus, report: Report): string {
     case "ready": return `${source} זו סריקת משחקי היום, והמחירים עודכנו היום.`;
     case "partial": return `${source} מחירי הסריקה הם צילום יומי, ורק המשחקים שטרם נגעו מוצגים.`;
     case "started": return `${source} כל משחקי הסריקה של היום כבר התחילו; הסריקה הבאה מתקבלת ב־${next}.`;
-    case "no-picks": return `${source} הסריקה הסתיימה, אך לא נמצאו היום שתי בחירות שעומדות בתנאי הניתוח.`;
+    case "no-picks": return report.watchlist?.length
+      ? `${source} המשחקים למעקב אינם צבר מומלץ; הנתונים הזמינים והפערים מוצגים בכרטיסים למטה.`
+      : `${source} הסריקה הסתיימה, אך לא נמצאו היום שתי בחירות שעומדות בתנאי הניתוח.`;
     case "unavailable": return `${source} סריקת היום טרם הושלמה; הניסיון הבא מתקבל ב־${next}.`;
     case "stale": return `${source} זהו דוח ${day(status, report)}, והסריקה הבאה מתקבלת ב־${next}.`;
   }

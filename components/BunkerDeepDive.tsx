@@ -8,6 +8,7 @@ import {
   BarChart3,
   ChevronDown,
   ClipboardList,
+  Clock3,
   Crosshair,
   Gauge,
   Info,
@@ -16,7 +17,7 @@ import {
   Target,
 } from "lucide-react";
 import { GoalLaboratory, RiskReward } from "./bunker/ReportSections";
-import type { Pick, Report } from "./bunker/reportData";
+import type { Pick, Report, WatchItem } from "./bunker/reportData";
 import { evaluateReport, statusHeadline } from "./bunker/reportStatus";
 import type { ReportStatus } from "./bunker/reportStatus";
 
@@ -171,6 +172,58 @@ function MatchAnalysis({ pick, index }: { pick: Pick; index: number }) {
   );
 }
 
+function WatchlistCard({ item, index, timeZone }: { item: WatchItem; index: number; timeZone: string }) {
+  const hasModel = item.probability !== null && item.edge !== null;
+  const metrics = [
+    { label: "יחס שוק · מעל 2.5", value: item.odds === null ? "—" : item.odds.toFixed(2), color: "text-amber-100" },
+    { label: "הסתברות מודל", value: item.probability === null ? "—" : percent(item.probability), color: "text-cyan-100" },
+    { label: "יחס הוגן במודל", value: item.fairOdds === null ? "—" : item.fairOdds.toFixed(2), color: "text-white" },
+    { label: "פער מול השוק", value: item.edge === null ? "—" : `${item.edge >= 0 ? "+" : ""}${percent(item.edge)}`, color: item.edge === null ? "text-slate-500" : item.edge >= 0 ? "text-emerald-200" : "text-rose-200" },
+  ];
+
+  return (
+    <li>
+      <Reveal delay={index * 0.07}>
+        <article className="relative h-full overflow-hidden rounded-[1.6rem] border border-cyan-300/15 bg-gradient-to-br from-[#101c21] via-[#0a1217] to-[#080d12] p-5 shadow-[0_20px_60px_rgba(0,0,0,.3)] transition-colors hover:border-cyan-300/30 sm:p-6">
+          <div className="pointer-events-none absolute -left-16 -top-20 h-52 w-52 rounded-full bg-cyan-400/[0.07] blur-[65px]" aria-hidden="true" />
+          <div className="relative flex flex-wrap items-start justify-between gap-3 border-b border-white/[0.08] pb-4">
+            <div>
+              <p className="font-mono text-[10px] font-bold tracking-[0.18em] text-cyan-200/75" dir="ltr">MATCH {String(index + 1).padStart(2, "0")}</p>
+              <p className="mt-1 text-xs font-semibold text-slate-400">{item.competition}</p>
+            </div>
+            <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[10px] font-bold ${hasModel ? "border-cyan-300/25 bg-cyan-300/[0.08] text-cyan-100" : "border-amber-200/25 bg-amber-200/[0.07] text-amber-100"}`}>
+              <span className={`h-1.5 w-1.5 rounded-full ${hasModel ? "bg-cyan-300 shadow-[0_0_10px_rgba(103,232,249,.8)]" : "bg-amber-200 shadow-[0_0_10px_rgba(253,230,138,.7)]"}`} />
+              {hasModel ? "מודל מחושב" : "מעקב · נתונים חלקיים"}
+            </span>
+          </div>
+
+          <div className="relative py-5">
+            <h4 className="text-lg font-black leading-snug text-white sm:text-xl">{item.home} <span className="mx-1 font-mono text-sm text-cyan-300/60">×</span> {item.away}</h4>
+            <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-400">
+              <span className="inline-flex items-center gap-1.5"><Clock3 size={13} className="text-cyan-300/70" /> שריקת פתיחה <bdi dir="ltr" className="font-mono text-slate-200">{new Date(item.kickoff).toLocaleString("he-IL", { timeZone, day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</bdi></span>
+              {item.bookmaker && <span>יחס מ־{item.bookmaker}</span>}
+            </p>
+          </div>
+
+          <div className="relative grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {metrics.map((metric) => (
+              <div key={metric.label} className="min-w-0 rounded-xl border border-white/[0.07] bg-black/25 px-3 py-3">
+                <p className="text-[10px] font-semibold leading-4 text-slate-400">{metric.label}</p>
+                <p className={`mt-2 font-mono text-lg font-black tabular-nums sm:text-xl ${metric.color}`} dir="ltr">{metric.value}</p>
+              </div>
+            ))}
+          </div>
+
+          <p className="relative mt-4 flex items-start gap-2 border-t border-white/[0.07] pt-4 text-xs leading-5 text-slate-400">
+            <Info size={14} className="mt-0.5 shrink-0 text-amber-200/75" />
+            <span>{item.note || (hasModel ? "הנתונים חושבו, אך לא נמצא צבר שעומד בסף הבחירה." : "נתוני מודל אינם זמינים למשחק זה.")} למעקב בלבד · לא המלצה.</span>
+          </p>
+        </article>
+      </Reveal>
+    </li>
+  );
+}
+
 export default function BunkerDeepDive({ report }: { report: Report }) {
   const [stake, setStake] = useState(100);
   // Whether a match has kicked off, and whether this report is still today's,
@@ -197,47 +250,30 @@ export default function BunkerDeepDive({ report }: { report: Report }) {
 
   if (status.state === "stale" || status.state === "started" || PICKS.length === 0) {
     const { title, body } = statusHeadline(status, report);
-    const watch = report.watchlist ?? [];
+    const watch = status.isToday ? report.watchlist ?? [] : [];
     return (
-      <section className="rounded-2xl border border-cyan-300/20 bg-slate-950 p-7 text-sm leading-7 text-slate-200">
-        <h2 className="text-xl font-black text-white">{title}</h2>
-        <p className="mt-2">{body}</p>
-        {report.scanNote ? <p className="mt-3 text-xs text-slate-500">{report.scanNote}</p> : null}
+      <section className="relative overflow-hidden rounded-[1.7rem] border border-cyan-300/20 bg-gradient-to-br from-[#0c1a1e] via-[#080f14] to-[#0b1016] p-5 shadow-[0_24px_85px_rgba(0,0,0,.34)] sm:p-8">
+        <div className="pointer-events-none absolute -right-20 -top-24 h-72 w-72 rounded-full bg-emerald-400/[0.06] blur-[85px]" aria-hidden="true" />
+        <div className="relative max-w-3xl">
+          <p className="flex items-center gap-2 text-[10px] font-black tracking-wide text-cyan-200"><ClipboardList size={14} /> שולחן האנליסט · סריקת משחקי היום</p>
+          <h2 className="mt-3 text-2xl font-black leading-tight text-white sm:text-3xl">{title}</h2>
+          <p className="mt-3 text-sm leading-7 text-slate-300">{body}</p>
+        </div>
         {watch.length > 0 ? (
-          <div className="mt-6">
-            <p className="text-xs font-black text-amber-200/90">
-              מעקב יומי · {watch.length} משחקים הקרובים — מידע חי, לא המלצה
-            </p>
-            <ul className="mt-3 divide-y divide-white/[0.06]">
-              {watch.map((item) => (
-                <li key={`${item.home}-${item.away}`} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-3">
-                  <span className="font-bold text-white">{item.home} – {item.away}</span>
-                  <span className="text-xs text-slate-500">
-                    {item.competition}
-                    {item.bookmaker ? ` · ${item.bookmaker}` : ""}
-                    {` · ${new Date(item.kickoff).toLocaleString("he-IL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}`}
-                  </span>
-                  <span className="w-full text-xs text-slate-400 sm:w-auto">
-                    {item.odds === null
-                      ? "אין מחיר עדכני ל־Over 2.5"
-                      : `Over 2.5 בשער ${item.odds.toFixed(2)}`}
-                    {item.probability === null
-                      ? item.note ? ` · ${item.note}` : ""
-                      : ` · המודל ${item.probability.toFixed(3)} · שער הוגן ${(item.fairOdds ?? 0).toFixed(2)} · `}
-                    {item.edge === null ? "" : (
-                      <span className={item.edge >= 0 ? "text-emerald-300" : "text-rose-300"}>
-                        פער {(item.edge * 100).toFixed(1)}%
-                      </span>
-                    )}
-                  </span>
-                </li>
-              ))}
+          <div className="relative mt-8 border-t border-white/[0.08] pt-6">
+            <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="font-mono text-[10px] font-bold tracking-[0.22em] text-cyan-300/70" dir="ltr">DAILY WATCHLIST / {String(watch.length).padStart(2, "0")}</p>
+                <h3 className="mt-1 text-xl font-black text-white">משחקים למעקב היום</h3>
+              </div>
+              <span className="inline-flex items-center gap-2 rounded-full border border-amber-200/20 bg-amber-200/[0.06] px-3 py-1.5 text-[10px] font-bold text-amber-100"><Activity size={13} /> מידע למעקב · לא המלצה</span>
+            </div>
+            <ul className="grid gap-4 lg:grid-cols-2">
+              {watch.map((item, index) => <WatchlistCard key={`${item.home}-${item.away}-${item.kickoff}`} item={item} index={index} timeZone={status.timeZone} />)}
             </ul>
-            <p className="mt-3 text-xs text-slate-500">
-              הצבר אינו מתקבל כאשר הפער המצטבר אינו עומד בסף של 4%. המשחקים שלמעלה נסרקו היום אך לא עברו את הסף, או שחסרו להם נתונים לחישוב המודל.
-            </p>
           </div>
         ) : null}
+        {report.scanNote && <p className="relative mt-5 border-t border-white/[0.07] pt-4 text-xs leading-6 text-slate-400">{report.scanNote}</p>}
       </section>
     );
   }
