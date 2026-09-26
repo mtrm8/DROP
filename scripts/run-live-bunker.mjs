@@ -1,4 +1,5 @@
 import { writeFile } from "node:fs/promises";
+import { UNAVAILABLE_STATUS_MESSAGE } from "./bunker-model.mjs";
 import { gatherLiveInput, unavailableInput } from "./fetch-live-bunker.mjs";
 
 const leagues = process.env.BUNKER_LEAGUES?.split(",").map(Number);
@@ -23,6 +24,6 @@ try {
   // successful daily scan; local runs still fail loudly by default.
   if (process.env.BUNKER_ALLOW_UNAVAILABLE !== "1") throw error;
   console.error("Today's provider data is unavailable; publishing a dated status instead of stale picks:", error);
-  await publish(unavailableInput(new Date(), timeZone, String(error?.message ?? error)));
+  await publish(unavailableInput(new Date(), timeZone, UNAVAILABLE_STATUS_MESSAGE, String(error?.message ?? error)));
   console.log("Published a dated unavailable status for today.");
 }

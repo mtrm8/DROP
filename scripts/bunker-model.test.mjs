@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import { strict as assert } from "node:assert";
 import { readFile } from "node:fs/promises";
-import { analyze, goalBuckets, overTwo } from "./bunker-model.mjs";
+import { analyze, goalBuckets, overTwo, UNAVAILABLE_STATUS_MESSAGE } from "./bunker-model.mjs";
 
 const input = JSON.parse(await readFile(new URL("../data/bunker-input.json", import.meta.url), "utf8"));
 
@@ -32,6 +32,15 @@ test("an unavailable live feed never masquerades as a completed scan", async () 
   const awaiting = JSON.parse(await readFile(new URL("../data/bunker-awaiting.json", import.meta.url), "utf8"));
   assert.equal(analyze(awaiting).status, "unavailable");
   assert.throws(() => analyze({ ...awaiting, picks: input.picks }), /unavailable status/);
+});
+
+test("unavailable reports always have a valid Hebrew status when the input omits it", async () => {
+  const awaiting = JSON.parse(await readFile(new URL("../data/bunker-awaiting.json", import.meta.url), "utf8"));
+  for (const statusMessage of [undefined, null, "", "   "]) {
+    const report = analyze({ ...awaiting, statusMessage });
+    assert.equal(report.statusMessage, UNAVAILABLE_STATUS_MESSAGE);
+    assert.ok(report.statusMessage.length > 0);
+  }
 });
 
 test("malformed results and mismatched accumulator prices fail before publication", () => {

@@ -1,4 +1,4 @@
-import { analyze, overTwo, venueGoalEstimate } from "./bunker-model.mjs";
+import { analyze, overTwo, UNAVAILABLE_STATUS_MESSAGE, venueGoalEstimate } from "./bunker-model.mjs";
 
 const BASE = "https://v3.football.api-sports.io";
 const flags = { Austria: "austria", Israel: "israel", Netherlands: "netherlands", Germany: "germany" };
@@ -306,15 +306,18 @@ export function selectValuePicks(candidates, asOf, minEdge = 0.04, timeZone = "A
  * leaving yesterday's finished matches on screen, and it is a valid live
  * report, so the daily build can still publish it.
  */
-export function unavailableInput(now = new Date(), timeZone = "Asia/Jerusalem", reason = "") {
-  // Say *why* the scan could not finish. "Data not completed" on its own gives
-  // a reader nothing to act on, and a wrong key looks identical to a provider
-  // outage unless the message carries the cause.
-  const why = reason ? ` (${reason.slice(0, 90)})` : "";
+export function unavailableInput(now = new Date(), timeZone = "Asia/Jerusalem", statusMessage = UNAVAILABLE_STATUS_MESSAGE, reason = "") {
+  // Publish a nonempty Hebrew status even for empty exception messages. Bound
+  // the optional provider detail to the model's 160-character text limit.
+  const fallback = typeof statusMessage === "string" && statusMessage.trim()
+    ? statusMessage.trim().slice(0, 160) : UNAVAILABLE_STATUS_MESSAGE;
+  const detail = typeof reason === "string" ? reason.trim() : "";
+  const available = Math.max(0, 160 - fallback.length - 3);
+  const message = detail && available ? `${fallback} (${detail.slice(0, available)})` : fallback;
   return {
     mode: "live",
     status: "unavailable",
-    statusMessage: `לא ניתן להשלים את עדכון הנתונים היום${why}. הבנקר יתעדכן שוב בסריקה המתוזמנת הבאה.`,
+    statusMessage: message,
     source: "עדכון נתוני הספק לא הושלם",
     asOf: now.toISOString(),
     timeZone,

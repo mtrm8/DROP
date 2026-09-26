@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import { strict as assert } from "node:assert";
-import { analyze, assertPublishable } from "./bunker-model.mjs";
+import { analyze, assertPublishable, UNAVAILABLE_STATUS_MESSAGE } from "./bunker-model.mjs";
 import { createProvider, DEFAULT_LEAGUES, gatherLiveInput, matchPriority, selectValuePicks, todayInZone, unavailableInput } from "./fetch-live-bunker.mjs";
 
 const now = new Date("2026-09-26T12:00:00Z");
@@ -468,10 +468,20 @@ test("a permanent failure is retried only a bounded number of times", async () =
 });
 
 test("an unavailable report names the reason instead of a bare waiting notice", () => {
-  const report = analyze(unavailableInput(now, "Asia/Jerusalem", "Football provider /fixtures: HTTP 401"));
+  const report = analyze(unavailableInput(now, "Asia/Jerusalem", UNAVAILABLE_STATUS_MESSAGE, "Football provider /fixtures: HTTP 401"));
   assert.equal(report.status, "unavailable");
+  assert.ok(report.statusMessage.startsWith(UNAVAILABLE_STATUS_MESSAGE));
   assert.match(report.statusMessage, /HTTP 401/);
-  assert.match(report.statusMessage, /הבנקר יתעדכן שוב/);
+});
+
+test("suspended-provider errors and empty reasons remain publishable within the text limit", () => {
+  const longError = `Account suspended: ${"provider unavailable ".repeat(20)}`;
+  const report = analyze(unavailableInput(now, "Asia/Jerusalem", UNAVAILABLE_STATUS_MESSAGE, longError));
+  assert.equal(report.status, "unavailable");
+  assert.ok(report.statusMessage.startsWith(UNAVAILABLE_STATUS_MESSAGE));
+  assert.match(report.statusMessage, /Account suspended/);
+  assert.ok(report.statusMessage.length <= 160);
+  assert.equal(analyze(unavailableInput(now, "Asia/Jerusalem", "", "")).statusMessage, UNAVAILABLE_STATUS_MESSAGE);
 });
 
 test("the daily build publishes a long scan of the current day and refuses older ones", async () => {

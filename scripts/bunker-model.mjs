@@ -11,6 +11,8 @@ const number = (value, label, minimum, maximum) => {
   return value;
 };
 
+export const UNAVAILABLE_STATUS_MESSAGE = "טרם התקבל דוח מאומת להיום - ספק הנתונים מושעה או לא זמין";
+
 export function overTwo(mean) {
   return 1 - Math.exp(-mean) * (1 + mean + mean * mean / 2);
 }
@@ -247,7 +249,10 @@ export function analyze(input) {
   return {
     mode: input.mode, source, asOf: input.asOf, timeZone, picks, combinedOdds, productOdds,
     status: picks.length === 0 ? (input.status === "unavailable" ? "unavailable" : "no-picks") : "ready",
-    statusMessage: input.status === "unavailable" ? text(input.statusMessage ?? "טרם התקבל דוח מאומת להיום", "statusMessage") : null,
+    statusMessage: input.status === "unavailable"
+      ? text(typeof input.statusMessage === "string" && input.statusMessage.trim()
+        ? input.statusMessage : UNAVAILABLE_STATUS_MESSAGE, "statusMessage")
+      : null,
     watchlist,
     scanNote,
     breakEven: 1 / combinedOdds, jointProbability,
