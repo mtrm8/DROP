@@ -391,6 +391,30 @@ export default function BunkerDeepDive({ report }: { report: Report }) {
 
   if (!status) return <section className="rounded-2xl border border-cyan-300/20 bg-slate-950 p-7 text-sm text-slate-300" role="status">בודקים את מצב סריקת היום…</section>;
 
+  // Suspended/unavailable provider: one clean professional banner with the
+  // fixed status copy from statusHeadline — never the raw provider payload.
+  if (status.state === "unavailable") {
+    const { title, body } = statusHeadline(status, report);
+    return (
+      <section role="status" className="relative overflow-hidden rounded-[1.7rem] border border-amber-300/30 bg-gradient-to-br from-[#1b1607] via-[#121009] to-[#0a0d10] p-6 shadow-[0_24px_85px_rgba(0,0,0,.34)] sm:p-9">
+        <div className="pointer-events-none absolute -right-16 -top-20 h-64 w-64 rounded-full bg-amber-400/[0.08] blur-[80px]" aria-hidden="true" />
+        <div className="relative flex flex-col items-start gap-5 sm:flex-row">
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-amber-200/30 bg-amber-300/[0.08] text-amber-200">
+            <AlertCircle size={26} />
+          </div>
+          <div className="max-w-3xl">
+            <p className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.18em] text-amber-200"><ClipboardList size={13} /> מנוע AI · מצב ספק נתונים</p>
+            <h2 className="mt-2 text-2xl font-black leading-tight text-white sm:text-3xl">{title}</h2>
+            <p className="mt-3 text-sm leading-7 text-slate-300">{body}</p>
+            <p className="mt-4 inline-flex items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-[10px] font-semibold text-slate-400">
+              <ShieldCheck size={13} className="text-amber-200/80" /> לא יוצגו נתונים חלקים, דוחות ישנים או שגיאות ספק גולמיות.
+            </p>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
   if (status.state === "stale" || status.state === "started" || PICKS.length === 0) {
     const { title, body } = statusHeadline(status, report);
     const watch = status.isToday ? report.watchlist ?? [] : [];

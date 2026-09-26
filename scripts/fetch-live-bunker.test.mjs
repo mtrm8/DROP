@@ -484,6 +484,16 @@ test("suspended-provider errors and empty reasons remain publishable within the 
   assert.equal(analyze(unavailableInput(now, "Asia/Jerusalem", "", "")).statusMessage, UNAVAILABLE_STATUS_MESSAGE);
 });
 
+test("raw provider JSON is stripped from the published status", () => {
+  const report = analyze(unavailableInput(now, "Asia/Jerusalem", UNAVAILABLE_STATUS_MESSAGE,
+    'Football provider /fixtures: {"access":"Your account is suspended, check on https://dashboard.api-sports.io/"}'));
+  assert.ok(!report.statusMessage.includes("{"));
+  assert.ok(!report.statusMessage.includes('"'));
+  assert.ok(!report.statusMessage.includes("https://"));
+  assert.match(report.statusMessage, /Your account is suspended/);
+  assert.ok(report.statusMessage.length <= 160);
+});
+
 test("the daily build publishes a long scan of the current day and refuses older ones", async () => {
   const report = analyze(await gatherLiveInput({ key: "test-key", now, request: mockProvider() }));
   // A sequential scan of every fixture easily outlives the fifteen-minute window

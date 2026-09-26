@@ -124,9 +124,12 @@ export function statusHeadline(status: ReportStatus, report: Report): { title: s
         body: `סריקת ${day} הסתיימה והמשחקים בה כבר התחילו. הסריקה הבאה מתקבלת ב־${next}.`,
       };
     case "unavailable":
+      // Never echo the raw provider payload: a suspended account returns mixed
+      // Hebrew/English JSON blobs that must not reach the reader. The UI shows
+      // one fixed, professional message and the next scheduled attempt instead.
       return {
         title: `סריקת ${day} טרם הושלמה`,
-        body: `${report.statusMessage || "עדיין לא התקבלה סריקת משחקים מאומתת להיום."} ניסיון הסריקה הבא צפוי ב־${next}.`,
+        body: `טרם התקבל דוח מאומת להיום - ספק הנתונים מושעה או לא זמין, ולכן הדוח לא פורסם. המערכת תנסה שוב אוטומטית בסריקה הבאה ב־${next}.`,
       };
     case "no-picks": {
       const near = report.watchlist?.length ?? 0;

@@ -1,9 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { motion } from "framer-motion";
-import { ArrowLeft, Atom, BrainCircuit, LockKeyhole, ShieldCheck } from "lucide-react";
+import { Atom, BrainCircuit, LockKeyhole, ShieldCheck } from "lucide-react";
 import Navbar from "./Navbar";
 import CommunityFooter from "./CommunityFooter";
 import BunkerDeepDive from "./BunkerDeepDive";
@@ -57,7 +56,9 @@ export default function AIBunkerExperience() {
 
   const handleUnlock = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (memberCode.trim() !== MEMBER_CODE) {
+    // Tolerate surrounding whitespace and keyboard case so the correct code
+    // always unlocks instead of bouncing the member back to the lock.
+    if (memberCode.trim().toUpperCase() !== MEMBER_CODE) {
       setCodeError(true);
       return;
     }
@@ -139,9 +140,6 @@ export default function AIBunkerExperience() {
             {codeError && <p role="alert" className="mt-2 text-xs text-rose-300">קוד הגישה שגוי. בדקו את הקוד ונסו שוב.</p>}
             <button type="submit" className="mt-4 w-full rounded-xl bg-gradient-to-l from-cyan-300 to-lime-300 px-6 py-3 font-black text-slate-950 transition hover:brightness-110">כניסה לבנקר AI</button>
           </form>
-          <Link href="/bunker" className="mt-5 inline-flex items-center gap-2 text-sm font-bold text-cyan-200 hover:text-white">
-            <ArrowLeft size={18} /> מעבר לבנקר האנליסט
-          </Link>
         </section>
         <CommunityFooter />
       </main>

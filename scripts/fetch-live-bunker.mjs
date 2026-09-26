@@ -308,10 +308,14 @@ export function selectValuePicks(candidates, asOf, minEdge = 0.04, timeZone = "A
  */
 export function unavailableInput(now = new Date(), timeZone = "Asia/Jerusalem", statusMessage = UNAVAILABLE_STATUS_MESSAGE, reason = "") {
   // Publish a nonempty Hebrew status even for empty exception messages. Bound
-  // the optional provider detail to the model's 160-character text limit.
+  // the optional provider detail to the model's 160-character text limit, and
+  // strip raw JSON: a suspended provider answers with blobs like
+  // {"access":"Your account is suspended…"} which must stay out of the report.
   const fallback = typeof statusMessage === "string" && statusMessage.trim()
     ? statusMessage.trim().slice(0, 160) : UNAVAILABLE_STATUS_MESSAGE;
-  const detail = typeof reason === "string" ? reason.trim() : "";
+  const detail = typeof reason === "string"
+    ? reason.replace(/https?:\/\/\S+/g, " ").replace(/[{}[\]"'\\]/g, " ").replace(/\s+/g, " ").trim()
+    : "";
   const available = Math.max(0, 160 - fallback.length - 3);
   const message = detail && available ? `${fallback} (${detail.slice(0, available)})` : fallback;
   return {

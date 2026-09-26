@@ -397,7 +397,7 @@ export default function DailyDrop() {
             <p className="mb-6 mt-2 max-w-2xl text-sm leading-relaxed text-slate-400 sm:mb-7 sm:text-base">
               {unlocked
                 ? DROP_PRIZE_COPY
-                : "הדרופ פתוח לחברי קהילת הכדורגל והפוקר — הזינו את קוד הגישה שקיבלתם."}
+                : "הדרופ פתוח לחברי קהילת הכדורגל — הזינו את קוד הגישה שקיבלתם."}
             </p>
 
             <AnimatePresence initial={false}>
