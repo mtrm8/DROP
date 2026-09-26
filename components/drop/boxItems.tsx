@@ -26,9 +26,9 @@ export const ITEM_EMOJI: Record<ItemIconName, string> = {
 };
 
 // Money tiers — the glyph a cash prize wears is derived from its amount, so the
-// card always looks richer as the amount climbs: notes -> cash bag -> gem -> fire -> crown.
+// card always looks richer as the amount climbs: notes -> cash bag -> gem -> fire.
 const MONEY_TIERS: { min: number; emoji: string; icon: ItemIconName }[] = [
-  { min: 500, emoji: "🔥", icon: "fire" },
+  { min: 400, emoji: "🔥", icon: "fire" },
   { min: 200, emoji: "💎", icon: "gem" },
   { min: 100, emoji: "💸", icon: "stack" },
   { min: 50, emoji: "💰", icon: "stack" },
@@ -117,20 +117,9 @@ export interface BoxItem {
   rarity: RarityName;
 }
 
-// Active client prize pool. Displayed odds are normalized over the remaining
-// weights after retiring the 20₪ tier and match the server-derived percentages.
+// Active client prize pool: strictly 50, 100, 200, 300 and 400 ₪. Displayed
+// odds are the normalized weight shares and always sum to 100%.
 export const BOX_ITEMS: BoxItem[] = [
-  {
-    id: "cash-30",
-    name: "30 ₪",
-    category: "cash",
-    icon: "chip",
-    emoji: "💵",
-    amount: 30,
-    chance: "43.1%",
-    weight: 2500,
-    rarity: "common",
-  },
   {
     id: "cash-50",
     name: "50 ₪",
@@ -138,7 +127,7 @@ export const BOX_ITEMS: BoxItem[] = [
     icon: "stack",
     emoji: "💰",
     amount: 50,
-    chance: "27.59%",
+    chance: "48.48%",
     weight: 1600,
     rarity: "uncommon",
   },
@@ -149,7 +138,7 @@ export const BOX_ITEMS: BoxItem[] = [
     icon: "stack",
     emoji: "💸",
     amount: 100,
-    chance: "17.24%",
+    chance: "30.30%",
     weight: 1000,
     rarity: "rare",
   },
@@ -160,29 +149,29 @@ export const BOX_ITEMS: BoxItem[] = [
     icon: "gem",
     emoji: "💎",
     amount: 200,
-    chance: "8.62%",
+    chance: "15.15%",
     weight: 500,
     rarity: "classified",
   },
   {
-    id: "cash-350",
-    name: "350 ₪",
+    id: "cash-300",
+    name: "300 ₪",
     category: "cash",
     icon: "gem",
     emoji: "💎",
-    amount: 350,
-    chance: "2.59%",
+    amount: 300,
+    chance: "4.55%",
     weight: 150,
     rarity: "covert",
   },
   {
-    id: "cash-500",
-    name: "500 ₪",
+    id: "cash-400",
+    name: "400 ₪",
     category: "cash",
     icon: "fire",
     emoji: "🔥",
-    amount: 500,
-    chance: "0.86%",
+    amount: 400,
+    chance: "1.52%",
     weight: 50,
     rarity: "special",
   },

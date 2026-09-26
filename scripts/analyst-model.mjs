@@ -30,6 +30,31 @@ const isoTime = (value, label) => {
   return value;
 };
 
+/** Validate the active combined ticket (Combine / משולב) shown on the page. */
+const validateSlip = (value, label) => {
+  requireValue(value && typeof value === "object" && !Array.isArray(value), `${label} must be an object`);
+  const legsValue = value.legs;
+  requireValue(Array.isArray(legsValue) && legsValue.length >= 1 && legsValue.length <= 10,
+    `${label}.legs must have 1–10 selections`);
+  const legs = legsValue.map((leg, j) => {
+    const legLabel = `${label}.legs[${j}]`;
+    requireValue(leg && typeof leg === "object" && !Array.isArray(leg), `${legLabel} must be an object`);
+    const home = text(leg.home, `${legLabel}.home`, 100);
+    const away = text(leg.away, `${legLabel}.away`, 100);
+    requireValue(home !== away, `${legLabel} teams must differ`);
+    return {
+      home, away,
+      market: text(leg.market, `${legLabel}.market`, 120),
+      odds: number(leg.odds, `${legLabel}.odds`, 1.01, 100),
+    };
+  });
+  const totalOdds = number(value.totalOdds, `${label}.totalOdds`, 1.01, 10000);
+  const product = legs.reduce((accumulator, leg) => accumulator * leg.odds, 1);
+  requireValue(Math.abs(totalOdds - product) <= 0.05,
+    `${label}.totalOdds must match the product of the leg odds (within 0.05)`);
+  return { label: text(value.label, `${label}.label`, 60), legs, totalOdds };
+};
+
 /** Validate human-authored picks and derive presentation-only metrics. */
 export function analyzeAnalystInput(input) {
   requireValue(input && typeof input === "object" && !Array.isArray(input), "expected a JSON object");
@@ -37,7 +62,8 @@ export function analyzeAnalystInput(input) {
   requireValue(Array.isArray(input.picks) && input.picks.length <= 10, "picks must be an array (max 10)");
   if (input.asOf === null) {
     requireValue(input.picks.length === 0, "asOf is required before publishing picks");
-    return { analyst, asOf: null, picks: [] };
+    requireValue(input.slip == null, "asOf is required before publishing a slip");
+    return { analyst, asOf: null, slip: null, picks: [] };
   }
   const asOf = isoTime(input.asOf, "asOf");
   const seen = new Set();
@@ -89,5 +115,6 @@ export function analyzeAnalystInput(input) {
       breakEven: 1 / odds,
     };
   });
-  return { analyst, asOf, picks };
+  const slip = input.slip == null ? null : validateSlip(input.slip, "slip");
+  return { analyst, asOf, slip, picks };
 }

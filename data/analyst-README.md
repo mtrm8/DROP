@@ -2,6 +2,28 @@
 
 `/bunker/` reads `data/analyst-picks.json`. It starts with an empty report and never fills a missing pick from the AI/API feed. A human analyst edits this JSON, reviews the underlying evidence, and publishes a new static build. `npm run bunker:test` verifies the manual report schema, and `npm run build:static` validates the file used by the site.
 
+## Active combined slip (Combine / משולב)
+
+The page can show the analyst's active combined ticket above the deep-analysis picks. It is a separate optional `slip` object and requires the same review `asOf`:
+
+```json
+{
+  "analyst": "צוות האנליסטים",
+  "asOf": "2026-09-26T22:30:00Z",
+  "slip": {
+    "label": "Combine · משולב",
+    "legs": [
+      { "home": "Charlotte", "away": "Chicago Fire", "market": "Total Goals Over 2.5", "odds": 1.42 },
+      { "home": "CF Montreal", "away": "Cincinnati", "market": "Total Yellow Cards Over 3.5", "odds": 1.69 }
+    ],
+    "totalOdds": 2.39
+  },
+  "picks": []
+}
+```
+
+Legs are 1–10 selections with quotes between 1.01 and 100; `totalOdds` must match the product of the leg odds within 0.05 (bookmakers round combined quotes). The slip is presentation-only: it never feeds the AI model, and `picks` may stay empty while only the active ticket is live.
+
 To publish a pick, set `asOf` to the timestamp of the manual review (with timezone), then add up to ten picks. The following is a **schema example with fictional teams**, not a published recommendation:
 
 ```json

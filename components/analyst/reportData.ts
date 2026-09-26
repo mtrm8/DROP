@@ -19,7 +19,9 @@ export type AnalystPick = {
   stats: { home: VenueStats; away: VenueStats; headToHead: { date: string; homeGoals: number; awayGoals: number }[] };
   breakEven: number;
 };
-export type AnalystReport = { analyst: string; asOf: string | null; picks: AnalystPick[] };
+export type AnalystSlipLeg = { home: string; away: string; market: string; odds: number };
+export type AnalystSlip = { label: string; legs: AnalystSlipLeg[]; totalOdds: number };
+export type AnalystReport = { analyst: string; asOf: string | null; slip: AnalystSlip | null; picks: AnalystPick[] };
 
 // This file is edited by a human and validated at build time. It is never
 // populated from the AI/API report or treated as synthetic demonstration data.

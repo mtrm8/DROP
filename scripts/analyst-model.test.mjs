@@ -17,8 +17,42 @@ const pick = {
 
 test("an empty manual report never invents analyst picks", () => {
   assert.deepEqual(analyzeAnalystInput({ analyst: "Human analyst", asOf: null, picks: [] }),
-    { analyst: "Human analyst", asOf: null, picks: [] });
+    { analyst: "Human analyst", asOf: null, slip: null, picks: [] });
   assert.throws(() => analyzeAnalystInput({ analyst: "Human analyst", asOf: null, picks: [pick] }), /asOf is required/);
+});
+
+const slip = {
+  label: "Combine · משולב",
+  legs: [
+    { home: "Charlotte", away: "Chicago Fire", market: "Total Goals Over 2.5", odds: 1.42 },
+    { home: "CF Montreal", away: "Cincinnati", market: "Total Yellow Cards Over 3.5", odds: 1.69 },
+  ],
+  totalOdds: 2.39,
+};
+
+test("the active combined slip is published exactly as the analyst entered it", () => {
+  const report = analyzeAnalystInput({ analyst: "Human analyst", asOf: "2026-09-26T22:30:00Z", slip, picks: [] });
+  assert.equal(report.slip.label, "Combine · משולב");
+  assert.equal(report.slip.legs.length, 2);
+  assert.equal(report.slip.legs[0].market, "Total Goals Over 2.5");
+  assert.equal(report.slip.legs[0].odds, 1.42);
+  assert.equal(report.slip.legs[1].market, "Total Yellow Cards Over 3.5");
+  assert.equal(report.slip.legs[1].odds, 1.69);
+  assert.equal(report.slip.totalOdds, 2.39);
+  assert.deepEqual(report.picks, []);
+});
+
+test("a slip cannot publish without a review time, bad legs or a wrong total", () => {
+  assert.throws(() => analyzeAnalystInput({ analyst: "Human analyst", asOf: null, slip, picks: [] }),
+    /asOf is required before publishing a slip/);
+  assert.throws(() => analyzeAnalystInput({ analyst: "Human analyst", asOf: "2026-09-26T22:30:00Z",
+    slip: { ...slip, totalOdds: 2.6 }, picks: [] }), /totalOdds must match/);
+  assert.throws(() => analyzeAnalystInput({ analyst: "Human analyst", asOf: "2026-09-26T22:30:00Z",
+    slip: { ...slip, legs: [{ ...slip.legs[0], odds: 0.9 }] }, picks: [] }), /odds must be between/);
+  assert.throws(() => analyzeAnalystInput({ analyst: "Human analyst", asOf: "2026-09-26T22:30:00Z",
+    slip: { ...slip, legs: [{ ...slip.legs[0], away: "Charlotte" }] }, picks: [] }), /teams must differ/);
+  assert.throws(() => analyzeAnalystInput({ analyst: "Human analyst", asOf: "2026-09-26T22:30:00Z",
+    slip: { ...slip, legs: [] }, picks: [] }), /1–10 selections/);
 });
 
 test("manual stats and reasoning produce presentation-only price metrics", () => {

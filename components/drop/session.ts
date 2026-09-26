@@ -1,6 +1,6 @@
 // Session-scoped proof that this tab passed the drop code flow. The standalone
-// Analyst Bunker route checks it so bookmarked/direct visits cannot bypass the
-// drop requirement, while the embedded landing-page section stays open.
+// Analyst Bunker route and the embedded landing-page section both check it, so
+// bookmarked/direct visits and shared URLs cannot bypass the drop requirement.
 const DROP_ACCESS_KEY = "drop-verified";
 
 export function markDropVerified(): void {

@@ -3,11 +3,11 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, useReducedMotion } from "framer-motion";
-import { Activity, Atom, BarChart3, CalendarClock, ClipboardList, Info, ShieldCheck, Target } from "lucide-react";
+import { Activity, Atom, BarChart3, CalendarClock, ClipboardList, Info, LockKeyhole, Receipt, ShieldCheck, Target } from "lucide-react";
 import Navbar from "./Navbar";
 import CommunityFooter from "./CommunityFooter";
 import report from "./analyst/reportData";
-import type { AnalystPick, VenueStats } from "./analyst/reportData";
+import type { AnalystPick, AnalystSlip, VenueStats } from "./analyst/reportData";
 import { isDropVerified } from "./drop/session";
 
 const percent = (value: number) => `${(value * 100).toFixed(1)}%`;
@@ -28,6 +28,43 @@ function FormCard({ team, location, stats, reduced }: { team: string; location: 
     </div>
     <p className="mt-3 text-[11px] text-slate-400">שערים למשחק · כבשה <bdi dir="ltr" className="font-mono text-white">{(stats.goalsFor / stats.matches).toFixed(1)}</bdi> · ספגה <bdi dir="ltr" className="font-mono text-white">{(stats.goalsAgainst / stats.matches).toFixed(1)}</bdi></p>
   </div>;
+}
+
+function SlipCard({ slip, reduced }: { slip: AnalystSlip; reduced: boolean }) {
+  return <motion.section
+    aria-label="הטופס המשולב הפעיל"
+    initial={reduced ? false : { opacity: 0, y: 20 }}
+    whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.15 }}
+    transition={{ duration: reduced ? 0 : 0.5 }}
+    className="relative overflow-hidden rounded-[1.7rem] border border-amber-300/25 bg-gradient-to-br from-[#1d1607] via-[#0d0c07] to-[#0a0d13] p-6 shadow-[0_24px_75px_rgba(0,0,0,.32)] sm:p-8"
+  >
+    <div className="pointer-events-none absolute -top-24 right-0 h-64 w-64 rounded-full bg-amber-400/[0.08] blur-[80px]" aria-hidden="true" />
+    <div className="relative flex flex-wrap items-center justify-between gap-4 border-b border-white/[0.08] pb-5">
+      <p className="flex items-center gap-2 text-[11px] font-black text-amber-100"><Receipt size={15} /> {slip.label}</p>
+      <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-500">Active ticket · טופס פעיל</p>
+    </div>
+    <ol className="relative mt-5 space-y-3">
+      {slip.legs.map((leg, index) => <li key={`${leg.home}-${leg.away}`} className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-white/[0.07] bg-black/25 px-4 py-3.5">
+        <div className="min-w-0">
+          <p className="font-mono text-[10px] font-black text-amber-200/70" dir="ltr">#{index + 1}</p>
+          <p className="mt-1 text-sm font-black text-white sm:text-base">{leg.home} <span className="text-cyan-200/60">×</span> {leg.away}</p>
+          <p className="mt-2 inline-block rounded-md border border-cyan-300/20 bg-cyan-300/[0.06] px-2.5 py-1 text-[11px] font-bold text-cyan-100" dir="ltr">{leg.market}</p>
+        </div>
+        <div className="ml-auto rounded-xl border border-amber-200/25 bg-amber-200/[0.06] px-4 py-2 text-center">
+          <p className="text-[9px] font-bold uppercase tracking-wider text-amber-100/70">Odds</p>
+          <p className="font-mono text-xl font-black text-amber-100" dir="ltr">{leg.odds.toFixed(2)}</p>
+        </div>
+      </li>)}
+    </ol>
+    <div className="relative mt-4 flex items-center justify-between gap-4 rounded-2xl border border-amber-300/25 bg-amber-300/[0.07] px-4 py-4">
+      <div>
+        <p className="text-[10px] font-black uppercase tracking-wider text-amber-100/85">סה״כ יחס · Total Odds</p>
+        <p className="mt-1 text-[11px] text-slate-400">{slip.legs.length} selections · טיפס משולב אחד</p>
+      </div>
+      <p className="ml-auto font-mono text-3xl font-black text-amber-100" dir="ltr">{slip.totalOdds.toFixed(2)}</p>
+    </div>
+    <p className="relative mt-3 text-[10px] leading-5 text-slate-500">טופס הפעילות של האנליסט. אם אחת הבחירות לא תעמוד ביעדה, הטופס כולו מפסיד — בכפוף לכללי הסליקה.</p>
+  </motion.section>;
 }
 
 function PickCard({ pick, index, reduced }: { pick: AnalystPick; index: number; reduced: boolean }) {
@@ -109,19 +146,20 @@ export default function AnalystBunker({ embedded = false }: { embedded?: boolean
   const router = useRouter();
   const reduced = Boolean(useReducedMotion());
   const [now, setNow] = useState<number | null>(null);
-  // The standalone route is session-gated: only visitors who passed the drop
-  // code flow in this tab may see it. Bookmarks and direct links are sent back
-  // to the drop flow; the embedded landing-page copy is intentionally public.
-  const [allowed, setAllowed] = useState<boolean | null>(embedded ? true : null);
+  // Both the standalone route and the embedded landing-page section are
+  // session-gated: only visitors who passed the drop code flow in this tab may
+  // see the report. Bookmarks, shared URLs and direct links get a locked
+  // teaser (route visits are sent back to the drop flow itself).
+  const [allowed, setAllowed] = useState<boolean | null>(null);
   useEffect(() => {
-    if (embedded || allowed !== null) return;
+    if (allowed !== null) return;
     if (isDropVerified()) {
       setAllowed(true);
       return;
     }
     setAllowed(false);
-    router.replace("/drop");
-  }, [embedded, allowed, router]);
+    if (!embedded) router.replace("/drop");
+  }, [allowed, embedded, router]);
   useEffect(() => {
     const check = () => setNow(Date.now());
     check();
@@ -142,17 +180,31 @@ export default function AnalystBunker({ embedded = false }: { embedded?: boolean
         </div>
       </header>
 
+      {report.slip && <SlipCard slip={report.slip} reduced={reduced} />}
+
       {upcoming.length ? <div className="space-y-5">{upcoming.map((pick, index) => <PickCard key={pick.id} pick={pick} index={index} reduced={reduced} />)}</div> :
         <section className="rounded-[1.7rem] border border-emerald-300/15 bg-slate-950/80 p-7 text-center sm:p-10" role="status">
           <ClipboardList size={30} className="mx-auto text-emerald-300/70" />
-          <h2 className="mt-4 text-xl font-black text-white">{report.picks.length ? "כל הבחירות שפורסמו כבר יצאו לדרך" : "בחירות האנליסט טרם פורסמו"}</h2>
-          <p className="mx-auto mt-3 max-w-xl text-sm leading-7 text-slate-400">{report.picks.length ? "כשיועלו בחירות ידניות חדשות, הניתוח המלא יופיע כאן לאחר פרסום האתר." : "הצוות יעלה לכאן בחירות שנבדקו ידנית, כולל יחסים, נתוני כושר, הסברים וגרפים. אין כאן בחירות ממנוע ה־AI."}</p>
+          <h2 className="mt-4 text-xl font-black text-white">{report.slip ? "הטיפס המשולב מוצג למעלה" : report.picks.length ? "כל הבחירות שפורסמו כבר יצאו לדרך" : "בחירות האנליסט טרם פורסמו"}</h2>
+          <p className="mx-auto mt-3 max-w-xl text-sm leading-7 text-slate-400">{report.slip ? "לטיפס הפעיל אין עדיין ניתוח מלא בעמוד. לאחר סקירה ידנית יפורסמו כאן היחסים, נתוני הכושר, הנימוקים והגרפים לכל משחק. אין כאן בחירות ממנוע ה־AI." : report.picks.length ? "כשיועלו בחירות ידניות חדשות, הניתוח המלא יופיע כאן לאחר פרסום האתר." : "הצוות יעלה לכאן בחירות שנבדקו ידנית, כולל יחסים, נתוני כושר, הסברים וגרפים. אין כאן בחירות ממנוע ה־AI."}</p>
         </section>}
     </div>;
 
+  // Fail-closed locked state for visitors without this tab's drop session:
+  // it is what a shared URL, a fresh bookmark or a new tab renders.
+  const locked = <section className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-8 sm:py-12" role="status">
+      <div className="rounded-[1.7rem] border border-emerald-300/15 bg-slate-950/80 p-7 text-center sm:p-10">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-emerald-300/25 bg-emerald-300/[0.07] text-emerald-200"><LockKeyhole size={24} /></div>
+        <Heading className="mt-4 text-2xl font-black text-white sm:text-3xl">בנקר האנליסט נעול</Heading>
+        <p className="mx-auto mt-3 max-w-xl text-sm leading-7 text-slate-400">הבחירות הידניות, הטיפס המשולב ונתוני האנליסט זמינים לאחר השלמת קוד הדרופ. השלימו את הקוד כדי לצפות בדוח המלא.</p>
+        <button type="button" onClick={() => router.push("/drop")} className="mt-5 inline-flex items-center gap-2 rounded-xl bg-gradient-to-l from-emerald-300 to-cyan-300 px-6 py-3 text-sm font-black text-slate-950 transition hover:brightness-110">מעבר לעמוד הדרופ</button>
+      </div>
+    </section>;
+
   // Embedded variant drops the page chrome so the section can sit directly in
-  // the landing page's scroll flow beneath the Community Drops block.
-  if (embedded) return content;
+  // the landing page's scroll flow beneath the Community Drops block. Without
+  // this tab's drop session it only renders the locked teaser above.
+  if (embedded) return allowed === true ? content : locked;
   if (allowed !== true) return <main className="min-h-screen overflow-x-clip">
     <Navbar />
     <div className="mx-auto flex min-h-[65vh] max-w-3xl items-center justify-center gap-3 px-6" role="status">
