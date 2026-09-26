@@ -8,7 +8,7 @@
     "build:static": "next build && node scripts/postbuild-pages.mjs",
     "bunker:generate": "node scripts/generate-bunker.mjs",
     "bunker:fetch": "node scripts/run-live-bunker.mjs",
-    "bunker:test": "node --test scripts/bunker-model.test.mjs scripts/fetch-live-bunker.test.mjs",
+    "bunker:test": "node --test scripts/bunker-model.test.mjs scripts/fetch-live-bunker.test.mjs scripts/report-status.test.mjs",
     "start": "next start",
     "lint": "next lint"
   },

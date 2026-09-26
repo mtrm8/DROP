@@ -1,9 +1,8 @@
 import type { Pick, Report } from "./reportData";
 
-// The Bunker is a daily snapshot, not a live feed. One scheduled build runs per
-// day at 12:15 UTC, so the published analysis always describes that local day.
-export const REFRESH_HOUR_UTC = 12;
-export const REFRESH_MINUTE_UTC = 15;
+// The published site is a static snapshot. The committed workflow runs every
+// six hours in UTC; an open tab only sees a newer scan after it is deployed.
+export const REFRESH_INTERVAL_HOURS = 6;
 export const DEFAULT_TIME_ZONE = "Asia/Jerusalem";
 
 export type ReportState =
@@ -33,13 +32,10 @@ const localDay = (date: Date, timeZone: string) =>
     timeZone, year: "numeric", month: "2-digit", day: "2-digit",
   }).format(date);
 
-/** The next scheduled daily build, so the UI can say when fresh data lands. */
-export function nextDailyRun(now: Date): Date {
-  const next = new Date(Date.UTC(
-    now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), REFRESH_HOUR_UTC, REFRESH_MINUTE_UTC,
-  ));
-  if (next.getTime() <= now.getTime()) next.setUTCDate(next.getUTCDate() + 1);
-  return next;
+/** Next scheduled run of the currently committed GitHub Actions workflow. */
+export function nextScheduledRun(now: Date): Date {
+  const nextHour = Math.floor(now.getUTCHours() / REFRESH_INTERVAL_HOURS + 1) * REFRESH_INTERVAL_HOURS;
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), nextHour));
 }
 
 /** A pick is actionable only while its fixture has not kicked off yet. */
@@ -77,7 +73,7 @@ export function evaluateReport(report: Report, now: Date = new Date()): ReportSt
     reportDate,
     today,
     isToday,
-    nextRefresh: nextDailyRun(now),
+    nextRefresh: nextScheduledRun(now),
     activePicks,
     kickedOff,
     isLive: report.mode === "live" && isToday && state !== "unavailable",
@@ -115,12 +111,12 @@ export function statusHeadline(status: ReportStatus, report: Report): { title: s
     case "demo":
       return report.picks.length ? { title: "", body: "" } : {
         title: "אין נתוני הדגמה להצגה",
-        body: "קובץ ההדגמה המקומי אינו מכיל בחירות. הדוח החי מתפרסם בסריקה היומית.",
+        body: "קובץ ההדגמה המקומי אינו מכיל בחירות. הדוח החי מתפרסם בסריקה המתוזמנת.",
       };
     case "stale":
       return {
         title: `הדוח המוצג הוא סריקת ${day}`,
-        body: `הבנקר מתעדכן פעם ביום. הסריקה הבאה מתקבלת ב־${next}, ואז יוצגו כאן משחקי היום עם היחסים וההרכבים המעודכנים.`,
+        body: `הבנקר מתעדכן בסריקות מתוזמנות. הסריקה הבאה צפויה ב־${next}, ואז יוצגו כאן נתוני היום העדכניים שפורסמו.`,
       };
     case "started":
       return {
@@ -130,7 +126,7 @@ export function statusHeadline(status: ReportStatus, report: Report): { title: s
     case "unavailable":
       return {
         title: `סריקת ${day} טרם הושלמה`,
-        body: `${report.statusMessage || "עדיין לא התקבלה סריקת משחקים מאומתת להיום."} הבנקר מתעדכן פעם ביום, והניסיון הבא מתקבל ב־${next}.`,
+        body: `${report.statusMessage || "עדיין לא התקבלה סריקת משחקים מאומתת להיום."} ניסיון הסריקה הבא צפוי ב־${next}.`,
       };
     case "no-picks": {
       const near = report.watchlist?.length ?? 0;
@@ -175,9 +171,18 @@ export function supersedes(current: Report, next: Report): boolean {
   if (!Number.isFinite(Date.parse(next.asOf))) return false;
   const currentAt = Date.parse(current.asOf);
   if (!Number.isFinite(currentAt)) return true;
-  if (Date.parse(next.asOf) > currentAt) return true;
+  if (Date.parse(next.asOf) > currentAt) {
+    // A failed retry later today must not erase still-upcoming, already
+    // verified fixtures from an open tab. A new local day always takes over.
+    if (next.status === "unavailable" && current.mode === "live" && current.status !== "unavailable" &&
+      localDay(new Date(current.asOf), current.timeZone || DEFAULT_TIME_ZONE) ===
+        localDay(new Date(next.asOf), current.timeZone || DEFAULT_TIME_ZONE) &&
+      [...current.picks.map((pick) => pick.fixture?.kickoff), ...(current.watchlist ?? []).map((item) => item.kickoff)]
+        .some((kickoff) => kickoff && Date.parse(kickoff) > Date.now())) return false;
+    return true;
+  }
   if (Date.parse(next.asOf) < currentAt) return false;
   const usable = (report: Report) => report.mode === "live" &&
-    report.status !== "unavailable" && report.picks.length > 0;
+    report.status !== "unavailable" && (report.picks.length > 0 || (report.watchlist?.length ?? 0) > 0);
   return usable(next) && !usable(current);
 }

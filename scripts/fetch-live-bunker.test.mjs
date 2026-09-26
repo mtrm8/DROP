@@ -28,6 +28,13 @@ const minor = {
   ...build({ id: 700, home: team(13, "Small FC"), away: team(14, "Other FC") }, "2026-09-26T12:45:00Z"),
   league: { id: 89, name: "Eerste Divisie", season: 2026 },
 };
+const nationalHistory = [
+  { fixture: { id: 800, date: "2026-09-20T12:00:00Z" }, teams: { home: team(12, "England"), away: team(11, "Spain") }, goals: { home: 2, away: 1 } },
+  { fixture: { id: 801, date: "2026-09-19T12:00:00Z" }, teams: { home: team(15, "Italy"), away: team(11, "Spain") }, goals: { home: 1, away: 2 } },
+  { fixture: { id: 802, date: "2026-09-18T12:00:00Z" }, teams: { home: team(16, "France"), away: team(11, "Spain") }, goals: { home: 1, away: 1 } },
+  { fixture: { id: 803, date: "2026-09-19T12:00:00Z" }, teams: { home: team(12, "England"), away: team(15, "Italy") }, goals: { home: 2, away: 0 } },
+  { fixture: { id: 804, date: "2026-09-18T12:00:00Z" }, teams: { home: team(12, "England"), away: team(16, "France") }, goals: { home: 1, away: 1 } },
+];
 const history = new Map();
 for (const match of [...fixtures, ...laterFixtures]) {
   for (let i = 1; i <= 3; i++) {
@@ -41,7 +48,7 @@ for (const match of [...fixtures, ...laterFixtures]) {
 }
 const lineup = (teamId) => ({ team: { id: teamId }, formation: "4-3-3", startXI: Array.from({ length: 11 }, (_, n) => ({ player: { id: teamId * 100 + n, name: `Starter ${teamId}-${n}` } })) });
 
-function mockProvider({ missingLineups = false, otherBook = false, missingPlayers = false, staleOdds = false, tomorrow = false, manyFixtures = false, marqueeMatch = false, minorMatch = false } = {}) {
+function mockProvider({ missingLineups = false, otherBook = false, missingPlayers = false, staleOdds = false, tomorrow = false, manyFixtures = false, marqueeMatch = false, minorMatch = false, marqueeHistory = false } = {}) {
   const listed = [...fixtures, ...(manyFixtures ? laterFixtures : []), ...(marqueeMatch ? [marquee] : []), ...(minorMatch ? [minor] : [])];
   return async (url) => {
     const path = url.pathname;
@@ -52,12 +59,17 @@ function mockProvider({ missingLineups = false, otherBook = false, missingPlayer
       fixture: { date: "2025-09-20T13:00:00Z", status: { short: "FT" } },
       teams: { home: team(2, "Beta"), away: team(1, "Alpha") }, goals: { home: 2, away: 1 },
     }] : [];
-    else if (path === "/fixtures") response = history.get(Number(url.searchParams.get("team"))) ?? [];
+    else if (path === "/fixtures") {
+      const teamId = Number(url.searchParams.get("team"));
+      response = marqueeHistory && (teamId === 11 || teamId === 12)
+        ? nationalHistory.filter((item) => item.teams.home.id === teamId || item.teams.away.id === teamId)
+        : history.get(teamId) ?? [];
+    }
     else if (path === "/fixtures/lineups") {
       const match = listed.find((item) => item.fixture.id === fixtureId);
       if (match) response = missingLineups ? [] : [lineup(match.teams.home.id), lineup(match.teams.away.id)];
       else {
-        const pastMatch = [...history.values()].flat().find((item) => item.fixture.id === fixtureId);
+        const pastMatch = [...history.values()].flat().concat(marqueeHistory ? nationalHistory : []).find((item) => item.fixture.id === fixtureId);
         response = pastMatch ? [lineup(pastMatch.teams.home.id), lineup(pastMatch.teams.away.id)] : [];
       }
     } else if (path === "/odds") {
@@ -203,15 +215,15 @@ test("the scan reports what it covered so an empty day is explainable", async ()
 });
 
 test("when every data gate drops the day, the top upcoming fixtures still publish", async () => {
-  // staleOdds strips every price, so nothing can be modelled or selected. The
-  // report must still list today's matches instead of rendering nothing.
+  // An older price cannot qualify as a pick, but the watch-only calculation
+  // can use actual results even before a new quote arrives.
   const input = await gatherLiveInput({ key: "test-key", now, request: mockProvider({ staleOdds: true, manyFixtures: true }) });
   const report = analyze(input);
   assert.equal(report.picks.length, 0);
   assert.equal(report.status, "no-picks");
   assert.ok(report.watchlist.length >= 3, `watchlist had ${report.watchlist.length}`);
-  // Nothing was modelled, so nothing may claim a probability or an edge.
-  assert.ok(report.watchlist.every((item) => item.probability === null && item.edge === null));
+  assert.ok(report.watchlist.every((item) => item.probability !== null && item.edge === null));
+  assert.ok(report.watchlist.every((item) => item.oddsStatus === "older"));
   assert.ok(report.watchlist.every((item) => item.home && item.away && item.kickoff && item.competition));
   // The rule is "top upcoming", so the soonest kickoffs lead.
   const kickoffs = report.watchlist.map((item) => item.kickoff);
@@ -224,16 +236,13 @@ test("when every data gate drops the day, the top upcoming fixtures still publis
 });
 
 test("the watchlist falls back to fixtures that only reached the price stage", async () => {
-  // missingPlayers keeps live prices but drops the fixture before the model, so
-  // the row must keep its real price and explain itself instead of inventing numbers.
+  // Missing player statistics still disqualify picks, but the historical
+  // goals estimate and actual quoted price remain available for watch only.
   const report = analyze(await gatherLiveInput({ key: "test-key", now, request: mockProvider({ missingPlayers: true, manyFixtures: true }) }));
   assert.ok(report.watchlist.length >= 3);
-  const dropped = report.watchlist.filter((item) => item.probability === null);
-  assert.ok(dropped.length > 0, "expected at least one unmodelled fixture");
-  assert.ok(dropped.every((item) => item.note && item.note.length > 0), "each unmodelled row explains itself");
-  // A price is real data and survives even with no model behind it.
-  assert.ok(dropped.every((item) => item.odds === null || item.odds > 1.01));
-  assert.ok(dropped.every((item) => item.homeForm?.games === 3 && item.awayForm?.games === 3));
+  assert.ok(report.watchlist.every((item) => item.note && item.note.length > 0));
+  assert.ok(report.watchlist.every((item) => item.odds > 1.01 && item.probability > 0));
+  assert.ok(report.watchlist.every((item) => item.homeForm?.games === 3 && item.awayForm?.games === 3));
 });
 
 test("modelled near-misses retain official crests and real home/away samples", async () => {
@@ -280,6 +289,82 @@ test("a marquee match remains visible when other matches qualify as picks", asyn
   assert.deepEqual(report.watchlist.map((item) => item.home), ["Spain"]);
 });
 
+test("pending international fixtures gain watch-only estimates, prior XIs and H2H before odds arrive", async () => {
+  const base = mockProvider({ otherBook: true, marqueeMatch: true, marqueeHistory: true, missingLineups: true });
+  const report = analyze(await gatherLiveInput({ key: "test-key", now, request: async (url) => {
+    if (url.pathname === "/odds" && url.searchParams.get("fixture") === "600") {
+      return { ok: true, json: async () => ({ response: [], paging: { total: 1 }, errors: [] }) };
+    }
+    return base(url);
+  } }));
+  const match = report.watchlist[0];
+  assert.equal(match.home, "Spain");
+  assert.equal(match.modelBasis, "recent");
+  assert.deepEqual(match.modelSample, { homeGames: 3, awayGames: 3 });
+  assert.ok(match.probability > 0);
+  assert.equal(match.odds, null);
+  assert.equal(match.edge, null);
+  assert.equal(match.lineup.home.status, "projected");
+  assert.equal(match.lineup.away.status, "projected");
+  assert.equal(match.lineup.home.starters, 11);
+  assert.deepEqual(match.headToHead, [{ date: "2026-09-20", homeGoals: 1, awayGoals: 2 }]);
+});
+
+test("a later scan upgrades available lineup and bookmaker evidence without changing pick rules", async () => {
+  const report = analyze(await gatherLiveInput({ key: "test-key", now: new Date("2026-09-26T12:20:00Z"),
+    request: mockProvider({ otherBook: true, marqueeMatch: true, marqueeHistory: true }) }));
+  const match = report.watchlist[0];
+  assert.equal(match.home, "Spain");
+  assert.equal(match.lineup.home.status, "confirmed");
+  assert.equal(match.oddsStatus, "recent");
+  assert.equal(match.oddsUpdatedAt, "2026-09-26T11:00:00Z");
+  assert.ok(match.odds > 1);
+  assert.ok(match.probability > 0);
+  assert.equal(report.picks.length, 0); // Missing national-team season stats still disqualify picks.
+});
+
+test("watch-only odds keep an older price labelled stale while the model still uses results", async () => {
+  const report = analyze(await gatherLiveInput({ key: "test-key", now, request: mockProvider({ staleOdds: true }) }));
+  assert.equal(report.picks.length, 0);
+  assert.equal(report.watchlist[0].oddsStatus, "older");
+  assert.equal(report.watchlist[0].oddsUpdatedAt, "2026-09-25T11:00:00Z");
+  assert.ok(report.watchlist[0].probability > 0);
+  assert.equal(report.watchlist[0].edge, null, "a historical quote cannot establish today's market edge");
+});
+
+test("a newer market timestamp on the bet beats an older listing timestamp", async () => {
+  const base = mockProvider({ otherBook: true });
+  const report = analyze(await gatherLiveInput({ key: "test-key", now, request: async (url) => {
+    const response = await base(url);
+    if (url.pathname !== "/odds") return response;
+    const body = await response.json();
+    const listing = body.response[0];
+    return { ok: true, json: async () => ({ ...body, response: [{ ...listing,
+      update: "2026-09-25T11:00:00Z",
+      bookmakers: listing.bookmakers.map((bookmaker) => ({ ...bookmaker,
+        bets: bookmaker.bets.map((bet) => ({ ...bet, update: "2026-09-26T11:30:00Z" })) })) }] }) };
+  } }));
+  assert.equal(report.watchlist[0].oddsStatus, "recent");
+  assert.equal(report.watchlist[0].oddsUpdatedAt, "2026-09-26T11:30:00Z");
+});
+
+test("a stale bet timestamp is not made fresh by an unrelated listing update", async () => {
+  const base = mockProvider({ otherBook: true });
+  const report = analyze(await gatherLiveInput({ key: "test-key", now, request: async (url) => {
+    const response = await base(url);
+    if (url.pathname !== "/odds") return response;
+    const body = await response.json();
+    const listing = body.response[0];
+    return { ok: true, json: async () => ({ ...body, response: [{ ...listing,
+      update: "2026-09-26T11:30:00Z",
+      bookmakers: listing.bookmakers.map((bookmaker) => ({ ...bookmaker,
+        bets: bookmaker.bets.map((bet) => ({ ...bet, update: "2026-09-25T11:00:00Z" })) })) }] }) };
+  } }));
+  assert.equal(report.picks.length, 0);
+  assert.equal(report.watchlist[0].oddsStatus, "older");
+  assert.equal(report.watchlist[0].edge, null);
+});
+
 test("default scan omits the Eerste Divisie even when it starts earlier", async () => {
   const report = analyze(await gatherLiveInput({ key: "test-key", now, request: mockProvider({ staleOdds: true, marqueeMatch: true, minorMatch: true }) }));
   assert.equal(report.watchlist[0].home, "Spain");
@@ -316,7 +401,7 @@ test("only the provider's own team crests are published", async () => {
   assert.throws(() => analyze({ ...input, watchlist: [{ ...input.watchlist[0], homeLogo: "https://example.com/track.png" }] }), /provider team image URL/);
 });
 
-test("a fixture whose first enrichment request fails still has its crests and a reason", async () => {
+test("a fixture whose current XI request fails recovers its prior XI without inventing confirmation", async () => {
   const base = mockProvider();
   const input = await gatherLiveInput({ key: "test-key", now, request: async (url) => {
     if (url.pathname === "/fixtures/lineups" && url.searchParams.get("fixture") === "100") {
@@ -325,11 +410,10 @@ test("a fixture whose first enrichment request fails still has its crests and a 
     return base(url);
   } });
   const report = analyze(input);
-  const first = report.watchlist.find((item) => item.home === "Alpha");
+  const first = report.picks.find((item) => item.home === "Alpha");
   assert.ok(first);
-  assert.equal(first.homeLogo, "https://media.api-sports.io/football/teams/1.png");
-  assert.equal(first.probability, null);
-  assert.match(first.note, /נתוני הספק/);
+  assert.equal(first.fixture.lineup.homeKind, "projected");
+  assert.equal(first.fixture.lineup.awayKind, "projected");
 });
 
 test("the watchlist never repeats a match and is capped", async () => {

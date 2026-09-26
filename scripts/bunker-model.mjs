@@ -15,6 +15,18 @@ export function overTwo(mean) {
   return 1 - Math.exp(-mean) * (1 + mean + mean * mean / 2);
 }
 
+/** Evidence for the published model: at least three home and away results. */
+export function venueGoalEstimate(results, home, away) {
+  const homeSample = results.filter((row) => row.home === home);
+  const awaySample = results.filter((row) => row.away === away);
+  if (homeSample.length < 3 || awaySample.length < 3) return null;
+  const average = (rows, field) => rows.reduce((sum, row) => sum + row[field], 0) / rows.length;
+  const lambdaHome = (average(homeSample, "homeGoals") + average(awaySample, "homeGoals")) / 2;
+  const lambdaAway = (average(awaySample, "awayGoals") + average(homeSample, "awayGoals")) / 2;
+  const mean = lambdaHome + lambdaAway;
+  return { homeGames: homeSample.length, awayGames: awaySample.length, lambdaHome, lambdaAway, mean, probability: overTwo(mean) };
+}
+
 export function goalBuckets(mean) {
   const buckets = [Math.exp(-mean)];
   for (let i = 1; i <= 5; i++) buckets.push(buckets[i - 1] * mean / i);
@@ -101,22 +113,15 @@ export function analyze(input) {
         players: pick.players,
       };
     }
-    const homeSample = results.filter((row) => row.home === home);
-    const awaySample = results.filter((row) => row.away === away);
     // Refuse to infer strength from a token sample. No invented forecast when data is absent.
     let model = null;
-    if (homeSample.length >= 3 && awaySample.length >= 3) {
-      const average = (rows, field) => rows.reduce((sum, row) => sum + row[field], 0) / rows.length;
-      const lambdaHome = (average(homeSample, "homeGoals") + average(awaySample, "homeGoals")) / 2;
-      const lambdaAway = (average(awaySample, "awayGoals") + average(homeSample, "awayGoals")) / 2;
-      const mean = lambdaHome + lambdaAway;
-      const probability = overTwo(mean);
+    const estimate = venueGoalEstimate(results, home, away);
+    if (estimate) {
       model = {
-        homeGames: homeSample.length, awayGames: awaySample.length,
-        lambdaHome, lambdaAway, mean, probability,
-        buckets: goalBuckets(mean),
-        fairOdds: probability > 0 ? 1 / probability : null,
-        edge: probability * odds - 1,
+        ...estimate,
+        buckets: goalBuckets(estimate.mean),
+        fairOdds: estimate.probability > 0 ? 1 / estimate.probability : null,
+        edge: estimate.probability * odds - 1,
       };
     }
     return { id, home, away, homeCode, awayCode, homeFlag, awayFlag, market: "מעל 2.5 שערים", odds, breakEven: 1 / odds, model, fixture };
@@ -188,12 +193,29 @@ export function analyze(input) {
       assert(Number.isInteger(homeGoals) && Number.isInteger(awayGoals), `${label} scores must be integers`);
       return { date: row.date, homeGoals, awayGoals };
     });
-    const probability = optional(item.probability, `watchlist[${i}].probability`, 0.001, 1);
+    const probability = optional(item.probability, `watchlist[${i}].probability`, 0, 1);
     const quote = optional(item.odds, `watchlist[${i}].odds`, 1.01, 10000);
-    // A live price is real data and is kept even when the fixture never reached
-    // the model. The reverse is meaningless: a probability with no price has
-    // nothing to be an edge against, so that pairing is refused.
-    assert(probability === null || quote !== null, `watchlist[${i}] has a probability but no price`);
+    // A model can be computed before a bookmaker publishes its price. Do not
+    // infer market edge until both independent pieces of evidence are present.
+    const modelBasis = item.modelBasis ?? null;
+    assert(modelBasis === null || ["venue", "recent"].includes(modelBasis), `watchlist[${i}].modelBasis is invalid`);
+    assert(probability !== null || modelBasis === null, `watchlist[${i}] cannot label a missing model`);
+    let modelSample = null;
+    if (item.modelSample != null) {
+      assert(item.modelSample && typeof item.modelSample === "object", `watchlist[${i}].modelSample is invalid`);
+      const homeGames = number(item.modelSample.homeGames, `watchlist[${i}].modelSample.homeGames`, 3, 20);
+      const awayGames = number(item.modelSample.awayGames, `watchlist[${i}].modelSample.awayGames`, 3, 20);
+      assert(Number.isInteger(homeGames) && Number.isInteger(awayGames), `watchlist[${i}].modelSample must contain game counts`);
+      modelSample = { homeGames, awayGames };
+    }
+    const oddsStatus = item.oddsStatus ?? null;
+    assert(oddsStatus === null || ["recent", "older"].includes(oddsStatus), `watchlist[${i}].oddsStatus is invalid`);
+    const oddsUpdatedAt = item.oddsUpdatedAt == null ? null : text(item.oddsUpdatedAt, `watchlist[${i}].oddsUpdatedAt`);
+    assert((oddsStatus === null && oddsUpdatedAt === null) ||
+      (quote !== null && oddsUpdatedAt !== null && Number.isFinite(Date.parse(oddsUpdatedAt)) &&
+        Date.parse(oddsUpdatedAt) <= asOf && asOf - Date.parse(oddsUpdatedAt) <= 48 * 60 * 60 * 1000 &&
+        (oddsStatus !== "recent" || asOf - Date.parse(oddsUpdatedAt) <= 12 * 60 * 60 * 1000)),
+    `watchlist[${i}] odds timestamp is invalid or stale`);
     return {
       home: text(item.home, `watchlist[${i}].home`),
       away: text(item.away, `watchlist[${i}].away`),
@@ -211,10 +233,12 @@ export function analyze(input) {
       kickoff: text(item.kickoff, `watchlist[${i}].kickoff`),
       note: item.note === null || item.note === undefined ? null : text(item.note, `watchlist[${i}].note`),
       odds: quote,
+      oddsStatus, oddsUpdatedAt,
       probability,
+      modelBasis, modelSample,
       mean: optional(item.mean, `watchlist[${i}].mean`, 0, 12),
       fairOdds: probability && probability > 0 ? 1 / probability : null,
-      edge: probability === null || quote === null ? null : probability * quote - 1,
+      edge: probability === null || quote === null || oddsStatus === "older" ? null : probability * quote - 1,
     };
   });
   const scanNote = input.scanNote === undefined || input.scanNote === null

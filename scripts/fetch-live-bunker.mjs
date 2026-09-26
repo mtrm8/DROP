@@ -1,4 +1,4 @@
-import { analyze } from "./bunker-model.mjs";
+import { analyze, overTwo, venueGoalEstimate } from "./bunker-model.mjs";
 
 const BASE = "https://v3.football.api-sports.io";
 const flags = { Austria: "austria", Israel: "israel", Netherlands: "netherlands", Germany: "germany" };
@@ -63,6 +63,21 @@ function venueForm(rows, teamName, venue) {
     goalsAgainst: recent.reduce((total, row) => total + row[venue === "home" ? "awayGoals" : "homeGoals"], 0),
     recentTotals: recent.map((row) => row.homeGoals + row.awayGoals),
   };
+}
+
+/** A watch-only estimate can use recent results even when venue samples are sparse. */
+export function watchGoalEstimate(homeRows, awayRows, home, away) {
+  const unique = [...new Map([...homeRows, ...awayRows].map((row) => [row.fixtureId, row])).values()];
+  const venue = venueGoalEstimate(unique, home, away);
+  if (venue && venue.mean <= 12) return { probability: venue.probability, mean: venue.mean,
+    basis: "venue", homeGames: venue.homeGames, awayGames: venue.awayGames };
+  const recentHome = homeRows.slice(0, 5);
+  const recentAway = awayRows.slice(0, 5);
+  if (recentHome.length < 3 || recentAway.length < 3) return null;
+  const averageTotal = (rows) => rows.reduce((sum, row) => sum + row.homeGoals + row.awayGoals, 0) / rows.length;
+  const mean = (averageTotal(recentHome) + averageTotal(recentAway)) / 2;
+  return mean <= 12 ? { mean, probability: overTwo(mean), basis: "recent",
+    homeGames: recentHome.length, awayGames: recentAway.length } : null;
 }
 
 function headToHead(rows, homeId, awayId, now) {
@@ -225,7 +240,9 @@ export function selectValuePicks(candidates, asOf, minEdge = 0.04, timeZone = "A
       homeLogo: teamLogo(item.home), awayLogo: teamLogo(item.away),
       homeForm: item.homeForm ?? null, awayForm: item.awayForm ?? null,
       bookmaker: item.bookmaker.name, kickoff: item.kickoff, odds: item.odds,
-      probability: item.probability, mean: item.mean, note: null,
+      oddsUpdatedAt: item.oddsUpdatedAt, oddsStatus: "recent",
+      probability: item.probability, mean: item.mean, modelBasis: "venue",
+      modelSample: item.modelSample ?? null, note: null,
       lineup: item.lineupSummary ?? null, headToHead: [],
     }));
   const chosen = modelled.map((item) => `${item.home}|${item.away}`);
@@ -239,12 +256,16 @@ export function selectValuePicks(candidates, asOf, minEdge = 0.04, timeZone = "A
       homeForm: item.homeForm ?? null, awayForm: item.awayForm ?? null,
       bookmaker: item.bookmaker, kickoff: item.kickoff,
       odds: item.odds, probability: item.probability, mean: item.mean, note: item.note,
+      oddsUpdatedAt: item.oddsUpdatedAt ?? null, oddsStatus: item.oddsStatus ?? null,
+      modelBasis: item.modelBasis ?? null, modelSample: item.modelSample ?? null,
       lineup: item.lineup ?? null, headToHead: [],
     }));
   const rankedWatchlist = [...modelled, ...upcomingOnly]
     .sort((a, b) => fixturePriority(b) - fixturePriority(a) ||
       Number(b.probability !== null) - Number(a.probability !== null) ||
-      (a.probability !== null && b.probability !== null ? (b.probability * b.odds - a.probability * a.odds) : 0) ||
+      Number(b.oddsStatus === "recent") - Number(a.oddsStatus === "recent") ||
+      (a.probability !== null && b.probability !== null && a.odds !== null && b.odds !== null
+        ? b.probability * b.odds - a.probability * a.odds : 0) ||
       a.kickoff.localeCompare(b.kickoff))
     .map((item) => ({ ...item, priorityLabel: priorityLabel(item.leagueId) }));
   if (!best) return {
@@ -293,7 +314,7 @@ export function unavailableInput(now = new Date(), timeZone = "Asia/Jerusalem", 
   return {
     mode: "live",
     status: "unavailable",
-    statusMessage: `לא ניתן להשלים את עדכון הנתונים היום${why}. הבנקר יתעדכן שוב בסריקה היומית הבאה.`,
+    statusMessage: `לא ניתן להשלים את עדכון הנתונים היום${why}. הבנקר יתעדכן שוב בסריקה המתוזמנת הבאה.`,
     source: "עדכון נתוני הספק לא הושלם",
     asOf: now.toISOString(),
     timeZone,
@@ -345,6 +366,36 @@ export async function gatherLiveInput({ key, leagues = DEFAULT_LEAGUES, timeZone
     if (!lineups.has(id)) lineups.set(id, await api("/fixtures/lineups", { fixture: id }));
     return lineups.get(id);
   };
+  const priorXI = async (rows, teamId) => {
+    for (const row of rows.slice(0, 5)) {
+      try {
+        const entries = await lineupFor(row.fixtureId);
+        const entry = entries.find((item) => item.team?.id === teamId);
+        const ids = starters(entry);
+        if (new Set(ids).size === 11) return { ids, entry };
+      } catch {
+        // A missing historical XI must not hide another available one.
+      }
+    }
+    return null;
+  };
+  const projectMissingLineups = async (fixture, homeRows, awayRows) => {
+    const [home, away] = await Promise.all([
+      fixture.lineup.home.status === "confirmed" ? null : priorXI(homeRows, fixture.homeId),
+      fixture.lineup.away.status === "confirmed" ? null : priorXI(awayRows, fixture.awayId),
+    ]);
+    if (home) fixture.lineup.home = lineupSnapshot(home.entry, "projected");
+    if (away) fixture.lineup.away = lineupSnapshot(away.entry, "projected");
+  };
+  const applyWatchEstimate = (fixture, homeRows, awayRows) => {
+    const estimate = watchGoalEstimate(homeRows, awayRows, fixture.home, fixture.away);
+    if (!estimate) return;
+    fixture.probability = estimate.probability;
+    fixture.mean = estimate.mean;
+    fixture.modelBasis = estimate.basis;
+    fixture.modelSample = { homeGames: estimate.homeGames, awayGames: estimate.awayGames };
+    if (fixture.odds !== null && fixture.oddsStatus === "recent") fixture.edge = estimate.probability * fixture.odds - 1;
+  };
   const playerSeason = async (team, league) => {
     const cacheKey = `${team.id}/${league.id}/${league.season}`;
     if (!playerSeasons.has(cacheKey)) playerSeasons.set(cacheKey, await api("/players", { team: team.id, league: league.id, season: league.season }));
@@ -368,12 +419,17 @@ export async function gatherLiveInput({ key, leagues = DEFAULT_LEAGUES, timeZone
       homeForm: null, awayForm: null,
       lineup: null,
       competition: match.league.name, kickoff: match.fixture.date,
-      odds: null, bookmaker: null,
-      probability: null, mean: null, edge: null, note: null,
+      odds: null, bookmaker: null, oddsUpdatedAt: null, oddsStatus: null,
+      probability: null, mean: null, edge: null, modelBasis: null, modelSample: null, note: null,
     };
     fixtures_.push(fixture);
     try {
-      const current = await lineupFor(match.fixture.id);
+      let current = [];
+      try {
+        current = await lineupFor(match.fixture.id);
+      } catch (error) {
+        console.warn(`Current XI unavailable for ${fixture.home} v ${fixture.away}: ${error.message}`);
+      }
       const currentHome = current.find((entry) => entry.team?.id === match.teams.home.id);
       const currentAway = current.find((entry) => entry.team?.id === match.teams.away.id);
       const confirmedHomeIds = starters(currentHome);
@@ -384,17 +440,27 @@ export async function gatherLiveInput({ key, leagues = DEFAULT_LEAGUES, timeZone
       };
 
       const listings = await api("/odds", { fixture: match.fixture.id });
-      const quotes = listings.flatMap((listing) => (listing.bookmakers ?? []).flatMap((bookmaker) =>
+      const priced = listings.flatMap((listing) => (listing.bookmakers ?? []).flatMap((bookmaker) =>
         (bookmaker.bets ?? []).filter((bet) => bet.id === 5 || bet.name === "Goals Over/Under").map((bet) => ({
           bookmaker, odds: Number(bet.values?.find((value) => value.value === "Over 2.5")?.odd),
-          oddsUpdatedAt: listing.update ?? bet.update,
+          // A bet-specific timestamp is stronger evidence for this exact
+          // price than the listing's update (which may cover another market).
+          oddsUpdatedAt: [bet.update, listing.update].find((stamp) =>
+            Number.isFinite(Date.parse(stamp)) && Date.parse(stamp) <= now.getTime()),
         })))).filter(({ bookmaker, odds, oddsUpdatedAt }) =>
         Number.isInteger(bookmaker.id) && bookmaker.name && Number.isFinite(odds) && odds > 1.01 && odds <= 100 &&
         oddsUpdatedAt && Number.isFinite(Date.parse(oddsUpdatedAt)) && Date.parse(oddsUpdatedAt) <= now.getTime() &&
-        now.getTime() - Date.parse(oddsUpdatedAt) <= ODDS_AGE_MS);
-      const bestQuote = quotes.reduce((best, item) => (!best || item.odds > best.odds ? item : best), null);
+        now.getTime() - Date.parse(oddsUpdatedAt) <= 48 * 60 * 60 * 1000);
+      // Only fresh odds qualify for picks. An older *real* quote may still be
+      // displayed on the watchlist, clearly stamped as a historical price.
+      const quotes = priced.filter((item) => now.getTime() - Date.parse(item.oddsUpdatedAt) <= ODDS_AGE_MS);
+      const displayQuotes = quotes.length ? quotes : priced;
+      const bestQuote = [...displayQuotes].sort((a, b) =>
+        Date.parse(b.oddsUpdatedAt) - Date.parse(a.oddsUpdatedAt) || b.odds - a.odds)[0] ?? null;
       fixture.odds = bestQuote?.odds ?? null;
       fixture.bookmaker = bestQuote?.bookmaker.name ?? null;
+      fixture.oddsUpdatedAt = bestQuote?.oddsUpdatedAt ?? null;
+      fixture.oddsStatus = bestQuote ? quotes.length ? "recent" : "older" : null;
       const reject = (reason) => {
         fixture.note = reason;
         return reason;
@@ -408,8 +474,12 @@ export async function gatherLiveInput({ key, leagues = DEFAULT_LEAGUES, timeZone
           const [home, away] = await Promise.allSettled([
             teamHistory(match.teams.home), teamHistory(match.teams.away),
           ]);
-          if (home.status === "fulfilled") fixture.homeForm = venueForm(home.value, fixture.home, "home");
-          if (away.status === "fulfilled") fixture.awayForm = venueForm(away.value, fixture.away, "away");
+          const homeRows = home.status === "fulfilled" ? home.value : [];
+          const awayRows = away.status === "fulfilled" ? away.value : [];
+          fixture.homeForm = venueForm(homeRows, fixture.home, "home");
+          fixture.awayForm = venueForm(awayRows, fixture.away, "away");
+          applyWatchEstimate(fixture, homeRows, awayRows);
+          await projectMissingLineups(fixture, homeRows, awayRows);
         }
         continue;
       }
@@ -420,6 +490,8 @@ export async function gatherLiveInput({ key, leagues = DEFAULT_LEAGUES, timeZone
       ]);
       fixture.homeForm = venueForm(homeResults, fixture.home, "home");
       fixture.awayForm = venueForm(awayResults, fixture.away, "away");
+      applyWatchEstimate(fixture, homeResults, awayResults);
+      if (fixtures_.length <= 5) await projectMissingLineups(fixture, homeResults, awayResults);
       if (homeResults.filter((row) => row.home === match.teams.home.name).length < 3 ||
           awayResults.filter((row) => row.away === match.teams.away.name).length < 3) {
         dropped.noHistory++;
@@ -428,15 +500,6 @@ export async function gatherLiveInput({ key, leagues = DEFAULT_LEAGUES, timeZone
       }
       // Use the most recent match that actually published a starting XI. A single
       // fixture with missing lineup data was enough to discard the whole day.
-      const priorXI = async (rows, teamId) => {
-        for (const row of rows.slice(0, 5)) {
-          const entries = await lineupFor(row.fixtureId);
-          const entry = entries.find((item) => item.team?.id === teamId);
-          const ids = starters(entry);
-          if (new Set(ids).size === 11) return { ids, entry };
-        }
-        return null;
-      };
       const [priorHome, priorAway] = await Promise.all([
         priorXI(homeResults, match.teams.home.id), priorXI(awayResults, match.teams.away.id),
       ]);
@@ -505,7 +568,8 @@ export async function gatherLiveInput({ key, leagues = DEFAULT_LEAGUES, timeZone
           kickoff: match.fixture.date, competition: match.league.name, bookmaker: { id: bookmaker.id, name: bookmaker.name },
           oddsUpdatedAt, odds, probability: model.probability, mean: model.mean,
           edge: model.probability * odds - 1, lineup, players, results,
-          homeForm: fixture.homeForm, awayForm: fixture.awayForm, lineupSummary: fixture.lineup });
+          homeForm: fixture.homeForm, awayForm: fixture.awayForm, lineupSummary: fixture.lineup,
+          modelSample: fixture.modelSample });
       }
     } catch (error) {
       // One unreachable fixture, a rate-limited odds call or a lineup
@@ -526,6 +590,22 @@ export async function gatherLiveInput({ key, leagues = DEFAULT_LEAGUES, timeZone
       item.headToHead = headToHead(meetings, item.homeId, item.awayId, now);
     } catch (error) {
       console.warn(`H2H unavailable for ${item.home} v ${item.away}: ${error.message}`);
+    }
+    if (!item.headToHead.length) {
+      // The dedicated endpoint may be empty or unavailable on some plans.
+      // Reuse already fetched recent results and request only missing teams.
+      const [home, away] = await Promise.allSettled([
+        teamHistory({ id: item.homeId }), teamHistory({ id: item.awayId }),
+      ]);
+      const rows = [...(home.status === "fulfilled" ? home.value : []), ...(away.status === "fulfilled" ? away.value : [])];
+      item.headToHead = [...new Map(rows.filter((row) =>
+        (row.home === item.home && row.away === item.away) ||
+        (row.home === item.away && row.away === item.home))
+        .map((row) => [row.fixtureId, row])).values()]
+        .sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5)
+        .map((row) => ({ date: row.date,
+          homeGoals: row.home === item.home ? row.homeGoals : row.awayGoals,
+          awayGoals: row.away === item.away ? row.awayGoals : row.homeGoals }));
     }
   }
   // Validate the exact payload that will be published, not just intermediate estimates.

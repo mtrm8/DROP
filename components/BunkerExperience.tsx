@@ -74,12 +74,20 @@ export default function BunkerExperience() {
       }
     };
     void update();
-    const interval = window.setInterval(() => void update(), 5 * 60 * 1000);
+    // Check more often while a pre-match card is missing a confirmed XI or a
+    // fresh quote. This checks the public export only; the API key stays server-side.
+    const pending = report.watchlist?.some((item) =>
+      Date.parse(item.kickoff) > Date.now() &&
+      (item.lineup?.home.status !== "confirmed" || item.lineup?.away.status !== "confirmed" || item.oddsStatus !== "recent"));
+    const interval = window.setInterval(() => void update(), pending ? 60_000 : 5 * 60_000);
+    const onVisible = () => { if (document.visibilityState === "visible") void update(); };
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
       active = false;
       window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [access]);
+  }, [access, report]);
 
   if (access === "checking") {
     return (

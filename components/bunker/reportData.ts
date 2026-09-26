@@ -75,7 +75,11 @@ export type WatchItem = {
   bookmaker: string | null;
   kickoff: string;
   odds: number | null;
+  oddsStatus: "recent" | "older" | null;
+  oddsUpdatedAt: string | null;
   probability: number | null;
+  modelBasis: "venue" | "recent" | null;
+  modelSample: { homeGames: number; awayGames: number } | null;
   mean: number | null;
   fairOdds: number | null;
   edge: number | null;

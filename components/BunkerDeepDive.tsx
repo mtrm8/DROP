@@ -238,19 +238,19 @@ function HeadToHead({ meetings, home, away, reduced }: { meetings: Meeting[]; ho
 }
 
 function SquadSnapshot({ team, evidence }: { team: string; evidence: LineupEvidence | null }) {
-  const status = evidence?.status === "confirmed" ? "הרכב מאושר" : evidence?.status === "projected" ? "על בסיס המשחק הקודם" : "הרכב לא פורסם";
+  const status = evidence?.status === "confirmed" ? "הרכב מאושר למשחק" : evidence?.status === "projected" ? "הרכב קודם · משוער בלבד" : evidence?.starters ? "הרכב חלקי · טרם אושר" : "הרכב למשחק טרם פורסם";
   return <div className="rounded-xl border border-white/[0.07] bg-black/20 p-3.5">
     <p className="text-xs font-black text-white">{team}</p>
-    <p className={`mt-2 text-[11px] font-bold ${evidence?.status === "confirmed" ? "text-emerald-200" : "text-amber-200"}`}>{status} · {evidence?.starters ?? 0}/11 שחקנים</p>
+    <p className={`mt-2 text-[11px] font-bold ${evidence?.status === "confirmed" ? "text-emerald-200" : "text-amber-200"}`}>{status}{evidence?.starters ? ` · ${evidence.starters}/11` : ""}</p>
     {evidence?.formation && <p className="mt-1 text-[10px] text-slate-300">מערך {evidence.status === "confirmed" ? "שפורסם" : "מהמשחק הקודם"}: <bdi dir="ltr" className="font-mono text-cyan-200">{evidence.formation}</bdi></p>}
     {evidence?.changes != null && <p className="mt-1 text-[10px] text-slate-400">{evidence.changes} שינויים מההרכב האחרון במדגם</p>}
-    {evidence?.keyPlayers?.length ? <p className="mt-2 text-[10px] leading-5 text-slate-400">שמות בהרכב {evidence.status === "confirmed" ? "שפורסם" : "הקודם"}: {evidence.keyPlayers.join(" · ")}</p> : <p className="mt-2 text-[10px] text-slate-500">לא סופקו שמות שחקנים להרכב זה.</p>}
+    {evidence?.keyPlayers?.length ? <p className="mt-2 text-[10px] leading-5 text-slate-400">שמות בהרכב {evidence.status === "confirmed" ? "שפורסם" : evidence.status === "projected" ? "הקודם" : "החלקי"}: {evidence.keyPlayers.join(" · ")}</p> : <p className="mt-2 text-[10px] text-slate-500">{evidence?.status === "unavailable" || !evidence ? "לא סופק הרכב מלא במקור הנתונים." : "לא סופקו שמות שחקנים להרכב זה."}</p>}
   </div>;
 }
 
 function WatchlistCard({ item, index, timeZone }: { item: WatchItem; index: number; timeZone: string }) {
   const reduced = useReducedMotion();
-  const hasModel = item.probability != null && item.edge != null;
+  const hasModel = item.probability != null;
   const marketThreshold = item.odds == null ? null : 1 / item.odds;
   const metrics = [
     { label: "יחס שוק · מעל 2.5", value: item.odds == null ? "—" : item.odds.toFixed(2), color: "text-amber-100" },
@@ -274,7 +274,7 @@ function WatchlistCard({ item, index, timeZone }: { item: WatchItem; index: numb
             </div>
             <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[10px] font-bold ${hasModel ? "border-cyan-300/25 bg-cyan-300/[0.08] text-cyan-100" : "border-amber-200/25 bg-amber-200/[0.07] text-amber-100"}`}>
               <motion.span className={`h-1.5 w-1.5 rounded-full ${hasModel ? "bg-cyan-300 shadow-[0_0_10px_rgba(103,232,249,.8)]" : "bg-amber-200 shadow-[0_0_10px_rgba(253,230,138,.7)]"}`} animate={reduced ? undefined : { opacity: [0.6, 1, 0.6], scale: [1, 1.3, 1] }} transition={{ duration: 2.3, repeat: Infinity }} />
-              {hasModel ? "מודל מחושב" : "מעקב · נתונים חלקיים"}
+              {hasModel ? item.modelBasis === "recent" ? "אומדן ניסיוני · מדגם אחרון" : "מודל שערים מחושב" : "מעקב · נתונים חלקיים"}
             </span>
           </div>
 
@@ -288,6 +288,9 @@ function WatchlistCard({ item, index, timeZone }: { item: WatchItem; index: numb
               <span className="inline-flex items-center gap-1.5"><Clock3 size={13} className="text-cyan-300/70" /> שריקת פתיחה <bdi dir="ltr" className="font-mono text-slate-200">{new Date(item.kickoff).toLocaleString("he-IL", { timeZone, day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</bdi></span>
               {item.bookmaker && <span>יחס מ־{item.bookmaker}</span>}
             </p>
+            {item.oddsUpdatedAt && <p className={`mt-2 text-center text-[10px] ${item.oddsStatus === "older" ? "font-bold text-amber-200" : "text-slate-500"}`}>
+              {item.oddsStatus === "older" ? "מחיר אחרון שנמצא · ייתכן שהשתנה" : "מחיר בעת הסריקה"} · {new Date(item.oddsUpdatedAt).toLocaleString("he-IL", { timeZone, day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+            </p>}
           </div>
 
           <div className="relative mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -301,17 +304,18 @@ function WatchlistCard({ item, index, timeZone }: { item: WatchItem; index: numb
 
           <div className="relative mt-5 rounded-2xl border border-cyan-300/10 bg-cyan-300/[0.025] p-4">
             <div className="flex items-center justify-between gap-2 text-[11px] font-bold text-cyan-100"><span>מפת הסתברויות · מעל 2.5 שערים</span>{item.mean != null && <span className="font-mono text-cyan-200" dir="ltr">λ {item.mean.toFixed(2)}</span>}</div>
-            {hasModel && marketThreshold != null ? <div className="mt-4 space-y-3">
+            {hasModel ? <div className="mt-4 space-y-3">
               {[
                 { label: "הערכת מודל", value: item.probability!, color: "bg-gradient-to-l from-cyan-300 to-emerald-400" },
-                { label: "סף איזון לפי יחס", value: marketThreshold, color: "bg-gradient-to-l from-amber-200 to-amber-500" },
+                ...(marketThreshold == null ? [] : [{ label: item.oddsStatus === "older" ? "סף לפי מחיר קודם" : "סף איזון לפי יחס", value: marketThreshold, color: "bg-gradient-to-l from-amber-200 to-amber-500" }]),
               ].map((bar) => <div key={bar.label}>
                 <div className="mb-1.5 flex justify-between text-[10px] text-slate-300"><span>{bar.label}</span><span className="font-mono" dir="ltr">{percent(bar.value)}</span></div>
                 <div className="h-2 overflow-hidden rounded-full bg-white/[0.07]" role="img" aria-label={`${bar.label}: ${percent(bar.value)}`}>
                   <motion.div className={`h-full rounded-full ${bar.color}`} initial={reduced ? false : { width: 0 }} whileInView={{ width: `${bar.value * 100}%` }} viewport={{ once: true }} transition={{ duration: reduced ? 0 : 0.9, ease: "easeOut" }} />
                 </div>
               </div>)}
-            </div> : <p className="mt-3 text-[11px] leading-5 text-slate-400">לא חושבה הסתברות עצמאית למשחק זה; אין גרף תחזית ללא נתוני מודל מאומתים.</p>}
+              <p className="text-[10px] leading-5 text-slate-400">{item.modelBasis === "recent" ? `אומדן מהשערים ב־${item.modelSample?.homeGames ?? "—"} ו־${item.modelSample?.awayGames ?? "—"} המשחקים האחרונים, ללא הפרדה לבית/חוץ; אינו בסיס לבחירה.` : marketThreshold == null ? "לא פורסם מחיר עדכני להשוואה מול המודל." : item.oddsStatus === "older" ? "מחיר קודם בלבד; אין להסיק ממנו פער שוק עדכני." : "מודל שערים היסטורי מול סף מחיר השוק בעת הסריקה."}</p>
+            </div> : <p className="mt-3 text-[11px] leading-5 text-slate-400">לא חושבה הסתברות עצמאית למשחק זה; אין גרף תחזית ללא מדגם תוצאות מספיק.</p>}
           </div>
 
           <div className="relative mt-5">
@@ -337,7 +341,7 @@ function WatchlistCard({ item, index, timeZone }: { item: WatchItem; index: numb
             <Info size={15} className="mt-1 shrink-0 text-amber-200" />
             <div>
               <p className="font-black text-amber-100">ניתוח לפני המשחק · למה הוא במעקב?</p>
-              <p className="mt-1">{item.priorityLabel ? `${item.priorityLabel} ${item.round ? `· ${item.round}` : ""} · ` : ""}{item.note || (hasModel ? `המודל מעריך ${percent(item.probability!)} לשלושה שערים ומעלה, לעומת סף איזון של ${percent(marketThreshold!)} לפי המחיר. לא נמצא צבר שעומד בתנאי הבחירה.` : "אין מספיק נתונים לחישוב פער מבוסס.")}</p>
+              <p className="mt-1">{item.priorityLabel ? `${item.priorityLabel} ${item.round ? `· ${item.round}` : ""} · ` : ""}{item.note || (hasModel ? `אומדן השערים מצביע על ${percent(item.probability!)} לשלושה שערים ומעלה${marketThreshold == null ? "; טרם נמצא מחיר להשוואה" : item.oddsStatus === "older" ? "; המחיר האחרון זקוק לאימות מחדש" : ` לעומת סף איזון של ${percent(marketThreshold)} לפי המחיר`}. המשחק אינו חלק מהצבר שנבחר.` : "אין מספיק נתונים לחישוב פער מבוסס.")}</p>
               {item.homeForm && item.awayForm && <p className="mt-2 text-slate-400">במדגם המקום שנאסף, {item.home} כבשה בממוצע {(item.homeForm.goalsFor / item.homeForm.games).toFixed(1)} בבית ו־{item.away} ספגה {(item.awayForm.goalsAgainst / item.awayForm.games).toFixed(1)} בחוץ; זו תמונת שערים היסטורית, לא ניתוח של לחץ או איכות יריבה.</p>}
               <p className="mt-2 text-amber-100/80">מידע למעקב בלבד · לא המלצה.</p>
             </div>
