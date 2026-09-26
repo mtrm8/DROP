@@ -7,7 +7,10 @@ import { ArrowLeft, Atom, BrainCircuit, LockKeyhole, ShieldCheck } from "lucide-
 import Navbar from "./Navbar";
 import CommunityFooter from "./CommunityFooter";
 import BunkerDeepDive from "./BunkerDeepDive";
-import report from "./bunker/reportData";
+import initialReport from "./bunker/reportData";
+import type { Report } from "./bunker/reportData";
+import { evaluateReport, statusLabel, statusSummary, supersedes } from "./bunker/reportStatus";
+import type { ReportStatus } from "./bunker/reportStatus";
 import { useFreshPageView } from "./useFreshPageView";
 import { consumeBunkerEntry } from "./drop/bunkerEntry";
 
@@ -29,6 +32,17 @@ function LocalClock() {
 export default function BunkerExperience() {
   useFreshPageView();
   const [access, setAccess] = useState<AccessState>("checking");
+  const [report, setReport] = useState<Report>(initialReport);
+  const [status, setStatus] = useState<ReportStatus | null>(null);
+
+  // The published report is a daily snapshot: resolve what it means for the
+  // visitor's clock in the browser, and keep it honest while the tab stays open.
+  useEffect(() => {
+    const check = () => setStatus(evaluateReport(report, new Date()));
+    check();
+    const interval = window.setInterval(check, 60_000);
+    return () => window.clearInterval(interval);
+  }, [report]);
 
   useEffect(() => {
     setAccess(consumeBunkerEntry() ? "granted" : "locked");
@@ -38,6 +52,33 @@ export default function BunkerExperience() {
     window.addEventListener("pageshow", onPageShow);
     return () => window.removeEventListener("pageshow", onPageShow);
   }, []);
+
+  // The build publishes the processed report as static JSON, so an open session
+  // can pick up a newer daily scan without a reload and without losing access.
+  useEffect(() => {
+    if (access !== "granted") return;
+    let active = true;
+    const update = async () => {
+      try {
+        const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+        const response = await fetch(`${basePath}/bunker-data.json?updated=${Date.now()}`, { cache: "no-store" });
+        if (!response.ok) return;
+        const latest = await response.json() as Report;
+        if (active && latest.mode === "live" && Array.isArray(latest.picks) &&
+          ["ready", "no-picks", "unavailable"].includes(latest.status) && Number.isFinite(Date.parse(latest.asOf))) {
+          setReport((current) => supersedes(current, latest) ? latest : current);
+        }
+      } catch {
+        // Keep the last verified snapshot if Pages is between deployments.
+      }
+    };
+    void update();
+    const interval = window.setInterval(() => void update(), 5 * 60 * 1000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [access]);
 
   if (access === "checking") {
     return (
@@ -91,7 +132,7 @@ export default function BunkerExperience() {
               <p className="mt-5 flex items-center gap-2 text-sm font-bold text-cyan-200"><BrainCircuit size={18} /> איינשטיין דרופ · שולחן האנליסט</p>
               <h1 className="mt-2 text-4xl font-black tracking-tight text-white sm:text-6xl"><span className="bg-gradient-to-l from-cyan-200 via-cyan-400 to-lime-300 bg-clip-text text-transparent">הבנקר</span></h1>
               <p className="mt-3 text-lg font-bold text-slate-200">{report.picks.length ? `דוח קדם־משחק · ניתוח ${report.picks.length} בחירות שערים` : "דוח קדם־משחק · סריקת משחקי היום"}</p>
-              <p className="mt-2 max-w-xl text-sm leading-7 text-slate-400">{report.picks.length ? `${report.picks.map((pick) => `${pick.home}–${pick.away}`).join(" ו־")}: בחינת קו מעל 2.5 שערים, ספי האיזון והסיכון בטופס משולב.` : "בחירות יופיעו כאן רק לאחר אימות משחקים קרובים, נתוני שחקנים ויחסים עדכניים."} {report.mode === "demo" ? "נתוני הדגמה סינתטיים." : report.status === "unavailable" ? "ממתינים לעדכון מנתוני הספק." : `מקור הנתונים: ${report.source}.`}</p>
+              <p className="mt-2 max-w-xl text-sm leading-7 text-slate-400">{report.picks.length ? `${report.picks.map((pick) => `${pick.home}–${pick.away}`).join(" ו־")}: בחינת קו מעל 2.5 שערים, ספי האיזון והסיכון בטופס משולב.` : "בחירות יופיעו כאן רק לאחר אימות משחקים קרובים, נתוני שחקנים ויחסים עדכניים."} {status ? statusSummary(status, report) : ""}</p>
             </div>
             <motion.div
               animate={{ y: [0, -8, 0], rotate: [0, 3, 0] }}
@@ -103,12 +144,19 @@ export default function BunkerExperience() {
             </motion.div>
           </div>
           <div className="relative mt-7 flex flex-wrap items-center justify-between gap-3 border-t border-white/[0.08] pt-4 text-[10px] font-semibold text-cyan-100/60">
-            <span className="flex items-center gap-2"><motion.span className="h-2 w-2 rounded-full bg-emerald-300 shadow-[0_0_12px_rgba(52,211,153,.8)]" animate={{ opacity: [.45, 1, .45] }} transition={{ duration: 1.8, repeat: Infinity }} />דוח אנליסט · {report.mode === "demo" ? "סביבת הדגמה" : report.status === "unavailable" ? "ממתינים לסריקת נתונים" : "נתוני משחקים ויחסים עדכניים"}</span>
+            <span className="flex items-center gap-2">
+              <motion.span
+                className={`h-2 w-2 rounded-full ${status?.isLive ? "bg-emerald-300 shadow-[0_0_12px_rgba(52,211,153,.8)]" : "bg-amber-300 shadow-[0_0_12px_rgba(252,211,77,.7)]"}`}
+                animate={{ opacity: [.45, 1, .45] }}
+                transition={{ duration: 1.8, repeat: Infinity }}
+              />
+              {status ? statusLabel(status, report) : "דוח אנליסט · טוענים את מצב הסריקה"}
+            </span>
             <LocalClock />
           </div>
         </motion.header>
 
-        <BunkerDeepDive />
+        <BunkerDeepDive key={report.asOf} report={report} />
       </section>
       <CommunityFooter />
     </main>

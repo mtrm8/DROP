@@ -29,7 +29,7 @@ export type Pick = {
     oddsUpdatedAt: string;
     competition: string;
     bookmaker: string;
-    lineup: { homeStarters: number; awayStarters: number; homeChanges: number; awayChanges: number };
+    lineup: { homeKind: "confirmed" | "projected"; awayKind: "confirmed" | "projected"; homeStarters: number; awayStarters: number; homeChanges: number; awayChanges: number };
     players: { season: number; home: PlayerSummary[]; away: PlayerSummary[] };
   } | null;
 };
@@ -40,6 +40,7 @@ export type Report = {
   mode: "demo" | "live";
   source: string;
   asOf: string;
+  timeZone: string;
   picks: Pick[];
   combinedOdds: number;
   productOdds: number;
@@ -48,6 +49,7 @@ export type Report = {
   jointFairOdds: number | null;
   jointEdge: number | null;
   status: "ready" | "no-picks" | "unavailable";
+  statusMessage: string | null;
   methodology: string;
 };
 

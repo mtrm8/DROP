@@ -3,7 +3,7 @@ import { analyze } from "./bunker-model.mjs";
 const BASE = "https://v3.football.api-sports.io";
 const flags = { Austria: "austria", Israel: "israel", Netherlands: "netherlands", Germany: "germany" };
 const starters = (lineup) => (lineup?.startXI ?? []).map((player) => player?.player?.id).filter(Number.isInteger);
-const ODDS_AGE_MS = 2 * 60 * 60 * 1000;
+const ODDS_AGE_MS = 12 * 60 * 60 * 1000;
 
 export function todayInZone(date, timeZone) {
   const parts = Object.fromEntries(new Intl.DateTimeFormat("en-US", {
@@ -60,7 +60,7 @@ export function createProvider(key, request = fetch) {
   };
 }
 
-export function selectValuePicks(candidates, asOf, minEdge = 0.04) {
+export function selectValuePicks(candidates, asOf, minEdge = 0.04, timeZone = "Asia/Jerusalem") {
   // Accumulator legs must be offered by one bookmaker; combining prices from
   // different books would advertise a payout that cannot be placed.
   const byBook = new Map();
@@ -83,14 +83,15 @@ export function selectValuePicks(candidates, asOf, minEdge = 0.04) {
     best = { top, edge, quoted };
   }
   if (!best) return {
-    mode: "live", source: "API-Football · סריקה יומית ללא בחירות מאומתות",
-    asOf: asOf.toISOString(), combinedOdds: 1.01, picks: [], results: [],
+    mode: "live", source: "API-Football · סריקה יומית ללא שתי בחירות בעלות יתרון מבוסס",
+    asOf: asOf.toISOString(), timeZone, combinedOdds: 1.01, picks: [], results: [],
   };
   const { top, quoted } = best;
   return {
     mode: "live",
-    source: `API-Football · ${top[0].bookmaker.name} · תוצאות והרכבים מאומתים`,
+    source: `API-Football · ${top[0].bookmaker.name} · תוצאות, הרכבים ונתוני שחקנים`,
     asOf: asOf.toISOString(),
+    timeZone,
     combinedOdds: quoted,
     picks: top.map((item, index) => ({
       id: String(index + 1).padStart(2, "0"),
@@ -104,6 +105,26 @@ export function selectValuePicks(candidates, asOf, minEdge = 0.04) {
     })),
     results: [...new Map(top.flatMap((item) => item.results).map((row) => [row.fixtureId, row])).values()]
       .map(({ date, home, away, homeGoals, awayGoals }) => ({ date, home, away, homeGoals, awayGoals })),
+  };
+}
+
+/**
+ * The dated status published when a scheduled scan cannot reach the provider.
+ * It carries the current day so the page reports an outage for today instead of
+ * leaving yesterday's finished matches on screen, and it is a valid live
+ * report, so the daily build can still publish it.
+ */
+export function unavailableInput(now = new Date(), timeZone = "Asia/Jerusalem") {
+  return {
+    mode: "live",
+    status: "unavailable",
+    statusMessage: "לא ניתן להשלים את עדכון הנתונים היום. הבנקר יתעדכן שוב בסריקה היומית הבאה.",
+    source: "עדכון נתוני הספק לא הושלם",
+    asOf: now.toISOString(),
+    timeZone,
+    combinedOdds: 1.01,
+    picks: [],
+    results: [],
   };
 }
 
@@ -147,9 +168,8 @@ export async function gatherLiveInput({ key, leagues = [39, 61, 78, 135, 140], t
   const candidates = [];
   for (const match of upcoming) {
     const current = await lineupFor(match.fixture.id);
-    const homeIds = starters(current.find((entry) => entry.team?.id === match.teams.home.id));
-    const awayIds = starters(current.find((entry) => entry.team?.id === match.teams.away.id));
-    if (new Set(homeIds).size !== 11 || new Set(awayIds).size !== 11) continue;
+    const confirmedHomeIds = starters(current.find((entry) => entry.team?.id === match.teams.home.id));
+    const confirmedAwayIds = starters(current.find((entry) => entry.team?.id === match.teams.away.id));
 
     const listings = await api("/odds", { fixture: match.fixture.id });
     const quotes = listings.flatMap((listing) => (listing.bookmakers ?? []).flatMap((bookmaker) =>
@@ -175,10 +195,16 @@ export async function gatherLiveInput({ key, leagues = [39, 61, 78, 135, 140], t
     const lastHomeIds = starters(oldHome.find((entry) => entry.team?.id === match.teams.home.id));
     const lastAwayIds = starters(oldAway.find((entry) => entry.team?.id === match.teams.away.id));
     if (new Set(lastHomeIds).size !== 11 || new Set(lastAwayIds).size !== 11) continue;
+    const homeConfirmed = new Set(confirmedHomeIds).size === 11;
+    const awayConfirmed = new Set(confirmedAwayIds).size === 11;
+    const homeIds = homeConfirmed ? confirmedHomeIds : lastHomeIds;
+    const awayIds = awayConfirmed ? confirmedAwayIds : lastAwayIds;
     const lineup = {
       homeStarters: 11, awayStarters: 11,
-      homeChanges: homeIds.filter((id) => !lastHomeIds.includes(id)).length,
-      awayChanges: awayIds.filter((id) => !lastAwayIds.includes(id)).length,
+      homeKind: homeConfirmed ? "confirmed" : "projected",
+      awayKind: awayConfirmed ? "confirmed" : "projected",
+      homeChanges: homeConfirmed ? homeIds.filter((id) => !lastHomeIds.includes(id)).length : 0,
+      awayChanges: awayConfirmed ? awayIds.filter((id) => !lastAwayIds.includes(id)).length : 0,
     };
     if (lineup.homeChanges > 4 || lineup.awayChanges > 4) continue;
 
@@ -207,7 +233,7 @@ export async function gatherLiveInput({ key, leagues = [39, 61, 78, 135, 140], t
         edge: model.probability * odds - 1, lineup, players, results });
     }
   }
-  const input = selectValuePicks(candidates, now);
+  const input = selectValuePicks(candidates, now, 0.04, timeZone);
   // Validate the exact payload that will be published, not just intermediate estimates.
   const report = analyze(input);
   if (report.picks.length > 0 && (!report.picks.every((pick) => pick.model && pick.model.edge >= 0.04) || report.jointEdge < 0.04)) {

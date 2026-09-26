@@ -1,7 +1,7 @@
 import { MessageCircle, ShieldCheck } from "lucide-react";
 import { WHATSAPP_URL } from "./drop/community";
 
-export default function CommunityFooter({ hebrewBrand = false }: { hebrewBrand?: boolean }) {
+export default function CommunityFooter() {
   return (
     <footer className="premium-hairline w-full border-t border-white/[0.06] mt-8 sm:mt-12 px-4 lg:px-8 py-8 pb-[max(2rem,env(safe-area-inset-bottom))]">
       <div className="mx-auto flex w-full max-w-xl flex-col items-center gap-4 text-center">
@@ -16,7 +16,7 @@ export default function CommunityFooter({ hebrewBrand = false }: { hebrewBrand?:
         </a>
         <p className="text-[11px] text-slate-600 flex items-center gap-1.5">
           <ShieldCheck size={12} className="text-slate-500" />
-          {hebrewBrand ? "איינשטיין דרופ" : "Einstein Drop · איינשטיין דרופ"} — קהילת כדורגל ופוקר
+          Einstein Drop · איינשטיין דרופ — קהילת כדורגל ופוקר
         </p>
       </div>
     </footer>

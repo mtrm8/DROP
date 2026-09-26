@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import { strict as assert } from "node:assert";
-import { analyze } from "./bunker-model.mjs";
-import { gatherLiveInput, selectValuePicks, todayInZone } from "./fetch-live-bunker.mjs";
+import { analyze, assertPublishable } from "./bunker-model.mjs";
+import { gatherLiveInput, selectValuePicks, todayInZone, unavailableInput } from "./fetch-live-bunker.mjs";
 
 const now = new Date("2026-09-26T12:00:00Z");
 const team = (id, name) => ({ id, name, code: name.slice(0, 3).toUpperCase() });
@@ -58,6 +58,7 @@ test("fetches fixtures, verified XIs, historical scores and one-book odds to sel
   assert.equal(input.picks.length, 2);
   assert.equal(input.picks[0].bookmaker, input.picks[1].bookmaker);
   assert.equal(input.picks[0].lineup.homeChanges, 0);
+  assert.equal(input.picks[0].lineup.homeKind, "confirmed");
   assert.equal(input.picks[0].players.home.length, 11);
   assert.equal(report.picks[0].fixture.players.home[0].shots, 14);
   assert.equal(report.picks[0].fixture.players.home[0].shotsOnTarget, 6);
@@ -65,8 +66,16 @@ test("fetches fixtures, verified XIs, historical scores and one-book odds to sel
   assert.ok(report.jointEdge > 0.04);
 });
 
+test("daily scan labels missing confirmed XIs as projections from the previous match", async () => {
+  const input = await gatherLiveInput({ key: "test-key", now, request: mockProvider({ missingLineups: true }) });
+  assert.equal(input.picks.length, 2);
+  assert.equal(input.picks[0].lineup.homeKind, "projected");
+  assert.equal(input.picks[0].lineup.awayKind, "projected");
+  assert.equal(analyze(input).status, "ready");
+});
+
 test("publishes a fresh no-picks report rather than stale games when evidence is missing", async () => {
-  for (const options of [{ missingLineups: true }, { otherBook: true }, { missingPlayers: true }, { staleOdds: true }, { tomorrow: true }]) {
+  for (const options of [{ otherBook: true }, { missingPlayers: true }, { staleOdds: true }, { tomorrow: true }]) {
     const input = await gatherLiveInput({ key: "test-key", now, request: mockProvider(options) });
     assert.equal(input.picks.length, 0);
     assert.equal(analyze(input).status, "no-picks");
@@ -76,9 +85,10 @@ test("publishes a fresh no-picks report rather than stale games when evidence is
 
 test("live model rejects stale prices, departed fixtures, and unconfirmed starting elevens", async () => {
   const input = await gatherLiveInput({ key: "test-key", now, request: mockProvider() });
-  assert.throws(() => analyze({ ...input, picks: [{ ...input.picks[0], kickoff: "2026-09-26T11:00:00Z" }, input.picks[1]] }), /upcoming/);
-  assert.throws(() => analyze({ ...input, picks: [{ ...input.picks[0], oddsUpdatedAt: "2026-09-25T10:00:00Z" }, input.picks[1]] }), /odds must be recent/);
-  assert.throws(() => analyze({ ...input, picks: [{ ...input.picks[0], lineup: { ...input.picks[0].lineup, awayStarters: 10 } }, input.picks[1]] }), /confirmed, stable/);
+  assert.throws(() => analyze({ ...input, picks: [{ ...input.picks[0], kickoff: "2026-09-26T11:00:00Z" }, input.picks[1]] }), /upcoming today/);
+  assert.throws(() => analyze({ ...input, picks: [{ ...input.picks[0], kickoff: "2026-09-27T13:00:00Z" }, input.picks[1]] }), /upcoming today/);
+  assert.throws(() => analyze({ ...input, picks: [{ ...input.picks[0], oddsUpdatedAt: "2026-09-25T10:00:00Z" }, input.picks[1]] }), /odds must be updated today/);
+  assert.throws(() => analyze({ ...input, picks: [{ ...input.picks[0], lineup: { ...input.picks[0].lineup, awayStarters: 10 } }, input.picks[1]] }), /verified or explicitly projected/);
   assert.throws(() => analyze({ ...input, picks: [{ ...input.picks[0], players: { ...input.picks[0].players, home: [] } }, input.picks[1]] }), /player statistics/);
 });
 
@@ -91,4 +101,27 @@ test("selector never combines prices from different books or duplicates one fixt
 test("today respects the chosen timezone across the UTC date boundary", () => {
   assert.equal(todayInZone(new Date("2026-09-26T22:00:00Z"), "Asia/Jerusalem"), "2026-09-27");
   assert.equal(todayInZone(new Date("2026-09-26T22:00:00Z"), "UTC"), "2026-09-26");
+});
+
+test("the daily build publishes a long scan of the current day and refuses older ones", async () => {
+  const report = analyze(await gatherLiveInput({ key: "test-key", now, request: mockProvider() }));
+  // A sequential scan of every fixture easily outlives the fifteen-minute window
+  // the old gate imposed, which used to abort the run and freeze the site on the
+  // previous day's report.
+  assert.equal(assertPublishable(report, new Date("2026-09-26T12:50:00Z")), report);
+  assert.throws(() => assertPublishable(report, new Date("2026-09-27T09:00:00Z")), /current day/);
+  assert.throws(() => assertPublishable({ ...report, mode: "demo" }, now), /live input/);
+  assert.throws(() => assertPublishable({ ...report, asOf: "2026-09-26T20:00:00Z" }, now), /future/);
+  assert.throws(() => assertPublishable({ ...report, picks: [{ ...report.picks[0], fixture: { ...report.picks[0].fixture, kickoff: "2026-09-26T11:00:00Z" } }, report.picks[1]] }, now), /kicked off/);
+});
+
+test("a failed scan still publishes today's dated status instead of stale picks", () => {
+  const report = analyze(unavailableInput(now));
+  assert.equal(report.status, "unavailable");
+  assert.equal(report.picks.length, 0);
+  assert.equal(report.timeZone, "Asia/Jerusalem");
+  // Dated today it publishes, so the page names an outage for the current day...
+  assert.equal(assertPublishable(report, now), report);
+  // ...but it can never masquerade as a later day's completed scan.
+  assert.throws(() => assertPublishable(report, new Date("2026-09-27T09:00:00Z")), /current day/);
 });

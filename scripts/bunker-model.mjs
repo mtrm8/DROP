@@ -27,6 +27,9 @@ export function analyze(input) {
   const source = text(input.source, "source");
   assert(!Number.isNaN(Date.parse(input.asOf)) && /(?:Z|[+-]\d\d:\d\d)$/.test(input.asOf), "asOf must be an ISO timestamp with timezone");
   const asOf = Date.parse(input.asOf);
+  const timeZone = text(input.timeZone ?? "Asia/Jerusalem", "timeZone");
+  const localDate = (date) => new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(date));
+  localDate(asOf); // Validate the configured IANA timezone even for empty reports.
   const combinedOdds = number(input.combinedOdds, "combinedOdds", 1.01, 10000);
   assert(Array.isArray(input.picks) && input.picks.length <= 10 && (input.picks.length > 0 || input.mode === "live"), "provide 1–10 picks (or a live no-picks report)");
   assert(input.status !== "unavailable" || (input.mode === "live" && input.picks.length === 0), "unavailable status cannot contain selections");
@@ -68,13 +71,17 @@ export function analyze(input) {
     if (input.mode === "live") {
       const kickoff = text(pick.kickoff, `picks[${i}].kickoff`);
       const oddsUpdatedAt = text(pick.oddsUpdatedAt, `picks[${i}].oddsUpdatedAt`);
-      assert(Number.isFinite(Date.parse(kickoff)) && Date.parse(kickoff) > asOf, `picks[${i}] must be upcoming`);
+      assert(Number.isFinite(Date.parse(kickoff)) && Date.parse(kickoff) > asOf &&
+        localDate(kickoff) === localDate(asOf), `picks[${i}] must be upcoming today`);
       assert(Number.isFinite(Date.parse(oddsUpdatedAt)) && Date.parse(oddsUpdatedAt) <= asOf &&
-        asOf - Date.parse(oddsUpdatedAt) <= 2 * 60 * 60 * 1000, `picks[${i}] odds must be recent`);
+        asOf - Date.parse(oddsUpdatedAt) <= 12 * 60 * 60 * 1000 && localDate(oddsUpdatedAt) === localDate(asOf),
+      `picks[${i}] odds must be updated today`);
       assert(pick.lineup && pick.lineup.homeStarters === 11 && pick.lineup.awayStarters === 11 &&
+        ["confirmed", "projected"].includes(pick.lineup.homeKind) &&
+        ["confirmed", "projected"].includes(pick.lineup.awayKind) &&
         Number.isInteger(pick.lineup.homeChanges) && pick.lineup.homeChanges >= 0 && pick.lineup.homeChanges <= 4 &&
         Number.isInteger(pick.lineup.awayChanges) && pick.lineup.awayChanges >= 0 && pick.lineup.awayChanges <= 4,
-      `picks[${i}] requires confirmed, stable starting lineups`);
+      `picks[${i}] requires a verified or explicitly projected starting XI`);
       assert(pick.players && Number.isInteger(pick.players.season) &&
         Array.isArray(pick.players.home) && Array.isArray(pick.players.away) &&
         pick.players.home.length >= 9 && pick.players.away.length >= 9 &&
@@ -117,13 +124,45 @@ export function analyze(input) {
   const complete = picks.length > 0 && picks.every((pick) => pick.model !== null);
   const jointProbability = complete ? picks.reduce((product, pick) => product * pick.model.probability, 1) : null;
   return {
-    mode: input.mode, source, asOf: input.asOf, picks, combinedOdds, productOdds,
+    mode: input.mode, source, asOf: input.asOf, timeZone, picks, combinedOdds, productOdds,
     status: picks.length === 0 ? (input.status === "unavailable" ? "unavailable" : "no-picks") : "ready",
+    statusMessage: input.status === "unavailable" ? text(input.statusMessage ?? "טרם התקבל דוח מאומת להיום", "statusMessage") : null,
     breakEven: 1 / combinedOdds, jointProbability,
     jointFairOdds: jointProbability && jointProbability > 0 ? 1 / jointProbability : null,
     jointEdge: jointProbability === null ? null : jointProbability * combinedOdds - 1,
-    methodology: "ממוצע השערים הביתיים = ממוצע שערי הבית של המארחת ושערי החובה בחוץ של האורחת, חלקי שניים; ולהפך לשערי האורחת. סך השערים מחושב במודל פואסון. הסתברות משותפת מחושבת כמכפלת הסתברויות המשחקים בהנחת אי־תלות. הרכבים מאושרים מושווים להרכב הקודם; נתוני השחקנים הם הקשר בלבד ואינם משנים את תוחלת השערים. אין תיקון לרמת היריבות או מרווח ההימורים.",
+    methodology: "ממוצע השערים הביתיים = ממוצע שערי הבית של המארחת ושערי החובה בחוץ של האורחת, חלקי שניים; ולהפך לשערי האורחת. סך השערים מחושב במודל פואסון. הסתברות משותפת מחושבת כמכפלת הסתברויות המשחקים בהנחת אי־תלות. הרכב מאושר מושווה להרכב הקודם; כשאינו זמין, ההרכב הקודם מוצג כהערכה בלבד. נתוני השחקנים הם הקשר ואינם משנים את תוחלת השערים. אין תיקון לרמת היריבות או למרווח ההימורים.",
   };
+}
+
+/**
+ * Gate for automated (daily) publication.
+ *
+ * A daily scan walks every one of today's fixtures sequentially, so the report
+ * is normally much older than the run that requested it. What has to hold is
+ * that the report is real provider data describing the current local day, and
+ * that it only carries matches which have not kicked off. An earlier version
+ * also demanded a report younger than fifteen minutes, which aborted long scans
+ * and left the site serving the previous day's report.
+ */
+export function assertPublishable(report, now = new Date()) {
+  const asOf = Date.parse(report.asOf);
+  const timeZone = report.timeZone || "Asia/Jerusalem";
+  const localDay = (value) => new Intl.DateTimeFormat("en-CA", {
+    timeZone, year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(new Date(value));
+  if (report.mode !== "live" || (report.picks.length > 0 && report.jointProbability === null)) {
+    throw new Error("Automated publication requires live input and sufficient data for each selected match");
+  }
+  if (localDay(asOf) !== localDay(now.getTime())) {
+    throw new Error(`Automated publication requires a report for the current day in ${timeZone}, got ${localDay(asOf)}`);
+  }
+  if (asOf - now.getTime() > 60 * 60 * 1000) {
+    throw new Error("Live report timestamp is unexpectedly far in the future");
+  }
+  if (report.picks.some((pick) => !pick.fixture || Date.parse(pick.fixture.kickoff) <= now.getTime())) {
+    throw new Error("Automated publication requires only fixtures that have not kicked off");
+  }
+  return report;
 }
 
 // The existing GitHub Actions workflow executes this file directly. When it is

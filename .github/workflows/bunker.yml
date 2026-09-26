@@ -1,0 +1,59 @@
+name: Build and Publish Bunker Report
+
+on:
+  schedule:
+    # Once a day, 12:15 UTC (14:15/15:15 in Israel). Each run rebuilds the whole
+    # report from that day's fixtures; there is no shorter interval.
+    - cron: '15 12 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bunker-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - name: Fetch today's fixtures, lineups, results and prices
+        env:
+          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+          BUNKER_LEAGUES: ${{ vars.BUNKER_LEAGUES }}
+          # If the provider is unreachable the run still publishes today's dated
+          # status, so the site never keeps serving a previous day's report.
+          BUNKER_ALLOW_UNAVAILABLE: '1'
+        run: npm run bunker:fetch
+      - name: Verify the model and selection rules
+        run: npm run bunker:test
+      - name: Generate the daily report
+        env:
+          BUNKER_DATA_FILE: data/bunker-live.json
+          BUNKER_REQUIRE_LIVE: '1'
+        run: npm run bunker:generate
+      - name: Build GitHub Pages static export
+        run: npm run build:static
+      - name: Verify Pages export before publishing
+        run: |
+          test -s out/index.html
+          test -s out/bunker/index.html
+          test -s out/404.html
+          test -s out/bunker-data.json
+          test -f out/.nojekyll
+          test -d out/_next/static
+          ls -la out
+      - name: Publish the exported site
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./out
+          publish_branch: gh-pages
+          force_orphan: true

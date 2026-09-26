@@ -23,6 +23,14 @@ const ENTRY_PAD = 260;
 const ACTIVE_KEY = "drop-in-progress";
 
 type Phase = "grid" | "collect" | "revealSelection" | "shuffle" | "suspense" | "reveal" | "done";
+const TIMELINE: { at: number; phase: Phase }[] = [
+  { at: 0, phase: "collect" },
+  { at: 1400, phase: "revealSelection" },
+  { at: 2800, phase: "shuffle" },
+  { at: 7500, phase: "suspense" },
+  { at: 8600, phase: "reveal" },
+  { at: 10300, phase: "done" },
+];
 
 interface DealCard {
   id: number;
@@ -145,6 +153,38 @@ function buildDeck(prize: BoxItem): DealCard[] {
   }));
 }
 
+// Pick which locked card will visually carry the server-rolled prize and move
+// the prize into that slot. Pure, and it always returns a winner id, so the
+// reveal can never end up without a card to show. The prize itself is never
+// re-rolled: the amount was already decided by the server.
+function placePrize(cards: DealCard[], prize: BoxItem): { cards: DealCard[]; winnerId: number } {
+  const selected = cards.filter((card) => card.selected);
+  const fallback = selected[0] ?? cards[0];
+  if (!fallback) return { cards, winnerId: -1 };
+  const holder = selected.find((card) => card.item.id === prize.id);
+  if (holder) return { cards, winnerId: holder.id };
+  const original = cards.find((card) => card.item.id === prize.id);
+  const target = selected[Math.floor(Math.random() * selected.length)] ?? fallback;
+  if (!original) return { cards, winnerId: target.id };
+  return {
+    winnerId: target.id,
+    cards: cards.map((card) => card.id === target.id
+      ? { ...card, item: prize }
+      : card.id === original.id ? { ...card, item: target.item } : card),
+  };
+}
+
+// Resolve the phase from elapsed time alone, so the machine state can always be
+// recovered from the clock instead of depending on a chain of timers landing.
+function phaseAt(elapsed: number): Phase {
+  let current: Phase = TIMELINE[0].phase;
+  for (const step of TIMELINE) {
+    if (elapsed < step.at) break;
+    current = step.phase;
+  }
+  return current;
+}
+
 export function CardRevealAnimation({ onFinished, prize }: CardRevealProps) {
   const [cards, setCards] = useState<DealCard[]>(() => {
     try {
@@ -162,7 +202,11 @@ export function CardRevealAnimation({ onFinished, prize }: CardRevealProps) {
   });
   const [winnerId, setWinnerId] = useState<number | null>(null);
   const [phase, setPhase] = useState<Phase>("grid");
-  const machineStarted = useRef(false);
+  // Single source of truth for "the machine is running". A state value (not a
+  // ref) so the guard, the button and the timeline can never disagree, and a
+  // dropped click cannot start a second run on top of the first.
+  const [machine, setMachine] = useState<"idle" | "running">("idle");
+  const startedAt = useRef(0);
   const finished = useRef(false);
 
   const selectedCount = cards.filter((c) => c.selected).length;
@@ -209,18 +253,29 @@ export function CardRevealAnimation({ onFinished, prize }: CardRevealProps) {
   }, [phase]);
 
   // Rule 1 — Selection Lock: once a card is selected it can never be unselected.
+  // The machine lock is checked here too, so a click that lands after the run
+  // began can never add a sixth card to the tray the machine is animating.
   const toggle = (id: number) => {
-    if (phase !== "grid") return;
+    if (machine !== "idle" || phase !== "grid") return;
     setCards((prev) => {
-      if (prev.find((c) => c.id === id)?.selected) return prev;
+      const target = prev.find((c) => c.id === id);
+      if (!target || target.selected) return prev;
       if (prev.filter((c) => c.selected).length >= SELECT_COUNT) return prev;
       return prev.map((c) => (c.id === id ? { ...c, selected: true } : c));
     });
   };
 
   const startMachine = () => {
-    if (!isComplete || machineStarted.current) return;
-    machineStarted.current = true;
+    if (machine !== "idle" || !isComplete) return;
+    // The result was already rolled by the server. Resolve the winning slot and
+    // the clock in the same batch, so from here on the reveal is fully
+    // determined and cannot stall waiting for a prize that is not on the tray.
+    const prepared = placePrize(cards, prize);
+    if (prepared.winnerId < 0) return;
+    startedAt.current = Date.now();
+    setWinnerId(prepared.winnerId);
+    setCards(prepared.cards);
+    setMachine("running");
     setPhase("collect");
   };
 
@@ -230,29 +285,26 @@ export function CardRevealAnimation({ onFinished, prize }: CardRevealProps) {
     onFinished(item);
   };
 
+  // The timeline is re-derived from elapsed time on every tick, so a throttled,
+  // clamped or dropped timer (background tab, locked screen, long main-thread
+  // task) can never strand the machine between phases.
   useEffect(() => {
-    const timers: number[] = [];
-    if (phase === "collect") {
-      timers.push(window.setTimeout(() => setPhase("revealSelection"), 1700));
-    } else if (phase === "revealSelection") {
-      timers.push(window.setTimeout(() => setPhase("shuffle"), 2500));
-    } else if (phase === "shuffle") {
-      timers.push(window.setTimeout(() => setPhase("suspense"), 8600));
-    } else if (phase === "suspense") {
-      timers.push(
-        window.setTimeout(() => {
-          // The machine "picks" the slot holding the server-rolled prize.
-          const target = cards.find((c) => c.item.id === prize.id) ?? cards[0];
-          if (target) setWinnerId(target.id);
-          setPhase("reveal");
-        }, 1250)
-      );
-    } else if (phase === "reveal") {
-      timers.push(window.setTimeout(() => setPhase("done"), 2600));
-    }
-    return () => timers.forEach((t) => window.clearTimeout(t));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase]);
+    if (machine !== "running") return;
+    const apply = () => setPhase((current) => {
+      const next = phaseAt(Date.now() - startedAt.current);
+      return current === next ? current : next;
+    });
+    apply();
+    const tick = window.setInterval(apply, 120);
+    const onVisibility = () => {
+      if (!document.hidden) apply();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.clearInterval(tick);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [machine]);
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-[#050b12]">
@@ -278,10 +330,13 @@ export function CardRevealAnimation({ onFinished, prize }: CardRevealProps) {
 
       <div className="relative z-10 flex min-h-0 flex-1 items-center justify-center overflow-visible px-3">
         <div
-          className="flex flex-col items-center justify-center"
+          className="relative flex flex-col items-center justify-center"
           style={{ width: phase === "grid" ? STAGE_W : MACHINE_STAGE_W, height: phase === "grid" ? GRID_H : MACHINE_H, transform: `scale(${fit})`, transformOrigin: "center center" }}
         >
-        <AnimatePresence mode="wait">
+        {/* The machine overlays the selection grid instead of waiting for its
+            exit to finish, so the run always begins on the click that started
+            it even on a slow frame budget. */}
+        <AnimatePresence>
           {phase === "grid" ? (
             <motion.div
               key="grid"
@@ -381,7 +436,7 @@ export function CardRevealAnimation({ onFinished, prize }: CardRevealProps) {
           ) : (
             <motion.div
               key="machine"
-              className="flex w-full flex-col items-center"
+              className="absolute inset-0 flex w-full flex-col items-center justify-center"
               style={{ paddingTop: ENTRY_PAD }}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -473,13 +528,13 @@ export function CardRevealAnimation({ onFinished, prize }: CardRevealProps) {
                 {/* the chosen cards inside the machine */}
                 <div className="absolute left-1/2 top-12 z-[10] flex h-56 w-72 -translate-x-1/2 items-center justify-center">
                   {selectedCards.map((c, i) => {
-                    const isWinner = c.id === winnerId;
+                    const isWinner = (phase === "reveal" || phase === "done") && c.id === winnerId;
                     const tossX = (i % 2 === 0 ? -1 : 1) * (110 + i * 15);
                     const tossY = -196 - (i % 3) * 24;
                     const tossRot = (i % 2 === 0 ? -1 : 1) * (16 + i * 4);
                     const delay = i * 0.13;
                     return (
-                      <motion.div key={c.id} className="absolute left-1/2 top-1/2 h-[235px] w-[170px] -ml-[85px] -mt-[117px] [transform-style:preserve-3d]" style={{ zIndex: isWinner ? 40 : 5, willChange: "transform" }}>
+                      <motion.div key={c.id} data-testid={isWinner ? "winning-selected-card" : undefined} className="absolute left-1/2 top-1/2 h-[235px] w-[170px] -ml-[85px] -mt-[117px] [transform-style:preserve-3d]" style={{ zIndex: isWinner ? 40 : 5, willChange: "transform" }}>
                         <motion.div
                           className="relative h-full w-full [transform-style:preserve-3d]"
                           initial={
@@ -514,10 +569,10 @@ export function CardRevealAnimation({ onFinished, prize }: CardRevealProps) {
                                 ? { duration: 1.0, ease: [0.4, 0, 0.2, 1] }
                                 : phase === "shuffle"
                                   ? {
-                                      x: { duration: 8, repeat: Infinity, ease: "easeInOut", times: SHUFFLE_TIMES },
-                                      y: { duration: 8, repeat: Infinity, ease: "easeInOut", times: SHUFFLE_TIMES },
-                                      rotateZ: { duration: 8, repeat: Infinity, ease: "easeInOut", times: SHUFFLE_TIMES },
-                                      scale: { duration: 8, repeat: Infinity, ease: "easeInOut", times: SHUFFLE_TIMES },
+                                       x: { duration: 4.6, repeat: Infinity, ease: "easeInOut", times: SHUFFLE_TIMES },
+                                       y: { duration: 4.6, repeat: Infinity, ease: "easeInOut", times: SHUFFLE_TIMES },
+                                       rotateZ: { duration: 4.6, repeat: Infinity, ease: "easeInOut", times: SHUFFLE_TIMES },
+                                       scale: { duration: 4.6, repeat: Infinity, ease: "easeInOut", times: SHUFFLE_TIMES },
                                       rotateY: { duration: 0.6, ease: "easeOut" },
                                       opacity: { duration: 0.3 },
                                     }

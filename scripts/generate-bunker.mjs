@@ -1,5 +1,5 @@
 import { readFile, writeFile } from "node:fs/promises";
-import { analyze } from "./bunker-model.mjs";
+import { analyze, assertPublishable } from "./bunker-model.mjs";
 
 const url = process.env.BUNKER_DATA_URL;
 let raw;
@@ -15,12 +15,6 @@ if (url) {
 }
 
 const report = analyze(JSON.parse(raw));
-if (process.env.BUNKER_REQUIRE_LIVE === "1" && (report.mode !== "live" || report.status === "unavailable" || (report.picks.length > 0 && report.jointProbability === null))) {
-  throw new Error("Automated publication requires live input and sufficient data for each selected match");
-}
-if (process.env.BUNKER_REQUIRE_LIVE === "1" && (Date.now() - Date.parse(report.asOf) > 15 * 60 * 1000 || Date.parse(report.asOf) - Date.now() > 5 * 60 * 1000 ||
-  report.picks.some((pick) => !pick.fixture || Date.parse(pick.fixture.kickoff) <= Date.now()))) {
-  throw new Error("Live report must be generated within 15 minutes and contain only future fixtures");
-}
+if (process.env.BUNKER_REQUIRE_LIVE === "1") assertPublishable(report);
 await writeFile(new URL("../components/bunker/generatedReport.json", import.meta.url), `${JSON.stringify(report, null, 2)}\n`);
 console.log(`Generated Bunker report: ${report.mode}, ${report.picks.length} picks, model ${report.jointProbability === null ? "unavailable" : "ready"}`);

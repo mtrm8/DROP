@@ -1,6 +1,7 @@
 {
   "mode": "live",
   "status": "unavailable",
+  "statusMessage": "טרם התקבלה סריקת משחקים מאומתת להיום.",
   "source": "ממתינים לסריקת נתונים מאומתת",
   "asOf": "2026-09-26T00:00:00Z",
   "combinedOdds": 1.01,

@@ -16,11 +16,11 @@ import {
   Target,
 } from "lucide-react";
 import { GoalLaboratory, RiskReward } from "./bunker/ReportSections";
-import report from "./bunker/reportData";
+import type { Pick, Report } from "./bunker/reportData";
+import { evaluateReport, statusHeadline } from "./bunker/reportStatus";
+import type { ReportStatus } from "./bunker/reportStatus";
 
-const PICKS = report.picks;
 const percent = (value: number) => `${(value * 100).toFixed(2)}%`;
-const demo = report.mode === "demo";
 
 function Reveal({ children, delay = 0 }: { children: React.ReactNode; delay?: number }) {
   const reduced = useReducedMotion();
@@ -36,10 +36,10 @@ function Reveal({ children, delay = 0 }: { children: React.ReactNode; delay?: nu
   );
 }
 
-function OddsBars() {
+function OddsBars({ picks }: { picks: Pick[] }) {
   return (
     <div className="space-y-5">
-      {PICKS.map((pick, index) => {
+      {picks.map((pick, index) => {
         const implied = pick.breakEven * 100;
         return (
           <div key={pick.id}>
@@ -89,7 +89,7 @@ function TeamBadge({ team, code, flag }: { team: string; code: string; flag: str
   );
 }
 
-function MatchAnalysis({ pick, index }: { pick: (typeof PICKS)[number]; index: number }) {
+function MatchAnalysis({ pick, index }: { pick: Pick; index: number }) {
   const accent = index === 0 ? "emerald" : "cyan";
   return (
     <Reveal delay={index * 0.08}>
@@ -151,7 +151,7 @@ function MatchAnalysis({ pick, index }: { pick: (typeof PICKS)[number]; index: n
           </ul>
         </div>
 
-        {pick.fixture && <p className="relative mt-3 text-[10px] leading-5 text-slate-300">הרכבים מאושרים · {pick.fixture.lineup.homeChanges} שינויים אצל {pick.home} ו־{pick.fixture.lineup.awayChanges} אצל {pick.away} בהשוואה להרכב הפותח הקודם. יחס מ־{pick.fixture.bookmaker}, עודכן ב־{new Date(pick.fixture.oddsUpdatedAt).toLocaleString("he-IL")}.</p>}
+        {pick.fixture && <p className="relative mt-3 text-[10px] leading-5 text-slate-300">{pick.home}: {pick.fixture.lineup.homeKind === "confirmed" ? `הרכב מאושר, ${pick.fixture.lineup.homeChanges} שינויים מהמשחק הקודם` : "הרכב משוער על בסיס המשחק הקודם"} · {pick.away}: {pick.fixture.lineup.awayKind === "confirmed" ? `הרכב מאושר, ${pick.fixture.lineup.awayChanges} שינויים מהמשחק הקודם` : "הרכב משוער על בסיס המשחק הקודם"}. היחס מ־{pick.fixture.bookmaker} בעת הסריקה, עודכן ב־{new Date(pick.fixture.oddsUpdatedAt).toLocaleString("he-IL")}; יש לאמת את היחס לפני החלטה.</p>}
         {pick.fixture && <div className="relative mt-4 grid gap-3 border-t border-white/[0.07] pt-4 sm:grid-cols-2">
           {([{ team: pick.home, players: pick.fixture.players.home }, { team: pick.away, players: pick.fixture.players.away }]).map(({ team, players }) => <div key={team} className="rounded-xl border border-white/[0.08] bg-black/20 p-3">
             <p className="text-xs font-bold text-white">{team} · שחקני ההרכב הבולטים ({pick.fixture!.players.season})</p>
@@ -171,38 +171,39 @@ function MatchAnalysis({ pick, index }: { pick: (typeof PICKS)[number]; index: n
   );
 }
 
-export default function BunkerDeepDive() {
+export default function BunkerDeepDive({ report }: { report: Report }) {
   const [stake, setStake] = useState(100);
-  const [expired, setExpired] = useState(false);
-  const [checked, setChecked] = useState(demo || report.status === "unavailable");
+  // Whether a match has kicked off, and whether this report is still today's,
+  // depend on the visitor's clock. Resolve them in the browser only and re-check
+  // every minute so a long-open tab ages the report correctly.
+  const [status, setStatus] = useState<ReportStatus | null>(null);
   useEffect(() => {
-    if (!demo) {
-      const localDate = (date: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem", year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
-      const check = () => {
-        setExpired(report.status !== "unavailable" && (localDate(new Date(report.asOf)) !== localDate(new Date()) ||
-          PICKS.some((pick) => !pick.fixture ||
-          Date.parse(pick.fixture.kickoff) <= Date.now() ||
-          Date.now() - Date.parse(pick.fixture.oddsUpdatedAt) > 2 * 60 * 60 * 1000)));
-        setChecked(true);
-      };
-      check();
-      const interval = window.setInterval(check, 60_000);
-      return () => window.clearInterval(interval);
-    }
-  }, []);
+    const check = () => setStatus(evaluateReport(report, new Date()));
+    check();
+    const interval = window.setInterval(check, 60_000);
+    return () => window.clearInterval(interval);
+  }, [report]);
+
+  // Only matches that have not kicked off are still actionable. A match that
+  // already started must not hide its siblings, which are still bettable.
+  const PICKS = status?.activePicks ?? [];
+  const demo = status?.state === "demo";
   const theoreticalReturn = stake * report.combinedOdds;
   const netProfit = theoreticalReturn - stake;
   const roundedCombinedImplied = report.breakEven * 100;
   const sourceInputs = PICKS;
 
-  if (!checked) return <section className="rounded-2xl border border-cyan-300/20 bg-slate-950 p-7 text-sm text-slate-300" role="status">מאמתים את עדכניות המשחקים והיחסים…</section>;
+  if (!status) return <section className="rounded-2xl border border-cyan-300/20 bg-slate-950 p-7 text-sm text-slate-300" role="status">בודקים את מצב סריקת היום…</section>;
 
-  if (expired) return <section className="rounded-2xl border border-amber-200/20 bg-slate-950 p-7 text-sm leading-7 text-amber-100">הדוח הקודם אינו עדכני עוד. בחירות חדשות יופיעו לאחר סריקת משחקי היום, ההרכבים והיחסים הזמינים.</section>;
-
-  if (!PICKS.length) return <section className="rounded-2xl border border-cyan-300/20 bg-slate-950 p-7 text-sm leading-7 text-slate-200">
-    <h2 className="text-xl font-black text-white">{report.status === "unavailable" ? "ממתינים לנתוני משחקים מאומתים להיום" : "אין היום שתי בחירות שעומדות בתנאי הניתוח"}</h2>
-    <p className="mt-2">{report.status === "unavailable" ? "דוח משחקים יופיע כאן לאחר סריקת נתוני הספק הקרובה. עד אז לא מוצגים משחקים או יחסים ישנים." : `הנתונים נבדקו מחדש ב־${new Date(report.asOf).toLocaleString("he-IL")}. לא נמצאו משחקים עם הרכבים מאושרים, נתוני שחקנים מספקים ויחסים עדכניים שנותנים יתרון מחושב אצל אותו מפעיל. הדוח יתעדכן אוטומטית בריצה הבאה.`}</p>
-  </section>;
+  if (status.state === "stale" || status.state === "started" || PICKS.length === 0) {
+    const { title, body } = statusHeadline(status, report);
+    return (
+      <section className="rounded-2xl border border-cyan-300/20 bg-slate-950 p-7 text-sm leading-7 text-slate-200">
+        <h2 className="text-xl font-black text-white">{title}</h2>
+        <p className="mt-2">{body}</p>
+      </section>
+    );
+  }
 
   return (
     <div className="space-y-7">
@@ -213,7 +214,10 @@ export default function BunkerDeepDive() {
             <div>
               <p className="flex items-center gap-2 text-[9px] font-black text-emerald-200"><ClipboardList size={13} /> תקציר מנהלים · דוח קדם־משחק</p>
               <h2 className="mt-2 text-2xl font-black text-white sm:text-4xl">{PICKS.length} משחקים, קו שערים אחד</h2>
-              <p className="mt-2 text-sm font-bold text-slate-300">{PICKS.length} בחירות מעל 2.5 שערים · כולן חייבות להצליח</p>
+              <p className="mt-2 text-sm font-bold text-slate-300">
+                {PICKS.length} בחירות מעל 2.5 שערים · כולן חייבות להצליח
+                {status.kickedOff.length > 0 && ` · היחס המשולב מחושב על כל ${report.picks.length} המשחקים של הסריקה`}
+              </p>
               <p className="mt-2 text-xs text-amber-100">{demo ? "סביבת הדגמה · נתונים סינתטיים, לא תחזית למשחקים אמיתיים" : `מקור: ${report.source} · עדכון: ${new Date(report.asOf).toLocaleString("he-IL")}`}</p>
             </div>
             <div className="rounded-xl border border-white/[0.08] bg-black/25 px-4 py-3">
@@ -224,8 +228,14 @@ export default function BunkerDeepDive() {
           </div>
           <div className="relative mt-5 flex items-start gap-2 rounded-xl border border-amber-200/15 bg-amber-200/[0.035] p-3 text-[10px] leading-5 text-slate-400">
             <Info size={14} className="mt-0.5 shrink-0 text-amber-200" />
-            <span>{demo ? "זהו פלט הדגמה המבוסס על תוצאות סינתטיות. אין להשתמש בו כהערכת משחקים אמיתיים. " : "הדוח חושב מנתוני ספק המשחקים והיחסים. הרכבים מאושרים נבדקו ושימשו לסינון בלבד. "}מודל השערים מבוסס על תוצאות בית וחוץ; איכות היריבות ונתוני xG אינם נכללים בו. {report.jointProbability === null ? "לא התקבל מדגם מספיק להערכת כל הבחירות." : "ההסתברות המשולבת מניחה אי־תלות בין המשחקים."}</span>
+            <span>{demo ? "זהו פלט הדגמה המבוסס על תוצאות סינתטיות. אין להשתמש בו כהערכת משחקים אמיתיים. " : "הדוח חושב מנתוני ספק המשחקים והיחסים. הרכבים מאושרים נבדקו; היעדר אישור מסומן כהערכת הרכב לפי המשחק הקודם. "}מודל השערים מבוסס על תוצאות בית וחוץ; איכות היריבות ונתוני xG אינם נכללים בו. {report.jointProbability === null ? "לא התקבל מדגם מספיק להערכת כל הבחירות." : "ההסתברות המשולבת מניחה אי־תלות בין המשחקים."}</span>
           </div>
+          {status.kickedOff.length > 0 && (
+            <p className="relative mt-3 flex items-start gap-2 rounded-xl border border-cyan-300/15 bg-cyan-300/[0.03] p-3 text-[10px] leading-5 text-cyan-100/80">
+              <Info size={14} className="mt-0.5 shrink-0 text-cyan-200" />
+              <span>{status.kickedOff.map((pick) => `${pick.home}–${pick.away}`).join(", ")} כבר החל{status.kickedOff.length === 1 ? "" : "ו"} ולכן אינם מוצגים. המשחקים הממתינים למעלה מעודכנים וניתנים להצבעה.</span>
+            </p>
+          )}
         </section>
       </Reveal>
 
@@ -243,7 +253,7 @@ export default function BunkerDeepDive() {
             <p className="text-[9px] text-slate-400">סף איזון = 1 חלקי היחס · לפני ניכוי מרווח ההימורים</p>
           </header>
           <div className="mt-6 grid gap-7 lg:grid-cols-[1fr_0.8fr]">
-            <OddsBars />
+            <OddsBars picks={PICKS} />
             <div className="rounded-2xl border border-white/[0.07] bg-black/20 p-4 sm:p-5">
               <p className="text-[9px] font-black text-slate-400">הבחירות יחד</p>
               <div className="mt-4 flex items-center justify-center gap-2 font-mono text-sm font-black sm:text-base">

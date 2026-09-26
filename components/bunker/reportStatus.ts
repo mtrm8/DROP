@@ -1,0 +1,173 @@
+import type { Pick, Report } from "./reportData";
+
+// The Bunker is a daily snapshot, not a live feed. One scheduled build runs per
+// day at 12:15 UTC, so the published analysis always describes that local day.
+export const REFRESH_HOUR_UTC = 12;
+export const REFRESH_MINUTE_UTC = 15;
+export const DEFAULT_TIME_ZONE = "Asia/Jerusalem";
+
+export type ReportState =
+  | "demo"        // synthetic demo data, never a real forecast
+  | "ready"       // today's report, every selected match is still upcoming
+  | "partial"     // today's report, some matches already kicked off
+  | "started"     // today's report, every selected match already kicked off
+  | "no-picks"    // today's scan completed, nothing cleared the analysis bar
+  | "unavailable" // today's scan did not complete
+  | "stale";      // the published report belongs to an earlier day
+
+export type ReportStatus = {
+  state: ReportState;
+  timeZone: string;
+  reportDate: string;
+  today: string;
+  isToday: boolean;
+  nextRefresh: Date;
+  activePicks: Pick[];
+  kickedOff: Pick[];
+  /** True when the report is the freshest processed analysis of the current day. */
+  isLive: boolean;
+};
+
+const localDay = (date: Date, timeZone: string) =>
+  new Intl.DateTimeFormat("en-CA", {
+    timeZone, year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(date);
+
+/** The next scheduled daily build, so the UI can say when fresh data lands. */
+export function nextDailyRun(now: Date): Date {
+  const next = new Date(Date.UTC(
+    now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), REFRESH_HOUR_UTC, REFRESH_MINUTE_UTC,
+  ));
+  if (next.getTime() <= now.getTime()) next.setUTCDate(next.getUTCDate() + 1);
+  return next;
+}
+
+/** A pick is actionable only while its fixture has not kicked off yet. */
+export const isKickoffPending = (pick: Pick, now: number) =>
+  Boolean(pick.fixture) && Date.parse(pick.fixture!.kickoff) > now;
+
+/**
+ * Decide what the Bunker should show from the published report alone.
+ *
+ * Expiry is decided per match, never for the whole report: a daily report whose
+ * first match has kicked off still carries a valid, unplayed second match, and
+ * hiding the entire report there made the page claim it was waiting for data
+ * that had already been processed and published.
+ */
+export function evaluateReport(report: Report, now: Date = new Date()): ReportStatus {
+  const timeZone = report.timeZone || DEFAULT_TIME_ZONE;
+  const at = now.getTime();
+  const reportDate = localDay(new Date(report.asOf), timeZone);
+  const today = localDay(now, timeZone);
+  const isToday = reportDate === today;
+  // Demo fixtures carry no kickoff, so they are never filtered by the clock.
+  const demo = report.mode === "demo";
+  const activePicks = demo ? report.picks : report.picks.filter((pick) => isKickoffPending(pick, at));
+  const kickedOff = demo ? [] : report.picks.filter((pick) => !isKickoffPending(pick, at));
+
+  const state: ReportState = demo ? "demo"
+    : !isToday ? "stale"
+      : report.picks.length === 0 ? (report.status === "unavailable" ? "unavailable" : "no-picks")
+        : activePicks.length === 0 ? "started"
+          : kickedOff.length === 0 ? "ready" : "partial";
+
+  return {
+    state,
+    timeZone,
+    reportDate,
+    today,
+    isToday,
+    nextRefresh: nextDailyRun(now),
+    activePicks,
+    kickedOff,
+    isLive: report.mode === "live" && isToday && state !== "unavailable",
+  };
+}
+
+const formatTime = (date: Date, timeZone: string) =>
+  new Intl.DateTimeFormat("he-IL", { timeZone, hour: "2-digit", minute: "2-digit" }).format(date);
+
+const formatDay = (date: Date, timeZone: string) =>
+  new Intl.DateTimeFormat("he-IL", { timeZone, day: "numeric", month: "long" }).format(date);
+
+const day = (status: ReportStatus, report: Report) => formatDay(new Date(report.asOf), status.timeZone);
+
+/** Short label for the header status pill. */
+export function statusLabel(status: ReportStatus, report: Report): string {
+  switch (status.state) {
+    case "demo": return "סביבת הדגמה";
+    case "ready": return `סריקת ${formatDay(new Date(report.asOf), status.timeZone)} · משחקים עדכניים`;
+    case "partial": return `סריקת ${formatDay(new Date(report.asOf), status.timeZone)} · ${status.activePicks.length} משחקים עדיין ממתינים`;
+    case "started": return `סריקת ${formatDay(new Date(report.asOf), status.timeZone)} · כל המשחקים התחילו`;
+    case "no-picks": return `סריקת ${formatDay(new Date(report.asOf), status.timeZone)} · אין כיום בחירות שעומדות בתנאים`;
+    case "unavailable": return `סריקת ${formatDay(new Date(report.asOf), status.timeZone)} · הנתונים טרם התקבלו`;
+    case "stale": return `דוח מ־${formatDay(new Date(report.asOf), status.timeZone)} · ממתין לסריקה הבאה`;
+  }
+}
+
+/** Headline + explanation for the report body. */
+export function statusHeadline(status: ReportStatus, report: Report): { title: string; body: string } {
+  const next = formatTime(status.nextRefresh, status.timeZone);
+  const day = formatDay(new Date(report.asOf), status.timeZone);
+  switch (status.state) {
+    case "demo":
+      return report.picks.length ? { title: "", body: "" } : {
+        title: "אין נתוני הדגמה להצגה",
+        body: "קובץ ההדגמה המקומי אינו מכיל בחירות. הדוח החי מתפרסם בסריקה היומית.",
+      };
+    case "stale":
+      return {
+        title: `הדוח המוצג הוא סריקת ${day}`,
+        body: `הבנקר מתעדכן פעם ביום. הסריקה הבאה מתקבלת ב־${next}, ואז יוצגו כאן משחקי היום עם היחסים וההרכבים המעודכנים.`,
+      };
+    case "started":
+      return {
+        title: "הבחירות של היום כבר יצאו לפועל",
+        body: `סריקת ${day} הסתיימה והמשחקים בה כבר התחילו. הסריקה הבאה מתקבלת ב־${next}.`,
+      };
+    case "unavailable":
+      return {
+        title: `סריקת ${day} טרם הושלמה`,
+        body: `${report.statusMessage || "עדיין לא התקבלה סריקת משחקים מאומתת להיום."} הבנקר מתעדכן פעם ביום, והניסיון הבא מתקבל ב־${next}.`,
+      };
+    case "no-picks":
+      return {
+        title: `סריקת ${day} הסתיימה ללא בחירות`,
+        body: `הסריקה רצה על משחקי היום אך לא נמצאו שתי בחירות עם נתוני קדם־משחק ויחסים עדכניים שנותנים יתרון מחושב אצל אותו מפעיל. תוצאות סריקה ישנות אינן מוצגות. הסריקה הבאה מתקבלת ב־${next}.`,
+      };
+    default:
+      return { title: "", body: "" };
+  }
+}
+
+/** One-line explanation for the report header. */
+export function statusSummary(status: ReportStatus, report: Report): string {
+  const next = formatTime(status.nextRefresh, status.timeZone);
+  const source = `מקור הנתונים: ${report.source}.`;
+  switch (status.state) {
+    case "demo": return "נתוני הדגמה סינתטיים.";
+    case "ready": return `${source} זו סריקת משחקי היום, והמחירים עודכנו היום.`;
+    case "partial": return `${source} מחירי הסריקה הם צילום יומי, ורק המשחקים שטרם נגעו מוצגים.`;
+    case "started": return `${source} כל משחקי הסריקה של היום כבר התחילו; הסריקה הבאה מתקבלת ב־${next}.`;
+    case "no-picks": return `${source} הסריקה הסתיימה, אך לא נמצאו היום שתי בחירות שעומדות בתנאי הניתוח.`;
+    case "unavailable": return `${source} סריקת היום טרם הושלמה; הניסיון הבא מתקבל ב־${next}.`;
+    case "stale": return `${source} זהו דוח ${day(status, report)}, והסריקה הבאה מתקבלת ב־${next}.`;
+  }
+}
+
+/**
+ * Decide whether a freshly fetched snapshot should replace the one on screen.
+ * A newer build always wins; so does a usable report replacing one that has
+ * nothing to show, which is what lets a recovered daily scan clear a stuck
+ * "waiting for data" page.
+ */
+export function supersedes(current: Report, next: Report): boolean {
+  if (!Number.isFinite(Date.parse(next.asOf))) return false;
+  const currentAt = Date.parse(current.asOf);
+  if (!Number.isFinite(currentAt)) return true;
+  if (Date.parse(next.asOf) > currentAt) return true;
+  if (Date.parse(next.asOf) < currentAt) return false;
+  const usable = (report: Report) => report.mode === "live" &&
+    report.status !== "unavailable" && report.picks.length > 0;
+  return usable(next) && !usable(current);
+}
