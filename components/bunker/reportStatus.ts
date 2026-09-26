@@ -99,7 +99,9 @@ export function statusLabel(status: ReportStatus, report: Report): string {
     case "ready": return `סריקת ${formatDay(new Date(report.asOf), status.timeZone)} · משחקים עדכניים`;
     case "partial": return `סריקת ${formatDay(new Date(report.asOf), status.timeZone)} · ${status.activePicks.length} משחקים עדיין ממתינים`;
     case "started": return `סריקת ${formatDay(new Date(report.asOf), status.timeZone)} · כל המשחקים התחילו`;
-    case "no-picks": return `סריקת ${formatDay(new Date(report.asOf), status.timeZone)} · אין כיום בחירות שעומדות בתנאים`;
+    case "no-picks": return report.watchlist?.length
+      ? `סריקת ${formatDay(new Date(report.asOf), status.timeZone)} · מעקב יומי · ${report.watchlist.length} משחקים`
+      : `סריקת ${formatDay(new Date(report.asOf), status.timeZone)} · אין כיום משחקים להצגה`;
     case "unavailable": return `סריקת ${formatDay(new Date(report.asOf), status.timeZone)} · הנתונים טרם התקבלו`;
     case "stale": return `דוח מ־${formatDay(new Date(report.asOf), status.timeZone)} · ממתין לסריקה הבאה`;
   }
@@ -134,11 +136,11 @@ export function statusHeadline(status: ReportStatus, report: Report): { title: s
       const near = report.watchlist?.length ?? 0;
       return {
         title: near
-          ? `סריקת ${day} הסתיימה ללא צבר מאומת · ${near} משוערים בסביבה`
-          : `סריקת ${day} הסתיימה ללא בחירות`,
+          ? `סריקת ${day} · מעקב יומי של ${near} המשחקים הקרובים`
+          : `סריקת ${day} · אין משחקים להצגה`,
         body: near
-          ? `הסריקה רצה על משחקי היום אך אף שילוב לא הגיע לפער מצטבר של 4%. המשוערים שהתקרבו הכי לסף מופיעים למטה עם הפער האמיתי שלהם, והם אינם המלצה. הסריקה הבאה מתקבלת ב־${next}.`
-          : `הסריקה רצה על משחקי היום אך לא נמצאו שתי בחירות עם נתוני קדם־משחק ויחסים עדכניים שנותנים יתרון מחושב אצל אותו מפעיל. תוצאות סריקה ישנות אינן מוצגות. הסריקה הבאה מתקבלת ב־${next}.`,
+          ? `הסריקה רצה על משחקי היום אך אף שילוב לא הגיע לפער מצטבר של 4%, ולכן אין צבר מומלץ. במקום זאת מוצגים למטה ${near} המשחקים הקרובים עם המחירים והנתונים החיים שנאספו עבורם, כולל הפער האמיתי כשחושב — וכן הסיבה שמשחק מסוים לא נכלל בחישוב. זהו מידע למעקב בלבד ולא המלצה. הסריקה הבאה מתקבלת ב־${next}.`
+          : `הסריקה רצה על משחקי היום אך לא נמצאו משחקים מתאימים להצגה. הסריקה הבאה מתקבלת ב־${next}.`,
       };
     }
     default:

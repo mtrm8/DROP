@@ -36,20 +36,23 @@ export type Pick = {
 
 export type PlayerSummary = { name: string; minutes: number; goals: number; assists: number; shots: number | null; shotsOnTarget: number | null; keyPasses: number | null; rating: number | null };
 
-// A match the scan evaluated but did not recommend. Shown only when no
+// A match the scan saw today but did not recommend. Shown only when no
 // accumulator qualified, and always with its real (often negative) edge so a
-// near-miss cannot be mistaken for a recommendation.
+// near-miss cannot be mistaken for a recommendation. A fixture that never
+// reached the model has no probability, edge or fair odds, and `note` says
+// which data gate dropped it.
 export type WatchItem = {
   home: string;
   away: string;
   competition: string;
-  bookmaker: string;
+  bookmaker: string | null;
   kickoff: string;
-  odds: number;
-  probability: number;
-  mean: number;
-  fairOdds: number;
-  edge: number;
+  odds: number | null;
+  probability: number | null;
+  mean: number | null;
+  fairOdds: number | null;
+  edge: number | null;
+  note: string | null;
 };
 
 export type Report = {

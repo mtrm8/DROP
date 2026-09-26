@@ -206,24 +206,35 @@ export default function BunkerDeepDive({ report }: { report: Report }) {
         {watch.length > 0 ? (
           <div className="mt-6">
             <p className="text-xs font-black text-amber-200/90">
-              {watch.length} המשוערים שהתקרבו הכי לסף — אין בהם המלצה, והפער מוצג באמת
+              מעקב יומי · {watch.length} משחקים הקרובים — מידע חי, לא המלצה
             </p>
             <ul className="mt-3 divide-y divide-white/[0.06]">
               {watch.map((item) => (
                 <li key={`${item.home}-${item.away}`} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-3">
                   <span className="font-bold text-white">{item.home} – {item.away}</span>
-                  <span className="text-xs text-slate-500">{item.competition} · {item.bookmaker}</span>
+                  <span className="text-xs text-slate-500">
+                    {item.competition}
+                    {item.bookmaker ? ` · ${item.bookmaker}` : ""}
+                    {` · ${new Date(item.kickoff).toLocaleString("he-IL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}`}
+                  </span>
                   <span className="w-full text-xs text-slate-400 sm:w-auto">
-                    Over 2.5 בשער {item.odds.toFixed(2)} · המודל {item.probability.toFixed(3)} · שער הוגן {item.fairOdds.toFixed(2)} ·{" "}
-                    <span className={item.edge >= 0 ? "text-emerald-300" : "text-rose-300"}>
-                      פער {(item.edge * 100).toFixed(1)}%
-                    </span>
+                    {item.odds === null
+                      ? "אין מחיר עדכני ל־Over 2.5"
+                      : `Over 2.5 בשער ${item.odds.toFixed(2)}`}
+                    {item.probability === null
+                      ? item.note ? ` · ${item.note}` : ""
+                      : ` · המודל ${item.probability.toFixed(3)} · שער הוגן ${(item.fairOdds ?? 0).toFixed(2)} · `}
+                    {item.edge === null ? "" : (
+                      <span className={item.edge >= 0 ? "text-emerald-300" : "text-rose-300"}>
+                        פער {(item.edge * 100).toFixed(1)}%
+                      </span>
+                    )}
                   </span>
                 </li>
               ))}
             </ul>
             <p className="mt-3 text-xs text-slate-500">
-              הצבר אינו מתקבל כאשר הפער המצטבר אינו עומד בסף של 4%. המשוערים למעלה נבדקו ונמצאו חסרים.
+              הצבר אינו מתקבל כאשר הפער המצטבר אינו עומד בסף של 4%. המשחקים שלמעלה נסרקו היום אך לא עברו את הסף, או שחסרו להם נתונים לחישוב המודל.
             </p>
           </div>
         ) : null}

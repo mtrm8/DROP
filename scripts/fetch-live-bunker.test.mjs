@@ -5,12 +5,23 @@ import { gatherLiveInput, selectValuePicks, todayInZone, unavailableInput } from
 
 const now = new Date("2026-09-26T12:00:00Z");
 const team = (id, name) => ({ id, name, code: name.slice(0, 3).toUpperCase() });
+const build = (item, kickoff) => ({
+  fixture: { id: item.id, date: kickoff },
+  league: { id: 39, name: "Test league", season: 2026 },
+  teams: { home: item.home, away: item.away },
+});
 const fixtures = [
-  { id: 100, home: team(1, "Alpha"), away: team(2, "Beta") },
-  { id: 200, home: team(3, "Gamma"), away: team(4, "Delta") },
-].map((item) => ({ fixture: { id: item.id, date: "2026-09-26T13:00:00Z" }, league: { id: 39, name: "Test league", season: 2026 }, teams: { home: item.home, away: item.away } }));
+  build({ id: 100, home: team(1, "Alpha"), away: team(2, "Beta") }, "2026-09-26T13:00:00Z"),
+  build({ id: 200, home: team(3, "Gamma"), away: team(4, "Delta") }, "2026-09-26T13:00:00Z"),
+];
+// Later kickoffs, so tests can assert the watchlist leads with what is soonest.
+const laterFixtures = [
+  build({ id: 300, home: team(5, "Epsilon"), away: team(6, "Zeta") }, "2026-09-26T18:00:00Z"),
+  build({ id: 400, home: team(7, "Eta"), away: team(8, "Theta") }, "2026-09-26T20:00:00Z"),
+  build({ id: 500, home: team(9, "Iota"), away: team(10, "Kappa") }, "2026-09-26T22:00:00Z"),
+];
 const history = new Map();
-for (const match of fixtures) {
+for (const match of [...fixtures, ...laterFixtures]) {
   for (let i = 1; i <= 3; i++) {
     const date = `2026-09-${String(20 + i).padStart(2, "0")}T12:00:00Z`;
     const id = match.fixture.id * 10 + i;
@@ -22,15 +33,16 @@ for (const match of fixtures) {
 }
 const lineup = (teamId) => ({ team: { id: teamId }, startXI: Array.from({ length: 11 }, (_, n) => ({ player: { id: teamId * 100 + n } })) });
 
-function mockProvider({ missingLineups = false, otherBook = false, missingPlayers = false, staleOdds = false, tomorrow = false } = {}) {
+function mockProvider({ missingLineups = false, otherBook = false, missingPlayers = false, staleOdds = false, tomorrow = false, manyFixtures = false } = {}) {
+  const listed = manyFixtures ? [...fixtures, ...laterFixtures] : fixtures;
   return async (url) => {
     const path = url.pathname;
     const fixtureId = Number(url.searchParams.get("fixture"));
     let response;
-    if (path === "/fixtures" && url.searchParams.has("date")) response = tomorrow ? fixtures.map((item) => ({ ...item, fixture: { ...item.fixture, date: "2026-09-27T13:00:00Z" } })) : fixtures;
+    if (path === "/fixtures" && url.searchParams.has("date")) response = tomorrow ? listed.map((item) => ({ ...item, fixture: { ...item.fixture, date: "2026-09-27T13:00:00Z" } })) : listed;
     else if (path === "/fixtures") response = history.get(Number(url.searchParams.get("team"))) ?? [];
     else if (path === "/fixtures/lineups") {
-      const match = fixtures.find((item) => item.fixture.id === fixtureId);
+      const match = listed.find((item) => item.fixture.id === fixtureId);
       if (match) response = missingLineups ? [] : [lineup(match.teams.home.id), lineup(match.teams.away.id)];
       else {
         const pastMatch = [...history.values()].flat().find((item) => item.fixture.id === fixtureId);
@@ -160,6 +172,42 @@ test("a report with picks never carries a watchlist", () => {
 test("the scan reports what it covered so an empty day is explainable", async () => {
   const report = analyze(await gatherLiveInput({ key: "test-key", now, request: mockProvider() }));
   assert.match(report.scanNote, /סריקה: \d+ פריצים/);
+});
+
+test("when every data gate drops the day, the top upcoming fixtures still publish", async () => {
+  // staleOdds strips every price, so nothing can be modelled or selected. The
+  // report must still list today's matches instead of rendering nothing.
+  const input = await gatherLiveInput({ key: "test-key", now, request: mockProvider({ staleOdds: true, manyFixtures: true }) });
+  const report = analyze(input);
+  assert.equal(report.picks.length, 0);
+  assert.equal(report.status, "no-picks");
+  assert.ok(report.watchlist.length >= 3, `watchlist had ${report.watchlist.length}`);
+  // Nothing was modelled, so nothing may claim a probability or an edge.
+  assert.ok(report.watchlist.every((item) => item.probability === null && item.edge === null));
+  assert.ok(report.watchlist.every((item) => item.home && item.away && item.kickoff && item.competition));
+  // The rule is "top upcoming", so the soonest kickoffs lead.
+  const kickoffs = report.watchlist.map((item) => item.kickoff);
+  assert.deepEqual(kickoffs, [...kickoffs].sort());
+  assert.equal(kickoffs[0], "2026-09-26T13:00:00Z");
+});
+
+test("the watchlist falls back to fixtures that only reached the price stage", async () => {
+  // missingPlayers keeps live prices but drops the fixture before the model, so
+  // the row must keep its real price and explain itself instead of inventing numbers.
+  const report = analyze(await gatherLiveInput({ key: "test-key", now, request: mockProvider({ missingPlayers: true, manyFixtures: true }) }));
+  assert.ok(report.watchlist.length >= 3);
+  const dropped = report.watchlist.filter((item) => item.probability === null);
+  assert.ok(dropped.length > 0, "expected at least one unmodelled fixture");
+  assert.ok(dropped.every((item) => item.note && item.note.length > 0), "each unmodelled row explains itself");
+  // A price is real data and survives even with no model behind it.
+  assert.ok(dropped.every((item) => item.odds === null || item.odds > 1.01));
+});
+
+test("the watchlist never repeats a match and is capped", async () => {
+  const report = analyze(await gatherLiveInput({ key: "test-key", now, request: mockProvider({ missingPlayers: true, manyFixtures: true }) }));
+  const keys = report.watchlist.map((item) => `${item.home}|${item.away}`);
+  assert.equal(new Set(keys).size, keys.length, "no duplicate matches");
+  assert.ok(report.watchlist.length <= 5);
 });
 
 test("the daily build publishes a long scan of the current day and refuses older ones", async () => {

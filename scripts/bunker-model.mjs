@@ -128,24 +128,34 @@ export function analyze(input) {
   const complete = picks.length > 0 && picks.every((pick) => pick.model !== null);
   const jointProbability = complete ? picks.reduce((product, pick) => product * pick.model.probability, 1) : null;
   // A flat day is not an empty day. When no accumulator clears the bar, carry
-  // the closest evaluated matches through as a clearly-labelled watchlist so the
-  // page can show what was actually near-miss instead of a bare "no picks".
-  // Edges are reported with their real sign: these are not recommendations.
+  // real matches through as a clearly-labelled watchlist so the page shows
+  // today's football instead of a blank screen. A fixture that never reached the
+  // model has no probability, and says so rather than borrowing a number.
+  // Every edge is reported with its real sign: these are not recommendations.
   const watchlist = (Array.isArray(input.watchlist) ? input.watchlist : []).slice(0, 5).map((item, i) => {
     assert(item && typeof item === "object", `watchlist[${i}] must be an object`);
-    const probability = number(item.probability, `watchlist[${i}].probability`, 0.001, 1);
-    const quote = number(item.odds, `watchlist[${i}].odds`, 1.01, 10000);
+    const optional = (value, label, low, high) =>
+      value === null || value === undefined ? null : number(value, label, low, high);
+    const probability = optional(item.probability, `watchlist[${i}].probability`, 0.001, 1);
+    const quote = optional(item.odds, `watchlist[${i}].odds`, 1.01, 10000);
+    // A live price is real data and is kept even when the fixture never reached
+    // the model. The reverse is meaningless: a probability with no price has
+    // nothing to be an edge against, so that pairing is refused.
+    assert(probability === null || quote !== null, `watchlist[${i}] has a probability but no price`);
     return {
       home: text(item.home, `watchlist[${i}].home`),
       away: text(item.away, `watchlist[${i}].away`),
       competition: text(item.competition, `watchlist[${i}].competition`),
-      bookmaker: text(item.bookmaker, `watchlist[${i}].bookmaker`),
+      bookmaker: item.bookmaker === null || item.bookmaker === undefined
+        ? null
+        : text(item.bookmaker, `watchlist[${i}].bookmaker`),
       kickoff: text(item.kickoff, `watchlist[${i}].kickoff`),
+      note: item.note === null || item.note === undefined ? null : text(item.note, `watchlist[${i}].note`),
       odds: quote,
       probability,
-      mean: number(item.mean, `watchlist[${i}].mean`, 0, 12),
-      fairOdds: 1 / probability,
-      edge: probability * quote - 1,
+      mean: optional(item.mean, `watchlist[${i}].mean`, 0, 12),
+      fairOdds: probability && probability > 0 ? 1 / probability : null,
+      edge: probability === null || quote === null ? null : probability * quote - 1,
     };
   });
   const scanNote = input.scanNote === undefined || input.scanNote === null

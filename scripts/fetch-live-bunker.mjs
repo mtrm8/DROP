@@ -118,19 +118,30 @@ export function selectValuePicks(candidates, asOf, minEdge = 0.04, timeZone = "A
       }
     }
   }
-  // A flat day still produced real numbers. Keep the closest evaluated matches
-  // so the page can show the near-misses with their honest (often negative)
-  // edges rather than claiming there is nothing to say.
-  const watchlist = [...candidates]
+  // A flat day still has fixtures. Take the closest evaluated matches first,
+  // then top up with the day's remaining upcoming fixtures so the report always
+  // shows real, live matches rather than a blank screen. Fixtures that never
+  // reached the model carry no probability and no edge, and say why instead.
+  const modelled = [...candidates]
+    .filter((item) => item.home?.name && item.away?.name && item.bookmaker?.name)
     .sort((a, b) => b.edge - a.edge || (b.mean ?? 0) - (a.mean ?? 0) || a.kickoff.localeCompare(b.kickoff))
     .filter((candidate, index, all) => all.findIndex((item) => item.fixtureId === candidate.fixtureId) === index)
-    .slice(0, watchlistSize)
-    .filter((item) => item.home?.name && item.away?.name)
     .map((item) => ({
       home: item.home.name, away: item.away.name, competition: item.competition,
       bookmaker: item.bookmaker.name, kickoff: item.kickoff, odds: item.odds,
-      probability: item.probability, mean: item.mean,
+      probability: item.probability, mean: item.mean, note: null,
     }));
+  const chosen = modelled.map((item) => `${item.home}|${item.away}`);
+  const upcomingOnly = (options.fallbackFixtures ?? [])
+    .filter((item) => item.home && item.away && !chosen.includes(`${item.home}|${item.away}`))
+    // Soonest first: the point of a daily watchlist is what is coming up next.
+    .sort((a, b) => a.kickoff.localeCompare(b.kickoff))
+    .map((item) => ({
+      home: item.home, away: item.away, competition: item.competition,
+      bookmaker: item.bookmaker, kickoff: item.kickoff,
+      odds: item.odds, probability: item.probability, mean: item.mean, note: item.note,
+    }));
+  const watchlist = [...modelled, ...upcomingOnly].slice(0, watchlistSize);
   if (!best) return {
     mode: "live", source: "API-Football · סריקה יומית ללא צבר מאומת",
     asOf: asOf.toISOString(), timeZone, combinedOdds: 1.01, picks: [], results: [],
@@ -220,6 +231,10 @@ export async function gatherLiveInput({ key, leagues = DEFAULT_LEAGUES, timeZone
   };
 
   const candidates = [];
+  // Every eligible fixture is remembered even when a data gate rejects it, so a
+  // day where the gates drop everything still has real matches to show. These
+  // are today's fixtures from the provider, not invented rows.
+  const fixtures_ = [];
   for (const match of upcoming) {
     scan.evaluated++;
     const current = await lineupFor(match.fixture.id);
@@ -235,8 +250,23 @@ export async function gatherLiveInput({ key, leagues = DEFAULT_LEAGUES, timeZone
       Number.isInteger(bookmaker.id) && bookmaker.name && Number.isFinite(odds) && odds > 1.01 && odds <= 100 &&
       oddsUpdatedAt && Number.isFinite(Date.parse(oddsUpdatedAt)) && Date.parse(oddsUpdatedAt) <= now.getTime() &&
       now.getTime() - Date.parse(oddsUpdatedAt) <= ODDS_AGE_MS);
+    const bestQuote = quotes.reduce((best, item) => (!best || item.odds > best.odds ? item : best), null);
+    // A fixture is a candidate for the watchlist from the moment its identity
+    // and kickoff are known; later stages only enrich it.
+    const fixture = {
+      home: match.teams.home.name, away: match.teams.away.name,
+      competition: match.league.name, kickoff: match.fixture.date,
+      odds: bestQuote?.odds ?? null, bookmaker: bestQuote?.bookmaker.name ?? null,
+      probability: null, mean: null, edge: null, note: null,
+    };
+    fixtures_.push(fixture);
+    const reject = (reason) => {
+      fixture.note = reason;
+      return reason;
+    };
     if (!quotes.length) {
       dropped.noQuote++;
+      reject("אין מחיר Over 2.5 עדכני");
       continue;
     }
     scan.quotes += quotes.length;
@@ -247,6 +277,7 @@ export async function gatherLiveInput({ key, leagues = DEFAULT_LEAGUES, timeZone
     if (homeResults.filter((row) => row.home === match.teams.home.name).length < 3 ||
         awayResults.filter((row) => row.away === match.teams.away.name).length < 3) {
       dropped.noHistory++;
+      reject("אין מספיק היסטוריית שערים");
       continue;
     }
     // Use the most recent match that actually published a starting XI. A single
@@ -264,6 +295,7 @@ export async function gatherLiveInput({ key, leagues = DEFAULT_LEAGUES, timeZone
     ]);
     if (!priorHome || !priorAway) {
       dropped.noPriorXI++;
+      reject("אין הרכב מאומת בהיסטוריה");
       continue;
     }
     const lastHomeIds = priorHome.ids;
@@ -281,6 +313,7 @@ export async function gatherLiveInput({ key, leagues = DEFAULT_LEAGUES, timeZone
     };
     if (lineup.homeChanges > 4 || lineup.awayChanges > 4) {
       dropped.tooManyChanges++;
+      reject("יותר מ־4 שינויים בהרכב המשוער");
       continue;
     }
 
@@ -291,6 +324,7 @@ export async function gatherLiveInput({ key, leagues = DEFAULT_LEAGUES, timeZone
     const awayPlayers = startingPlayerStats(awaySeason, awayIds, match.league.id, match.league.season);
     if (!homePlayers || !awayPlayers) {
       dropped.noPlayers++;
+      reject("אין נתוני שחקנים מלאים");
       continue;
     }
     const players = { season: match.league.season, home: homePlayers, away: awayPlayers };
@@ -306,8 +340,14 @@ export async function gatherLiveInput({ key, leagues = DEFAULT_LEAGUES, timeZone
     const model = analyze(base).picks[0].model;
     if (!model) {
       dropped.noModel++;
+      reject("אין מספיק נתונים למודל");
       continue;
     }
+    // Fully evaluated: the watchlist row can now carry real model numbers.
+    fixture.probability = model.probability;
+    fixture.mean = model.mean;
+    fixture.edge = model.probability * bestQuote.odds - 1;
+    fixture.note = null;
     for (const { bookmaker, odds, oddsUpdatedAt } of quotes) {
       candidates.push({ fixtureId: match.fixture.id, home: match.teams.home, away: match.teams.away,
         kickoff: match.fixture.date, competition: match.league.name, bookmaker: { id: bookmaker.id, name: bookmaker.name },
@@ -315,7 +355,7 @@ export async function gatherLiveInput({ key, leagues = DEFAULT_LEAGUES, timeZone
         edge: model.probability * odds - 1, lineup, players, results });
     }
   }
-  const input = selectValuePicks(candidates, now, 0.04, timeZone);
+  const input = selectValuePicks(candidates, now, 0.04, timeZone, { fallbackFixtures: fixtures_ });
   // Validate the exact payload that will be published, not just intermediate estimates.
   const report = analyze(input);
   if (report.picks.length > 0 && (!report.picks.every((pick) => pick.model && pick.model.edge > 0) || report.jointEdge < 0.04)) {
