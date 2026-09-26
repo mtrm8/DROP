@@ -10,8 +10,8 @@
 // so the client cannot influence, re-roll or edit what was won — the browser
 // only ever renders the amount the server already committed to.
 //
-// Robust community code fallback guarantees that valid community codes like
-// ADIR-DROP-2026 always pass verification successfully without false validation errors.
+// The local allowlist is a demo fallback for static deployments without the
+// backend. When configured, RPC rejection/network failures must fail closed.
 import { moneyEmojiFor, moneyIconFor, BOX_ITEMS, pickWeighted } from "./boxItems";
 import type { BoxItem, ItemIconName, RarityName } from "./boxItems";
 
@@ -30,7 +30,7 @@ export const COMMUNITY_CODES = [
 ];
 
 export function isValidCommunityCode(code: string): boolean {
-  return !!(code && code.trim().length > 0);
+  return COMMUNITY_CODES.includes((code ?? "").trim().toUpperCase());
 }
 
 export type RedeemResult =
@@ -104,14 +104,7 @@ export async function redeemCode(rawInput: string): Promise<RedeemResult> {
       ) {
         return { status: "already_used" };
       }
-      if (isCommunity) {
-        return { status: "ok" };
-      }
       return { status: "invalid" };
-    }
-
-    if (isCommunity) {
-      return { status: "ok" };
     }
 
     const errObj = (data ?? {}) as { error?: string; message?: string };
@@ -123,9 +116,6 @@ export async function redeemCode(rawInput: string): Promise<RedeemResult> {
     }
     return { status: "invalid" };
   } catch {
-    if (isCommunity) {
-      return { status: "ok" };
-    }
     return { status: "invalid" };
   }
 }
@@ -298,9 +288,6 @@ async function callPrizeRpc(
 
     if (!res.ok) {
       const err = classify(res, dataRow);
-      if (isCommunity) {
-        return { status: "ok", prize: pickWeighted(BOX_ITEMS) };
-      }
       return { status: "error", ...err };
     }
 
@@ -308,21 +295,11 @@ async function callPrizeRpc(
     if (prize) return { status: "ok", prize };
 
     if (Array.isArray(rawData) && rawData.length === 0) {
-      if (isCommunity && rpc === "roll_prize") {
-        return { status: "ok", prize: pickWeighted(BOX_ITEMS) };
-      }
       return { status: "empty" };
-    }
-
-    if (isCommunity) {
-      return { status: "ok", prize: pickWeighted(BOX_ITEMS) };
     }
 
     return { status: "error", message: "unexpected_prize_response" };
   } catch {
-    if (isCommunity) {
-      return { status: "ok", prize: pickWeighted(BOX_ITEMS) };
-    }
     return { status: "error", message: "network" };
   }
 }

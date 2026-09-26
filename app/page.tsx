@@ -1,10 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { motion, useMotionValue, useSpring, useTransform } from "framer-motion";
 import { Atom, ArrowLeft, BrainCircuit, ChevronDown, ShieldCheck, Sparkles } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import CommunityFooter from "@/components/CommunityFooter";
+
+const DROP_URL = `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/drop/`;
 
 function FloatingCard({ w, h, rot }: { w: number; h: number; rot: number }) {
   return (
@@ -35,6 +36,7 @@ function HeroCard3D() {
   const glowShiftY = useSpring(useTransform(glowY, [0, 100], [-42, 42]), { stiffness: 250, damping: 28, mass: 0.7 });
 
   function onPointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    if (e.pointerType !== "mouse") return;
     const rect = e.currentTarget.getBoundingClientRect();
     const px = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
     const py = Math.min(1, Math.max(0, (e.clientY - rect.top) / rect.height));
@@ -53,13 +55,11 @@ function HeroCard3D() {
     <div className="relative animate-float">
       <div className="[perspective:1400px]">
         <motion.div
-          role="button"
-          aria-label="קלף Einstein Drop תלת־ממדי — גררו לסיבוב"
+          aria-hidden="true"
           onPointerMove={onPointerMove}
           onPointerLeave={onPointerLeave}
-          className="relative touch-none select-none outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#05060a]"
-          style={{ transformStyle: "preserve-3d", rotateX, rotateY, cursor: "grab", willChange: "transform", contain: "layout paint" }}
-          whileTap={{ cursor: "grabbing" }}
+          className="relative select-none"
+          style={{ transformStyle: "preserve-3d", rotateX, rotateY, willChange: "transform", contain: "layout paint" }}
         >
           <div
             className="relative h-[300px] w-[212px] sm:h-[390px] sm:w-[276px] overflow-hidden rounded-2xl border border-cyan-400/45 bg-gradient-to-br from-[#101b27] via-[#08111b] to-black shadow-[0_30px_70px_-20px_rgba(0,0,0,0.85),0_0_40px_rgba(34,211,238,0.16)]"
@@ -187,14 +187,14 @@ export default function LandingPage() {
           </p>
 
           <div className="mt-9 flex flex-col items-center gap-4">
-            <Link
-              href="/drop"
+            <a
+              href={DROP_URL}
               className="group relative inline-flex items-center justify-center gap-2.5 rounded-2xl px-8 py-4 text-lg font-black text-slate-950 outline-none transition focus-visible:ring-2 focus-visible:ring-amber-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#05060a] bg-gradient-to-br from-amber-300 via-amber-400 to-amber-500 shadow-[0_0_45px_rgba(245,158,11,0.4)] hover:brightness-110 active:scale-[0.99]"
             >
               <Sparkles size={22} className="transition-transform group-hover:rotate-12" />
               פתחו את ההדרוף
               <ArrowLeft size={20} className="transition-transform group-hover:-translate-x-1" />
-            </Link>
+            </a>
             <p className="text-[11px] text-slate-500">
               כניסה עם קוד הקהילה — קוד זמין פעם אחת בלבד
             </p>
@@ -262,13 +262,13 @@ export default function LandingPage() {
           <p className="mx-auto mt-3 max-w-sm text-xs text-slate-400 sm:text-sm">
             ההדרוף פתוח לחברי הקהילה בלבד. הזינו את הקוד האישי שלכם והתחילו לסבב.
           </p>
-          <Link
-            href="/drop"
+          <a
+            href={DROP_URL}
             className="group mt-8 inline-flex items-center justify-center gap-2.5 rounded-2xl px-8 py-4 text-lg font-black text-slate-950 outline-none transition focus-visible:ring-2 focus-visible:ring-amber-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#05060a] bg-gradient-to-br from-amber-300 via-amber-400 to-amber-500 shadow-[0_0_45px_rgba(245,158,11,0.4)] hover:brightness-110 active:scale-[0.99]"
           >
             בחרו את הקלפים שלכם
             <ArrowLeft size={20} className="transition-transform group-hover:-translate-x-1" />
-          </Link>
+          </a>
         </motion.div>
       </section>
 
