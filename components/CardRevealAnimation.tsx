@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, Lock, Sparkles, X } from "lucide-react";
+import { Check, Lock, Sparkles } from "lucide-react";
 import { BOX_ITEMS, BoxItem, ItemIcon, RARITIES, pickWeighted } from "./drop/boxItems";
 import EinsteinConfetti from "./EinsteinConfetti";
 
@@ -31,7 +31,6 @@ interface DealCard {
 
 interface CardRevealProps {
   onFinished: (winner: BoxItem) => void;
-  onCancel?: () => void;
   // The cash prize the SERVER already rolled for this code. The machine only
   // decides which slot visually shows it — the amount can never be influenced,
   // re-rolled or forged by the client.
@@ -167,7 +166,7 @@ function buildDeck(prize: BoxItem): DealCard[] {
   }));
 }
 
-export function CardRevealAnimation({ onFinished, onCancel, prize }: CardRevealProps) {
+export function CardRevealAnimation({ onFinished, prize }: CardRevealProps) {
   const [cards, setCards] = useState<DealCard[]>(() => buildDeck(prize));
   const [winnerId, setWinnerId] = useState<number | null>(null);
   const [phase, setPhase] = useState<Phase>("grid");
@@ -275,16 +274,6 @@ export function CardRevealAnimation({ onFinished, onCancel, prize }: CardRevealP
             <p className="text-sm font-bold text-white leading-tight">איינשטיין דרופ — מעבדת הקלפים</p>
           </div>
         </div>
-        {onCancel && (
-          <button
-            type="button"
-            onClick={onCancel}
-            className="rounded-xl border border-white/10 bg-white/[0.03] p-2 text-slate-300 transition outline-none hover:border-amber-400/40 hover:text-amber-200 focus-visible:ring-2 focus-visible:ring-amber-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#05060a]"
-            aria-label="סגירה"
-          >
-            <X size={18} />
-          </button>
-        )}
       </div>
 
       <div className="relative z-10 flex min-h-0 flex-1 items-center justify-center overflow-visible px-3">

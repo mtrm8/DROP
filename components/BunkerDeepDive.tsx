@@ -1,216 +1,326 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
-import { motion, useReducedMotion } from "framer-motion";
-import { ArrowDown, BookOpen, ChartNoAxesCombined, Crosshair, Goal, Scale, Shield, ShieldCheck, Swords, Users } from "lucide-react";
-import TeamBadge, { type Country } from "./bunker/TeamBadge";
-import { GoalModelCharts, PriceBars, RiskRewardChart } from "./bunker/ReportCharts";
-import { ACCUMULATOR_ODDS, EXACT_PRODUCT, LEG_ODDS, accumulatorValuation, impliedProbability } from "./bunker/reportMath";
+import { useEffect, useState } from "react";
+import { motion } from "framer-motion";
+import {
+  Activity,
+  AlertCircle,
+  BarChart3,
+  ChevronDown,
+  ClipboardList,
+  Crosshair,
+  Gauge,
+  Info,
+  ShieldCheck,
+  Star,
+  Target,
+} from "lucide-react";
+import { GoalLaboratory, RiskReward } from "./bunker/ReportSections";
+import report from "./bunker/reportData";
 
-const PICKS = [
-  {
-    id: "austria-israel", chapter: "02", home: "אוסטריה", away: "ישראל",
-    countries: ["austria", "israel"] as Country[], odds: LEG_ODDS[0],
-    headline: "שלושה שערים — אך לא בהכרח משני הצדדים",
-    intro: "הבחירה באוסטריה–ישראל מתייחסת לסך השערים, ולא למנצחת. גם 3:0 וגם 2:1 עוברים את הקו. לכן השאלה האנליטית היא האם קצב יצירת המצבים הכולל תומך בשלושה שערים, ולא רק האם אחת הנבחרות עדיפה.",
-    attack: "לבחינת ההתקפה יש להפריד בין מספר הבעיטות לבין איכותן: מצבים מתוך הרחבה, מסירות רוחב לאחור ומצבים נייחים עשויים לייצר איכות שונה מבעיטות מרחוק. עבור שתי הנבחרות נדרש מדגם של מצבים שנוצרו, תוך התאמה לרמת היריבות. יתרון בהחזקת כדור לבדו אינו מוכיח פוטנציאל שערים גבוה.",
-    defence: "בצד ההגנתי כדאי לבדוק מצבים שסופגים לאחר איבוד כדור, הגנה על מרכז הרחבה ויכולת להתמודד עם כדורים נייחים. לחץ גבוה עשוי לקצר את הדרך לשער, אך גם לחשוף שטח מאחורי ההגנה. אלה מנגנונים לבחינה בווידאו ובנתונים, ולא קביעה שכך אוסטריה או ישראל ישחקו במפגש המסוים.",
-    history: "מגמת שערים צריכה להתבסס על חלון משחקים מוגדר: כמה משחקים נבדקו, באיזו מסגרת, מול אילו יריבות ובאיזה מגרש. שיעור משחקים עם שלושה שערים במדגם קטן עלול להשתנות מאוד בעקבות תוצאה חריגה אחת. יש להשוות גם את החציון ואת איכות המצבים כדי לזהות אם רצף הכיבוש נשען על בסיס יציב.",
-    scenarios: ["שער מוקדם עשוי לפתוח שטחים אם הנבחרת שבפיגור מגדילה סיכון.", "יתרון מוקדם עשוי דווקא להוביל להאטת הקצב ולשמירה על התוצאה.", "מצבים נייחים יכולים להכריע את הקו גם במשחק עם מעט התקפות מסודרות."],
-  },
-  {
-    id: "netherlands-germany", chapter: "03", home: "הולנד", away: "גרמניה",
-    countries: ["netherlands", "germany"] as Country[], odds: LEG_ODDS[1],
-    headline: "מחיר נמוך יותר מציב רף הסתברות גבוה יותר",
-    intro: "בהולנד–גרמניה נבחר אותו שוק, אך היחס 1.49 נמוך יותר. פירוש הדבר הוא רף איזון גבוה יותר ביחס לבחירה הראשונה. מוניטין התקפי או תוצאות זכורות ממפגשי עבר אינם מספיקים כדי להצדיק את המחיר ללא נתוני סגל, מסגרת ותאריך.",
-    attack: "בתדריך הטקטי יש לבחון מי יוצר יתרון בין הקווים, האם שחקני הכנף נכנסים לרחבה ומהי התרומה של המגנים להתקפה. תנועה של קשרים מאחור עשויה להוסיף הזדמנויות גם כשהחלוץ מכוסה. הרכב התקפי על הנייר אינו תחליף לבדיקה של איכות המצבים ושל חלוקת התפקידים בפועל.",
-    defence: "הגנת המעבר היא ציר מרכזי לבדיקה: כמה שחקנים נשארים מאחורי הכדור בזמן התקפה, ומה קורה לאחר איבוד באגף. קו הגנה גבוה עשוי להגדיל את הסיכון למתפרצות, אך לחץ מתואם יכול לצמצם אותו. כדי לבחור בין ההסברים נדרשים נתוני המפגש והסגלים, שאינם כלולים ביחסים שסופקו.",
-    history: "מפגשים ישירים מספקים הקשר, אך שינוי מאמן, גיל הסגל והמסגרת התחרותית יכולים להפוך השוואה ישנה ללא רלוונטית. אין להסיק תדירות כיבוש מזיכרון של משחק בולט. יש לציין תאריכים, גודל מדגם והפרדה בין משחקי ידידות למשחקים תחרותיים לפני הצגת מגמה היסטורית.",
-    scenarios: ["לחץ הדדי עשוי לייצר מעברים מהירים, אך גם לצמצם זמן לקבלת החלטות.", "משחק שבו תיקו מתאים לשני הצדדים עלול להתנהל בקצב שונה מהצפוי.", "היעדרות של יוצר מצבים או שחקן הגנה מרכזי עשויה לשנות את הערכת הקו."],
-  },
-];
+const PICKS = report.picks;
+const percent = (value: number) => `${(value * 100).toFixed(2)}%`;
+const demo = report.mode === "demo";
 
-function Reveal({ children }: { children: ReactNode }) {
-  const reduced = useReducedMotion();
-  return <motion.div initial={reduced ? false : { opacity: 0, y: 18 }} whileInView={{ opacity: 1, y: 0 }}
-    viewport={{ once: true, amount: 0.08 }} transition={{ duration: reduced ? 0 : 0.5 }}>{children}</motion.div>;
+function Reveal({ children, delay = 0 }: { children: React.ReactNode; delay?: number }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 22 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, amount: 0.16 }}
+      transition={{ duration: 0.55, delay, ease: [0.22, 1, 0.36, 1] }}
+    >
+      {children}
+    </motion.div>
+  );
 }
 
-const currency = (value: number) => new Intl.NumberFormat("he-IL", { style: "currency", currency: "ILS" }).format(value);
+function OddsBars() {
+  return (
+    <div className="space-y-5">
+      {PICKS.map((pick, index) => {
+        const implied = pick.breakEven * 100;
+        return (
+          <div key={pick.id}>
+            <div className="mb-2 flex items-center justify-between gap-4 text-xs">
+              <span className="font-bold text-slate-300">{pick.home} · {pick.away}</span>
+              <span className="font-mono font-black text-white">{implied.toFixed(2)}%</span>
+            </div>
+            <div className="relative h-3 overflow-hidden rounded-full bg-white/[0.06]">
+              <motion.div
+                className={`h-full rounded-full ${index === 0 ? "bg-gradient-to-r from-emerald-800 via-emerald-500 to-emerald-300" : "bg-gradient-to-r from-teal-800 via-cyan-500 to-cyan-200"}`}
+                initial={{ width: 0 }}
+                whileInView={{ width: `${implied}%` }}
+                viewport={{ once: true }}
+                transition={{ duration: 1.1, delay: 0.15 + index * 0.14, ease: "easeOut" }}
+              />
+              <span className="absolute inset-y-0 left-1/2 border-l border-dashed border-white/35" />
+              {pick.model && <span className="absolute inset-y-0 w-0.5 bg-amber-200" style={{ left: `${pick.model.probability * 100}%` }} />}
+            </div>
+            <div className="mt-1 flex justify-between font-mono text-[9px] text-slate-500" dir="ltr"><span>0%</span><span>{pick.model ? `מודל: ${percent(pick.model.probability)}` : "50%"}</span><span>100%</span></div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
-function MatchReport({ pick }: { pick: (typeof PICKS)[number] }) {
-  const implied = impliedProbability(pick.odds) * 100;
-  return <Reveal>
-    <article id={pick.id} className="relative scroll-mt-24 overflow-hidden rounded-[2rem] border border-emerald-300/20 bg-[#080e0d] p-5 sm:p-9">
-      <div aria-hidden className="pointer-events-none absolute -left-28 -top-28 h-80 w-80 rounded-full bg-emerald-400/[0.06] blur-3xl" />
-      <header className="relative border-b border-white/10 pb-7">
-        <p className="text-xs font-bold text-[#d4af37]">פרק {pick.chapter} · תיק משחק</p>
-        <h2 className="mt-2 text-2xl font-black text-white sm:text-3xl">{pick.home} נגד {pick.away}</h2>
-        <div className="mt-7 flex flex-wrap items-center justify-around gap-6 rounded-2xl border border-white/[0.07] bg-black/20 px-4 py-6">
-          <TeamBadge country={pick.countries[0]} />
-          <div className="text-center">
-            <p className="text-xs text-slate-400">מעל 2.5 שערים</p>
-            <p className="mt-1 font-mono text-4xl font-black text-[#e8ca75] sm:text-5xl" dir="ltr">{pick.odds.toFixed(2)}</p>
-            <p className="mt-1 text-xs text-slate-400">יחס לפי פרטי הטופס</p>
-          </div>
-          <TeamBadge country={pick.countries[1]} />
-        </div>
-      </header>
-
-      <div className="relative mt-7 grid gap-7 lg:grid-cols-[1.45fr_1fr]">
-        <div>
-          <h3 className="text-xl font-black text-white">{pick.headline}</h3>
-          <p className="mt-3 text-sm leading-8 text-slate-300">{pick.intro}</p>
-          <div className="mt-5 rounded-xl border-r-2 border-emerald-400 bg-emerald-300/[0.04] p-4">
-            <p className="text-sm leading-7 text-slate-200">נקודת האיזון במחיר הזה היא <bdi className="font-bold text-emerald-200">{implied.toFixed(2)}%</bdi>. כדי לטעון ליתרון כלכלי נדרש אומדן הסתברות עצמאי הגבוה מסף זה; היחס לבדו אינו מספק אומדן כזה.</p>
-            <p className="mt-2 font-mono text-sm text-emerald-300" dir="ltr">1 ÷ {pick.odds.toFixed(2)} × 100 = {implied.toFixed(2)}%</p>
-          </div>
-        </div>
-        <aside className="rounded-2xl border border-white/10 bg-black/20 p-5">
-          <h3 className="flex items-center gap-2 font-bold text-white"><Goal size={20} className="text-emerald-300" /> מפת תוצאות</h3>
-          <p className="mt-3 text-xs leading-6 text-slate-400">סיווג לפי מספר השערים בלבד. גובה האריחים אינו מייצג הסתברות.</p>
-          <div className="mt-4 grid grid-cols-3 gap-2" dir="ltr">
-            {[0, 1, 2, 3, 4, 5].map((goals) => <div key={goals} className={`rounded-xl border p-3 text-center ${goals < 3 ? "border-white/10 bg-white/[0.02] text-slate-400" : "border-emerald-300/25 bg-emerald-300/10 text-emerald-100"}`}>
-              <p className="font-mono text-xl font-black">{goals === 5 ? "5+" : goals}</p>
-              <p className="mt-1 text-xs">{goals < 3 ? "לא עובר" : "עובר"}</p>
-            </div>)}
-          </div>
-          <p className="mt-4 text-xs leading-6 text-slate-400">יש לבדוק בטופס המקורי את כללי הסליקה: זמן חוקי, הארכה ותנאי ביטול. הם לא נמסרו עם היחסים.</p>
-        </aside>
+function TeamBadge({ team, code, flag }: { team: string; code: string; flag: string }) {
+  return (
+    <div className="flex items-center gap-2.5">
+      <div className="relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/20 bg-slate-950 shadow-[0_0_24px_rgba(16,185,129,.12)]">
+        {flag === "austria" && <span className="absolute inset-0 bg-[linear-gradient(to_bottom,#ed2939_0_33%,#fff_33%_67%,#ed2939_67%)]" />}
+        {flag === "netherlands" && <span className="absolute inset-0 bg-[linear-gradient(to_bottom,#ae1c28_0_33%,#fff_33%_67%,#21468b_67%)]" />}
+        {flag === "germany" && <span className="absolute inset-0 bg-[linear-gradient(to_bottom,#111_0_33%,#d00_33%_67%,#ffce00_67%)]" />}
+        {flag === "israel" && <>
+          <span className="absolute inset-x-0 top-[22%] h-[12%] bg-white" />
+          <span className="absolute inset-x-0 bottom-[22%] h-[12%] bg-white" />
+          <Star size={15} fill="#1d4ed8" className="relative z-10 text-blue-700" />
+        </>}
+        {!flag && <span className="relative z-10 font-mono text-xs font-black text-cyan-200">{code.slice(0, 3)}</span>}
+        <span className="absolute inset-0 bg-black/10" />
       </div>
-
-      <div className="relative mt-7 grid gap-4 md:grid-cols-2">
-        {[
-          { title: "יצירת מצבים והתקפה", icon: Swords, body: pick.attack },
-          { title: "מבנה ההגנה והמעברים", icon: Shield, body: pick.defence },
-        ].map(({ title, icon: Icon, body }) => <section key={title} className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-5 transition-colors hover:border-emerald-300/30">
-          <Icon className="mb-3 text-emerald-300" size={25} />
-          <h3 className="text-lg font-bold text-white">{title}</h3>
-          <p className="mt-3 text-sm leading-7 text-slate-300">{body}</p>
-        </section>)}
+      <div>
+        <p className="text-sm font-black text-white">{team}</p>
+        <p className="font-mono text-[9px] font-bold tracking-[0.18em] text-slate-500">{code}</p>
       </div>
-      <section className="relative mt-5 rounded-2xl border border-[#d4af37]/15 bg-[#d4af37]/[0.03] p-5">
-        <h3 className="flex items-center gap-2 text-lg font-bold text-[#e8ca75]"><BookOpen size={21} /> מגמות כיבוש והקשר היסטורי</h3>
-        <p className="mt-3 text-sm leading-7 text-slate-300">{pick.history}</p>
-        <p className="mt-3 text-xs leading-6 text-slate-400">מצב המקור: לא סופקו תאריכים או תוצאות עבר למשחק זה. לכן אין כאן אחוזי כיבוש היסטוריים או גרף מגמה המיוחס לנבחרות.</p>
-      </section>
-      <section className="relative mt-6">
-        <h3 className="font-bold text-white">תרחישים לבדיקה לפני גיבוש תחזית</h3>
-        <ol className="mt-4 grid gap-3 md:grid-cols-3">
-          {pick.scenarios.map((text, index) => <li key={text} className="rounded-xl border border-white/10 p-4">
-            <span className="font-mono text-lg text-emerald-400" aria-hidden>{String(index + 1).padStart(2, "0")}</span>
-            <p className="mt-2 text-sm leading-7 text-slate-300">{text}</p>
-          </li>)}
-        </ol>
-      </section>
-    </article>
-  </Reveal>;
+    </div>
+  );
+}
+
+function MatchAnalysis({ pick, index }: { pick: (typeof PICKS)[number]; index: number }) {
+  const accent = index === 0 ? "emerald" : "cyan";
+  return (
+    <Reveal delay={index * 0.08}>
+      <article className={`relative overflow-hidden rounded-[1.7rem] border bg-[#080f12]/95 p-5 shadow-[0_20px_70px_rgba(0,0,0,.3)] sm:p-7 ${accent === "emerald" ? "border-emerald-300/20" : "border-cyan-300/20"}`}>
+        <div className={`pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full blur-3xl ${accent === "emerald" ? "bg-emerald-400/[0.07]" : "bg-cyan-400/[0.07]"}`} />
+        <header className="relative flex flex-wrap items-center justify-between gap-4 border-b border-white/[0.08] pb-5">
+          <div>
+            <p className="mb-2 text-[9px] font-black text-slate-400">משחק {pick.id} · {pick.fixture ? `${pick.fixture.competition} · ${new Date(pick.fixture.kickoff).toLocaleString("he-IL")}` : "תמונת מצב לפני שריקת הפתיחה"}</p>
+            <div className="flex flex-wrap items-center gap-3 sm:gap-5">
+              <TeamBadge team={pick.home} code={pick.homeCode} flag={pick.homeFlag} />
+              <span className="font-mono text-xs font-black text-slate-600">נגד</span>
+              <TeamBadge team={pick.away} code={pick.awayCode} flag={pick.awayFlag} />
+            </div>
+          </div>
+          <div className="rounded-xl border border-amber-200/20 bg-amber-200/[0.05] px-4 py-2 text-center">
+            <p className="text-[8px] font-black text-amber-100/80">יחס השוק</p>
+            <p className="font-mono text-2xl font-black text-amber-100">{pick.odds.toFixed(2)}</p>
+          </div>
+        </header>
+
+        <div className="relative mt-5 grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
+          <div className="rounded-2xl border border-white/[0.07] bg-black/25 p-4 sm:p-5">
+            <p className="text-[9px] font-black text-emerald-200/80">הבחירה בשוק</p>
+            <h4 className="mt-2 flex items-center gap-2 text-lg font-black text-white"><Target size={19} className="text-emerald-300" /> {pick.market}</h4>
+            <p className="mt-2 text-xs leading-6 text-slate-400">סופרים את השערים של שתי הנבחרות יחד: שלושה ומעלה מזכים את הבחירה; עד שני שערים מפסידים אותה.</p>
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <div className="rounded-xl border border-red-300/10 bg-red-400/[0.035] p-3">
+                <span className="text-[9px] font-bold uppercase tracking-wider text-slate-500">0–2 שערים</span>
+                <p className="mt-1 text-xs font-black text-slate-300">הבחירה מפסידה</p>
+              </div>
+              <div className="rounded-xl border border-emerald-300/15 bg-emerald-300/[0.045] p-3">
+                <span className="text-[9px] font-bold uppercase tracking-wider text-slate-500">3+ שערים</span>
+                <p className="mt-1 text-xs font-black text-emerald-100">הבחירה זוכה</p>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div className="flex items-center gap-2 text-[9px] font-black text-cyan-200"><BarChart3 size={14} /> סף האיזון לפי היחס</div>
+            <p className="mt-2 text-sm leading-6 text-slate-300">יחס {pick.odds.toFixed(2)} מציב את סף האיזון על {percent(pick.breakEven)}. {pick.model ? `לפי מדגם של ${pick.model.homeGames} משחקי בית של ${pick.home} ו־${pick.model.awayGames} משחקי חוץ של ${pick.away}, מודל השערים מציע ${percent(pick.model.probability)} לשלושה שערים ומעלה. הפער מהסף הוא ${percent(pick.model.probability - pick.breakEven)} נקודות אחוז.` : "לא התקבל מדגם מספיק לחישוב הסתברות עצמאית למשחק."}</p>
+            <div className="mt-4 rounded-xl border border-cyan-300/10 bg-cyan-300/[0.025] p-3.5">
+              <p className="font-mono text-xs text-cyan-100/80" dir="ltr">1 ÷ {pick.odds.toFixed(2)} × 100 = {percent(pick.breakEven)}</p>
+              <p className="mt-1 text-[10px] leading-5 text-slate-400">סף תמחורי בלבד, ללא ניכוי מרווח ההימורים; לא אומדן לסיכוי בפועל.</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="relative mt-5 grid gap-4 border-t border-white/[0.07] pt-5 md:grid-cols-[0.9fr_1.1fr]">
+          <div>
+            <p className="flex items-center gap-2 text-[9px] font-black text-amber-100/80"><Crosshair size={13} /> מה צריך לבדוק לפני הערכת המשחק?</p>
+            <p className="mt-2 text-xs leading-6 text-slate-400">המודל מסתמך על שערים במשחקים קודמים, ללא התאמה לרמת היריבה. לפני הסקת מסקנה יש לבדוק גם כושר נוכחי, היעדרויות ומשמעות המשחק.</p>
+          </div>
+          <ul className="space-y-2">
+            {["בדקו הרכבים, חיסורים וכשירות השוערים.", "השוו את רמת היריבות במדגם למשחק הקרוב.", "בחנו נתוני שערים צפויים ממקור מאומת, אם ישנם.", "בדקו את המסגרת התחרותית ואת כללי סליקת הטופס."].map((question) => (
+              <li key={question} className="flex items-start gap-2 text-[10px] leading-5 text-slate-400">
+                <ChevronDown size={13} className="mt-0.5 shrink-0 rotate-[-90deg] text-emerald-300" />{question}
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {pick.fixture && <p className="relative mt-3 text-[10px] leading-5 text-slate-300">הרכבים מאושרים · {pick.fixture.lineup.homeChanges} שינויים אצל {pick.home} ו־{pick.fixture.lineup.awayChanges} אצל {pick.away} בהשוואה להרכב הפותח הקודם. יחס מ־{pick.fixture.bookmaker}, עודכן ב־{new Date(pick.fixture.oddsUpdatedAt).toLocaleString("he-IL")}.</p>}
+        {pick.fixture && <div className="relative mt-4 grid gap-3 border-t border-white/[0.07] pt-4 sm:grid-cols-2">
+          {([{ team: pick.home, players: pick.fixture.players.home }, { team: pick.away, players: pick.fixture.players.away }]).map(({ team, players }) => <div key={team} className="rounded-xl border border-white/[0.08] bg-black/20 p-3">
+            <p className="text-xs font-bold text-white">{team} · שחקני ההרכב הבולטים ({pick.fixture!.players.season})</p>
+            <p className="mt-1 text-[10px] text-slate-400">נתוני עונה במפעל · שערים, בישולים, בעיטות ומסירות מפתח</p>
+            <ul className="mt-2 space-y-1.5">{[...players].sort((a, b) => (b.goals + b.assists) - (a.goals + a.assists) || b.minutes - a.minutes).slice(0, 3).map((player) =>
+              <li key={player.name} className="text-[10px] leading-5 text-slate-300">{player.name} · {player.minutes} דק׳ · {player.goals} שערים · {player.assists} בישולים · {player.shots ?? "—"} בעיטות ({player.shotsOnTarget ?? "—"} למסגרת) · {player.keyPasses ?? "—"} מסירות מפתח · ציון {player.rating?.toFixed(1) ?? "—"}</li>
+            )}</ul>
+          </div>)}
+        </div>}
+        <div className="relative mt-4 flex flex-wrap gap-2">
+          {[pick.model ? `ממוצע שערים במודל: ${pick.model.mean.toFixed(2)} למשחק` : "מדגם: אינו מספיק לחיזוי", "מפגשים ישירים: לא נותחו", "נתוני xG: לא נמסרו"].map((item) => (
+            <span key={item} className="rounded-lg border border-white/[0.07] bg-white/[0.02] px-2.5 py-1.5 text-[9px] font-semibold text-slate-500">{item}</span>
+          ))}
+        </div>
+      </article>
+    </Reveal>
+  );
 }
 
 export default function BunkerDeepDive() {
-  const [stakeText, setStakeText] = useState("100");
-  const numericStake = Number(stakeText);
-  const validStake = stakeText.trim() !== "" && Number.isFinite(numericStake) && numericStake >= 1 && numericStake <= 100000;
-  const stake = validStake ? numericStake : 0;
-  const value = accumulatorValuation(stake, 0);
+  const [stake, setStake] = useState(100);
+  const [expired, setExpired] = useState(false);
+  useEffect(() => {
+    if (!demo) {
+      const localDate = (date: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem", year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
+      const check = () => setExpired(report.status !== "unavailable" && (localDate(new Date(report.asOf)) !== localDate(new Date()) ||
+        PICKS.some((pick) => !pick.fixture ||
+        Date.parse(pick.fixture.kickoff) <= Date.now() ||
+        Date.now() - Date.parse(pick.fixture.oddsUpdatedAt) > 2 * 60 * 60 * 1000)));
+      check();
+      const interval = window.setInterval(check, 60_000);
+      return () => window.clearInterval(interval);
+    }
+  }, []);
+  const theoreticalReturn = stake * report.combinedOdds;
+  const netProfit = theoreticalReturn - stake;
+  const roundedCombinedImplied = report.breakEven * 100;
+  const sourceInputs = PICKS;
 
-  return <div className="space-y-8" dir="rtl">
-    <nav aria-label="ניווט בפרקי הדוח" className="flex flex-wrap gap-2 rounded-2xl border border-emerald-300/15 bg-[#080e0d] p-3">
-      {[
-        ["summary", "תקציר מנהלים"], ["austria-israel", "אוסטריה – ישראל"], ["netherlands-germany", "הולנד – גרמניה"],
-        ["goals-model", "מעבדת שערים"], ["valuation", "סיכון ותשואה"], ["sources", "מקורות ומתודולוגיה"],
-      ].map(([id, label]) => <a key={id} href={`#${id}`} className="rounded-xl px-3 py-2 text-sm font-semibold text-slate-300 transition hover:bg-emerald-300/10 hover:text-emerald-100 focus-visible:outline focus-visible:outline-emerald-300">{label}</a>)}
-    </nav>
+  if (!PICKS.length) return <section className="rounded-2xl border border-cyan-300/20 bg-slate-950 p-7 text-sm leading-7 text-slate-200">
+    <h2 className="text-xl font-black text-white">{report.status === "unavailable" ? "ממתינים לנתוני משחקים מאומתים להיום" : "אין היום שתי בחירות שעומדות בתנאי הניתוח"}</h2>
+    <p className="mt-2">{report.status === "unavailable" ? "דוח משחקים יופיע כאן לאחר סריקת נתוני הספק הקרובה. עד אז לא מוצגים משחקים או יחסים ישנים." : `הנתונים נבדקו מחדש ב־${new Date(report.asOf).toLocaleString("he-IL")}. לא נמצאו משחקים עם הרכבים מאושרים, נתוני שחקנים מספקים ויחסים עדכניים שנותנים יתרון מחושב אצל אותו מפעיל. הדוח יתעדכן אוטומטית בריצה הבאה.`}</p>
+  </section>;
 
-    <Reveal><section id="summary" className="scroll-mt-24 rounded-[2rem] border border-emerald-300/20 bg-gradient-to-bl from-[#10241c] via-[#080e0d] to-[#131108] p-5 sm:p-9">
-      <p className="text-xs font-bold text-emerald-300">פרק 01 · תקציר מנהלים</p>
-      <h2 className="mt-2 text-3xl font-black text-white sm:text-4xl">שני משחקים. קו שערים אחד.</h2>
-      <p className="mt-5 max-w-3xl text-base leading-8 text-slate-300">הדוח מפרק את טופס הצבירה לשני תיקים: אוסטריה נגד ישראל ביחס 1.56, והולנד נגד גרמניה ביחס 1.49. בשניהם נבחרו מעל 2.5 שערים. המטרה היא להבין את מחיר הבחירה, את תנאי ההצלחה ואת הנתונים הדרושים כדי להעריך אותה מקצועית.</p>
-      <div className="mt-7 grid gap-3 sm:grid-cols-3">
-        {[
-          ["בחירות בטופס", "02", "שתיהן צריכות להצליח"],
-          ["יחס משולב שנמסר", "2.32", "זהו הבסיס לחישובי ההחזר"],
-          ["סף איזון משולב", `${(impliedProbability(ACCUMULATOR_ODDS) * 100).toFixed(2)}%`, "מחושב מהמחיר, לא מתחזית"],
-        ].map(([label, number, note]) => <div key={label} className="rounded-2xl border border-white/10 bg-black/20 p-5">
-          <p className="text-sm text-slate-400">{label}</p><p className="mt-2 font-mono text-3xl font-black text-[#e8ca75]" dir="ltr">{number}</p><p className="mt-2 text-xs leading-6 text-slate-400">{note}</p>
-        </div>)}
+  if (expired) return <section className="rounded-2xl border border-amber-200/20 bg-slate-950 p-7 text-sm leading-7 text-amber-100">הדוח הקודם אינו עדכני עוד. בחירות חדשות יופיעו לאחר סריקת משחקי היום, ההרכבים והיחסים הזמינים.</section>;
+
+  return (
+    <div className="space-y-7">
+      <Reveal>
+        <section className="relative overflow-hidden rounded-[1.7rem] border border-emerald-300/20 bg-gradient-to-br from-[#081713] via-[#070d10] to-[#101008] p-5 shadow-[0_22px_85px_rgba(0,0,0,.32)] sm:p-7">
+          <div className="pointer-events-none absolute -left-20 -top-24 h-64 w-64 rounded-full bg-emerald-400/[0.07] blur-[90px]" />
+          <div className="relative flex flex-wrap items-end justify-between gap-5">
+            <div>
+              <p className="flex items-center gap-2 text-[9px] font-black text-emerald-200"><ClipboardList size={13} /> תקציר מנהלים · דוח קדם־משחק</p>
+              <h2 className="mt-2 text-2xl font-black text-white sm:text-4xl">{PICKS.length} משחקים, קו שערים אחד</h2>
+              <p className="mt-2 text-sm font-bold text-slate-300">{PICKS.length} בחירות מעל 2.5 שערים · כולן חייבות להצליח</p>
+              <p className="mt-2 text-xs text-amber-100">{demo ? "סביבת הדגמה · נתונים סינתטיים, לא תחזית למשחקים אמיתיים" : `מקור: ${report.source} · עדכון: ${new Date(report.asOf).toLocaleString("he-IL")}`}</p>
+            </div>
+            <div className="rounded-xl border border-white/[0.08] bg-black/25 px-4 py-3">
+              <p className="text-[8px] font-black text-slate-400">{demo ? "היחס המשולב לדוגמה" : "יחס משולב מחושב מאותם יחסי שוק"}</p>
+              <p className="mt-0.5 font-mono text-3xl font-black text-amber-100">{report.combinedOdds.toFixed(2)}</p>
+              <p className="text-[9px] text-slate-400">מכפלת היחסים: <bdi>{report.productOdds.toFixed(4)}</bdi></p>
+            </div>
+          </div>
+          <div className="relative mt-5 flex items-start gap-2 rounded-xl border border-amber-200/15 bg-amber-200/[0.035] p-3 text-[10px] leading-5 text-slate-400">
+            <Info size={14} className="mt-0.5 shrink-0 text-amber-200" />
+            <span>{demo ? "זהו פלט הדגמה המבוסס על תוצאות סינתטיות. אין להשתמש בו כהערכת משחקים אמיתיים. " : "הדוח חושב מנתוני ספק המשחקים והיחסים. הרכבים מאושרים נבדקו ושימשו לסינון בלבד. "}מודל השערים מבוסס על תוצאות בית וחוץ; איכות היריבות ונתוני xG אינם נכללים בו. {report.jointProbability === null ? "לא התקבל מדגם מספיק להערכת כל הבחירות." : "ההסתברות המשולבת מניחה אי־תלות בין המשחקים."}</span>
+          </div>
+        </section>
+      </Reveal>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        {PICKS.map((pick, index) => <MatchAnalysis key={pick.id} pick={pick} index={index} />)}
       </div>
-      <p className="mt-6 text-sm leading-7 text-slate-400">בסיס הדוח: פרטי הבחירות והיחסים שנמסרו. תאריך, מסגרת, נתוני שערים צפויים, הרכבים ומפגשי עבר אינם מצורפים. הפרקים הטקטיים מציגים מסגרת ניתוח; הגרפים מבוססים על חישובי מחיר או על הנחות מפורשות.</p>
-      <a href="#austria-israel" className="mt-5 inline-flex items-center gap-2 text-sm font-bold text-emerald-200">לפתיחת תיקי המשחק <ArrowDown size={17} /></a>
-    </section></Reveal>
 
-    {PICKS.map((pick) => <MatchReport key={pick.id} pick={pick} />)}
+      <Reveal>
+        <section className="rounded-[1.7rem] border border-cyan-300/20 bg-[#070e11]/95 p-5 shadow-[0_18px_70px_rgba(0,0,0,.28)] sm:p-7">
+          <header className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <p className="text-[9px] font-black text-cyan-200">מפת הסתברויות · מחיר השוק</p>
+              <h2 className="mt-1 text-xl font-black text-white sm:text-2xl">איזה סיכוי דרוש כדי להגיע לאיזון?</h2>
+            </div>
+            <p className="text-[9px] text-slate-400">סף איזון = 1 חלקי היחס · לפני ניכוי מרווח ההימורים</p>
+          </header>
+          <div className="mt-6 grid gap-7 lg:grid-cols-[1fr_0.8fr]">
+            <OddsBars />
+            <div className="rounded-2xl border border-white/[0.07] bg-black/20 p-4 sm:p-5">
+              <p className="text-[9px] font-black text-slate-400">הבחירות יחד</p>
+              <div className="mt-4 flex items-center justify-center gap-2 font-mono text-sm font-black sm:text-base">
+                {PICKS.map((pick, index) => <span key={pick.id} className="contents">{index > 0 && <span className="text-slate-600">×</span>}<span className="rounded-lg border border-emerald-300/20 bg-emerald-300/[0.05] px-2.5 py-2 text-emerald-100">{pick.odds.toFixed(2)}</span></span>)}
+                <span className="text-slate-600">=</span>
+                <span className="rounded-lg border border-amber-200/25 bg-amber-200/[0.06] px-2.5 py-2 text-amber-100">{report.productOdds.toFixed(4)}</span>
+              </div>
+              <div className="mt-5 grid grid-cols-2 gap-3">
+                <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3">
+                  <p className="text-[9px] text-slate-400">סף לפי מכפלת היחסים</p>
+                  <p className="mt-1 font-mono text-xl font-black text-white">{percent(1 / report.productOdds)}</p>
+                </div>
+                <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3">
+                  <p className="text-[9px] text-slate-400">סף לפי היחס המשולב: {report.combinedOdds.toFixed(2)}</p>
+                  <p className="mt-1 font-mono text-xl font-black text-white">{roundedCombinedImplied.toFixed(2)}%</p>
+                </div>
+              </div>
+              <p className="mt-3 text-[10px] leading-5 text-slate-400">{demo ? "היחס שנמסר בדוגמה" : "מכפלת יחסי השוק המעוגלת"}, {report.combinedOdds.toFixed(2)}, היא הבסיס לחישובי ההחזר והאיזון. {report.jointProbability === null ? "אין מדגם מספיק להערכת סיכוי משותף." : `המודל מעריך סיכוי משותף של ${percent(report.jointProbability)} בהנחת אי־תלות בין המשחקים; התוחלת לפי אומדן זה היא ${percent(report.jointEdge!)} מסכום הטופס.`} מרווח ההימורים אינו מנוכה מהיחסים.</p>
+            </div>
+          </div>
+        </section>
+      </Reveal>
 
-    <Reveal><section className="rounded-[2rem] border border-white/10 bg-[#090f0d] p-5 sm:p-8">
-      <h2 className="text-2xl font-black text-white">שלוש עדשות להערכת המשחק</h2>
-      <p className="mt-3 text-sm leading-7 text-slate-400">כרטיסי עבודה לקראת קבלת הרכבים ומידע תחרותי. אין כאן שחקנים, תפקידים או שופט שיוחסו למפגש ללא מקור.</p>
-      <div className="mt-6 grid gap-4 md:grid-cols-3">
-        {[
-          { icon: Users, title: "תפקידי מפתח", subtitle: "יוצר מצבים · חלוץ · שוער", body: "האם יוצרי המצבים צפויים לפתוח? האם החלוץ מקבל דקות מלאות? שינוי בעמדה מרכזית עשוי לשנות את נפח ההתקפה גם בלי לשנות את המערך הרשום." },
-          { icon: Crosshair, title: "איכות ולא רק כמות", subtitle: "רחבה · מעברים · כדורים נייחים", body: "עשר בעיטות אינן בהכרח טובות מחמש. יש לבחון מרחק, זווית, לחץ הגנתי וסוג מצב. נתוני שערים צפויים מועילים במיוחד כאשר מפרידים פנדלים מהמשחק השוטף." },
-          { icon: Scale, title: "הקשר השיפוט", subtitle: "קצב · עבירות · כדורי עונשין", body: "זהות השופט לא נמסרה. לאחר אימותה אפשר לבדוק ממוצעי עבירות וכרטיסים במדגם מתאים, אך אין לתרגם אותם אוטומטית להסתברות לפנדל או להרחקה." },
-        ].map(({ icon: Icon, title, subtitle, body }) => <motion.article key={title} whileHover={{ y: -4 }} className="relative overflow-hidden rounded-2xl border border-[#d4af37]/25 bg-gradient-to-b from-emerald-950/40 to-black/40 p-6">
-          <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-2xl border border-emerald-200/25 bg-emerald-300/[0.06] text-emerald-200"><Icon size={32} strokeWidth={1.5} /></div>
-          <h3 className="text-xl font-black text-white">{title}</h3><p className="mt-2 text-xs text-[#e8ca75]">{subtitle}</p><p className="mt-4 text-sm leading-7 text-slate-300">{body}</p>
-        </motion.article>)}
-      </div>
-    </section></Reveal>
+      <Reveal>
+        <section className="overflow-hidden rounded-[1.7rem] border border-amber-200/20 bg-gradient-to-br from-[#141309] via-[#0c0d0b] to-[#07100d] p-5 sm:p-7">
+          <header className="flex items-center gap-2 text-sm font-black text-amber-100"><Gauge size={14} /> סיכון ותשואה · מה קורה אם הטופס זוכה?</header>
+          <div className="mt-5 grid gap-5 lg:grid-cols-[0.75fr_1.25fr]">
+            <label className="block rounded-2xl border border-white/[0.08] bg-black/25 p-4">
+              <span className="text-[10px] font-bold text-slate-400">סכום הטופס לחישוב (₪)</span>
+              <input type="number" min="1" max="100000" step="0.01" value={stake} onChange={(event) => setStake(Math.max(1, Math.min(100000, Number(event.target.value) || 1)))} className="mt-2 block w-full bg-transparent font-mono text-3xl font-black text-white outline-none focus-visible:ring-1 focus-visible:ring-amber-200" dir="ltr" />
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <motion.div key={theoreticalReturn} initial={{ opacity: 0.6, y: 6 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl border border-emerald-300/15 bg-emerald-300/[0.04] p-4">
+                <p className="text-[9px] font-bold text-slate-400">החזר כולל אם שתי הבחירות מצליחות</p>
+                <p className="mt-2 font-mono text-2xl font-black text-emerald-100">₪{theoreticalReturn.toFixed(2)}</p>
+                <p className="mt-1 text-[9px] text-slate-400">סכום הטופס × {report.combinedOdds.toFixed(2)}, כולל הקרן</p>
+              </motion.div>
+              <motion.div key={netProfit} initial={{ opacity: 0.6, y: 6 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl border border-amber-200/15 bg-amber-200/[0.035] p-4">
+                <p className="text-[9px] font-bold text-slate-400">רווח נקי אם שתי הבחירות מצליחות</p>
+                <p className="mt-2 font-mono text-2xl font-black text-amber-100">₪{netProfit.toFixed(2)}</p>
+                <p className="mt-1 text-[9px] text-slate-400">ההחזר הכולל פחות סכום הטופס</p>
+              </motion.div>
+            </div>
+          </div>
+          <div className="mt-4 overflow-hidden rounded-xl border border-white/[0.07]">
+            <div className="grid grid-cols-[1.2fr_1fr_0.7fr] bg-white/[0.035] px-3 py-2 text-[9px] font-black uppercase tracking-wider text-slate-500 sm:px-4">
+              <span>משחק</span><span>בחירה</span><span className="text-right">יחס</span>
+            </div>
+            {sourceInputs.map((pick) => (
+              <div key={pick.home} className="grid grid-cols-[1.2fr_1fr_0.7fr] border-t border-white/[0.05] px-3 py-3 text-[10px] sm:px-4">
+                <span className="font-bold text-slate-200">{pick.home} – {pick.away}</span><span className="text-slate-400">{pick.market}</span><span className="text-right font-mono font-black text-cyan-100">{pick.odds.toFixed(2)}</span>
+              </div>
+            ))}
+            <div className="grid grid-cols-[1.2fr_1fr_0.7fr] border-t border-amber-200/10 bg-amber-200/[0.025] px-3 py-3 text-[10px] sm:px-4">
+              <span className="font-black text-amber-100">טופס משולב</span><span className="text-slate-400">כל הבחירות יחד</span><span className="text-right font-mono font-black text-amber-100">{report.combinedOdds.toFixed(2)}</span>
+            </div>
+          </div>
+          <p className="mt-3 flex items-start gap-2 text-[10px] leading-5 text-slate-400"><AlertCircle size={12} className="mt-0.5 shrink-0 text-amber-200/70" /> אם בחירה אחת מפסידה, סכום הטופס כולו בסיכון, בכפוף לכללי הסליקה. {demo ? "החישוב מבוסס על היחס המשולב בדוגמה." : "היחס המשולב הוא מכפלת יחסי השוק מאותו מפעיל, מעוגלת לשתי ספרות; יחס הטופס בפועל עשוי להיות שונה."}</p>
+          <RiskReward stake={stake} odds={report.combinedOdds} modelChance={report.jointProbability} />
+        </section>
+      </Reveal>
 
-    <Reveal><section className="rounded-[2rem] border border-emerald-300/20 bg-[#080e0d] p-5 sm:p-8">
-      <div className="mb-6 flex items-center gap-3"><ChartNoAxesCombined className="text-emerald-300" /><h2 className="text-2xl font-black text-white">מה המחיר אומר — ומה הוא לא אומר</h2></div>
-      <div className="grid gap-6 lg:grid-cols-2"><PriceBars /><div className="space-y-5 text-sm leading-8 text-slate-300">
-        <h3 className="text-xl font-bold text-white">מחיר, הסתברות ושולי ביטחון</h3>
-        <p>יחס נמוך יותר מחייב הסתברות הצלחה גבוהה יותר כדי להגיע לאיזון. לכן הבחירה בהולנד–גרמניה דורשת רף גבוה יותר מהבחירה באוסטריה–ישראל. אין בכך הוכחה שהמפגש השני אכן צפוי להניב יותר שערים.</p>
-        <p>היחסים כוללים בדרך כלל מרווח של מפעיל ההימורים. כדי להסירו נדרשים גם היחסים של הצד המשלים בשוק ובאותו מועד. שתי בחירות ה״מעל״ לבדן אינן מאפשרות להפיק הסתברות הוגנת נטולת מרווח.</p>
-        <div className="rounded-xl border border-[#d4af37]/20 bg-[#d4af37]/5 p-4">
-          <p className="font-bold text-[#e8ca75]">דיוק בטופס המשולב</p>
-          <p className="mt-2 font-mono" dir="ltr">1.56 × 1.49 = {EXACT_PRODUCT.toFixed(4)} ≈ 2.32</p>
-          <p className="mt-2">מכפלת היחסים לפני עיגול היא 2.3244. בדוח זה ההחזר מחושב לפי היחס המשולב שנמסר, 2.32; תנאי הטופס המקורי הם שקובעים את הסכום המשולם.</p>
-        </div>
-        <p>הפיכת מכפלת היחסים להסתברות משותפת אמיתית דורשת גם אומדנים עצמאיים וגם הנחת אי־תלות מתאימה. כאן מוצגים ספי מחיר בלבד.</p>
-      </div></div>
-    </section></Reveal>
+      <Reveal><GoalLaboratory picks={PICKS} /></Reveal>
 
-    <Reveal><GoalModelCharts /></Reveal>
-
-    <Reveal><section id="valuation" className="scroll-mt-24 rounded-[2rem] border border-[#d4af37]/25 bg-gradient-to-bl from-[#17150d] to-[#080e0d] p-5 sm:p-8">
-      <p className="text-xs font-bold text-[#d4af37]">פרק 05 · הערכת הטופס</p>
-      <h2 className="mt-2 text-2xl font-black text-white sm:text-3xl">החזר אפשרי, סכום בסיכון ותוחלת</h2>
-      <p className="mt-4 text-sm leading-7 text-slate-300">צבירה מגדילה את ההחזר האפשרי, אך מחייבת הצלחה בכל הבחירות. בחירה אחת שנכשלת מספיקה כדי להפסיד את הסכום שהושקע, בכפוף לכללי הסליקה של הטופס.</p>
-      <div className="mt-6 grid gap-4 md:grid-cols-3">
-        <label className="rounded-xl border border-white/10 bg-black/20 p-5 text-sm text-slate-300">
-          סכום לחישוב בשקלים
-          <input type="number" min="1" max="100000" step="0.01" value={stakeText} onChange={(e) => setStakeText(e.target.value)} aria-invalid={!validStake} aria-describedby={!validStake ? "stake-error" : undefined}
-            className="mt-3 block w-full rounded-lg border border-emerald-200/20 bg-[#080e0d] px-3 py-2 font-mono text-2xl text-white outline-none focus:ring-2 focus:ring-emerald-300" dir="ltr" />
-          {!validStake && <span id="stake-error" className="mt-2 block text-xs text-rose-300">יש להזין סכום בין 1 ל־100,000 ₪.</span>}
-        </label>
-        {[["החזר כולל אם הטופס זוכה", value.grossReturn], ["רווח נקי אם הטופס זוכה", value.netProfit]].map(([label, amount]) => <div key={label} className="rounded-xl border border-white/10 bg-black/20 p-5" aria-live="polite">
-          <p className="text-sm text-slate-300">{label}</p><p className="mt-4 text-2xl font-black text-emerald-100"><bdi>{validStake ? currency(Number(amount)) : "—"}</bdi></p>
-        </div>)}
-      </div>
-      <div className="mt-6 overflow-x-auto rounded-xl border border-white/10">
-        <table className="w-full text-right text-sm">
-          <caption className="border-b border-white/10 bg-white/[0.025] p-4 text-right font-bold text-white">טבלת תמחור לפי הבחירות שנמסרו</caption>
-          <thead className="text-slate-400"><tr><th scope="col" className="p-4">משחק</th><th scope="col" className="p-4">בחירה</th><th scope="col" className="p-4">יחס</th><th scope="col" className="p-4">סף איזון</th></tr></thead>
-          <tbody>{PICKS.map((pick) => <tr key={pick.id} className="border-t border-white/5 text-slate-200"><th scope="row" className="p-4 font-semibold">{pick.home} – {pick.away}</th><td className="p-4">מעל 2.5 שערים</td><td className="p-4"><bdi>{pick.odds.toFixed(2)}</bdi></td><td className="p-4"><bdi>{(impliedProbability(pick.odds) * 100).toFixed(2)}%</bdi></td></tr>)}</tbody>
-          <tfoot className="border-t border-[#d4af37]/25 bg-[#d4af37]/5 text-[#e8ca75]"><tr><th scope="row" className="p-4">טופס משולב</th><td className="p-4">שתי הבחירות</td><td className="p-4">2.32</td><td className="p-4"><bdi>{(impliedProbability(ACCUMULATOR_ODDS) * 100).toFixed(2)}%</bdi></td></tr></tfoot>
-        </table>
-      </div>
-      {validStake && <RiskRewardChart stake={stake} />}
-    </section></Reveal>
-
-    <Reveal><section id="sources" className="scroll-mt-24 rounded-[2rem] border border-white/10 bg-[#080e0d] p-5 sm:p-8">
-      <p className="text-xs font-bold text-emerald-300">פרק 06 · מקורות ומתודולוגיה</p>
-      <h2 className="mt-2 flex items-center gap-3 text-2xl font-black text-white"><ShieldCheck className="text-emerald-300" /> הפרדה בין עובדות, חישובים והנחות</h2>
-      <div className="mt-6 grid gap-5 md:grid-cols-3">
-        {[
-          ["פרטים שנמסרו", "שמות ארבע הנבחרות, שתי בחירות מעל 2.5 שערים, יחסים 1.56 ו־1.49 ויחס משולב 2.32. לא נמסר מועד שבו היחסים נלקחו."],
-          ["חישובים בדוח", "ספי איזון, מכפלת יחסים, החזר ברוטו ורווח נקי. כל אלה ניתנים לשחזור מהמספרים בטופס. המחירים לא עברו ניכוי מרווח מפעיל."],
-          ["תרחישים בהנחת משתמש", "התפלגות השערים ועקומת התוחלת מחושבות לפי פרמטרים שבחרתם. הן אינן סדרת נתונים היסטורית או תחזית מאומתת למשחקים."],
-        ].map(([title, body]) => <div key={title} className="rounded-xl border border-white/10 p-5"><h3 className="font-bold text-emerald-100">{title}</h3><p className="mt-3 text-sm leading-7 text-slate-300">{body}</p></div>)}
-      </div>
-      <h3 className="mt-7 text-lg font-bold text-white">להשלמת תיק המידע</h3>
-      <p className="mt-3 text-sm leading-8 text-slate-300">נדרשים תאריך ומסגרת, הרכבים מאושרים, מקור נתונים עקבי לשערים צפויים, רשימת משחקי המדגם ומידע על המגרש והשופט. עד לקבלתם לא ניתן להציג ממוצעי כיבוש, אחוזי מפגשים ישירים או מדדי שערים צפויים ספציפיים לנבחרות. סמלי הנבחרות בדוח הם עיצובים מקוריים בצבעי דגלי המדינות, ולא סמלי ההתאחדויות הרשמיים.</p>
-    </section></Reveal>
-  </div>;
+      <Reveal>
+        <section className="rounded-[1.7rem] border border-white/[0.08] bg-slate-950/75 p-5 sm:p-7">
+          <div className="flex items-center gap-2 text-[9px] font-black text-emerald-200"><ShieldCheck size={14} /> מקורות ומתודולוגיה</div>
+          <h2 className="mt-2 text-xl font-black text-white">מה ידוע, מה מחושב ומה עדיין חסר</h2>
+          <p className="mt-2 max-w-3xl text-xs leading-6 text-slate-400">מקור הנתונים: {report.source}. עודכן: {new Date(report.asOf).toLocaleString("he-IL")}. {report.methodology} {demo ? "ההרכבים אינם כלולים בדוגמה." : "היחס המשולב מחושב ממכפלת מחירי אותו מפעיל; אינו ציטוט לטופס."} נתוני xG אינם כלולים בקלט. מעבדת השערים מאפשרת לשנות את הנחת הממוצע ולבחון רגישות.</p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            {[
+              { title: "מגמות שערים", value: "נכלל מדגם תוצאות בית וחוץ; לא בוצעה התאמה לרמת היריבות", icon: BarChart3 },
+              { title: "מפגשים ישירים", value: "לא נותחו במודל", icon: Activity },
+              { title: "שערים צפויים", value: "דרוש מקור נתונים עקבי ומאומת", icon: Target },
+            ].map((item) => (
+              <div key={item.title} className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-3.5">
+                <item.icon size={15} className="text-cyan-200" />
+                <p className="mt-2 text-[10px] font-black text-white">{item.title}</p>
+                <p className="mt-1 text-[9px] text-slate-500">{item.value}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+      </Reveal>
+    </div>
+  );
 }
