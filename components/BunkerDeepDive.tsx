@@ -422,7 +422,7 @@ export default function BunkerDeepDive({ report }: { report: Report }) {
       <section className="relative overflow-hidden rounded-[1.7rem] border border-cyan-300/20 bg-gradient-to-br from-[#0c1a1e] via-[#080f14] to-[#0b1016] p-5 shadow-[0_24px_85px_rgba(0,0,0,.34)] sm:p-8">
         <div className="pointer-events-none absolute -right-20 -top-24 h-72 w-72 rounded-full bg-emerald-400/[0.06] blur-[85px]" aria-hidden="true" />
         <div className="relative max-w-3xl">
-          <p className="flex items-center gap-2 text-[10px] font-black tracking-wide text-cyan-200"><ClipboardList size={14} /> מנוע AI · סריקת משחקי היום</p>
+          <p className="flex items-center gap-2 text-[10px] font-black tracking-wide text-cyan-200"><ClipboardList size={14} /> {status.state === "stale" ? "מנוע AI · ממתינים לסריקה הבאה" : "מנוע AI · סריקת משחקי היום"}</p>
           <h2 className="mt-3 text-2xl font-black leading-tight text-white sm:text-3xl">{title}</h2>
           <p className="mt-3 text-sm leading-7 text-slate-300">{body}</p>
         </div>

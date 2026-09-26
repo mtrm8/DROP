@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { motion, useReducedMotion } from "framer-motion";
-import { Activity, BarChart3, CalendarClock, ClipboardList, Info, ShieldCheck, Target } from "lucide-react";
+import { Activity, Atom, BarChart3, CalendarClock, ClipboardList, Info, ShieldCheck, Target } from "lucide-react";
 import Navbar from "./Navbar";
 import CommunityFooter from "./CommunityFooter";
 import report from "./analyst/reportData";
 import type { AnalystPick, VenueStats } from "./analyst/reportData";
+import { isDropVerified } from "./drop/session";
 
 const percent = (value: number) => `${(value * 100).toFixed(1)}%`;
 const formatDate = (value: string) => new Date(value).toLocaleString("he-IL", {
@@ -104,8 +106,22 @@ function PickCard({ pick, index, reduced }: { pick: AnalystPick; index: number; 
 }
 
 export default function AnalystBunker({ embedded = false }: { embedded?: boolean }) {
+  const router = useRouter();
   const reduced = Boolean(useReducedMotion());
   const [now, setNow] = useState<number | null>(null);
+  // The standalone route is session-gated: only visitors who passed the drop
+  // code flow in this tab may see it. Bookmarks and direct links are sent back
+  // to the drop flow; the embedded landing-page copy is intentionally public.
+  const [allowed, setAllowed] = useState<boolean | null>(embedded ? true : null);
+  useEffect(() => {
+    if (embedded || allowed !== null) return;
+    if (isDropVerified()) {
+      setAllowed(true);
+      return;
+    }
+    setAllowed(false);
+    router.replace("/drop");
+  }, [embedded, allowed, router]);
   useEffect(() => {
     const check = () => setNow(Date.now());
     check();
@@ -137,6 +153,14 @@ export default function AnalystBunker({ embedded = false }: { embedded?: boolean
   // Embedded variant drops the page chrome so the section can sit directly in
   // the landing page's scroll flow beneath the Community Drops block.
   if (embedded) return content;
+  if (allowed !== true) return <main className="min-h-screen overflow-x-clip">
+    <Navbar />
+    <div className="mx-auto flex min-h-[65vh] max-w-3xl items-center justify-center gap-3 px-6" role="status">
+      <Atom className="animate-spin text-cyan-200" size={34} aria-label="בודקים גישת דרופ" />
+      <span className="text-sm font-bold text-slate-400">נדרש קוד דרופ — עוברים לעמוד הדרופ…</span>
+    </div>
+    <CommunityFooter />
+  </main>;
   return <main className="min-h-screen overflow-x-clip">
     <Navbar />
     {content}

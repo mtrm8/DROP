@@ -113,6 +113,11 @@ export default function AIBunkerExperience() {
     };
   }, [access, report]);
 
+  // Header copy is driven by the evaluated state: a stale or provider-blocked
+  // scan must never claim to show "today's games".
+  const state = status?.state ?? null;
+  const visiblePicks = status ? status.activePicks : report.picks;
+
   if (access === "checking") {
     return (
       <main className="min-h-screen">
@@ -135,7 +140,7 @@ export default function AIBunkerExperience() {
           <h1 className="mt-4 text-3xl font-black text-white">בנקר AI · גישה לחברים ולמפתחים</h1>
           <p className="mt-3 max-w-md text-sm leading-7 text-slate-400">מנוע הנתונים האוטומטי זמין כעת לתצוגה מוקדמת בלבד. הזינו קוד גישה כדי לצפות בסריקה הניסיונית ובבחירות מבוססות API.</p>
           <form onSubmit={handleUnlock} className="mt-7 w-full max-w-md text-right">
-            <label htmlFor="ai-bunker-member-code" className="text-xs font-bold text-cyan-100">קוד גישה לחברים</label>
+            <label htmlFor="ai-bunker-member-code" className="text-xs font-bold text-cyan-100">קוד זה מיועד רק למפתחים</label>
             <input id="ai-bunker-member-code" type="text" value={memberCode} onChange={(event) => { setMemberCode(event.target.value); setCodeError(false); }} autoComplete="off" spellCheck={false} dir="ltr" className="mt-2 w-full rounded-xl border border-cyan-300/20 bg-slate-950 px-4 py-3 text-center font-mono text-base tracking-wide text-white outline-none focus-visible:border-cyan-300 focus-visible:ring-2 focus-visible:ring-cyan-300/20" />
             {codeError && <p role="alert" className="mt-2 text-xs text-rose-300">קוד הגישה שגוי. בדקו את הקוד ונסו שוב.</p>}
             <button type="submit" className="mt-4 w-full rounded-xl bg-gradient-to-l from-cyan-300 to-lime-300 px-6 py-3 font-black text-slate-950 transition hover:brightness-110">כניסה לבנקר AI</button>
@@ -167,8 +172,33 @@ export default function AIBunkerExperience() {
               <div className="inline-flex items-center gap-2 rounded-full border border-amber-200/25 bg-amber-200/[0.07] px-3 py-1.5 text-[10px] font-black text-amber-100"><ShieldCheck size={13} /> בפיתוח · גישת חברים פעילה</div>
               <p className="mt-5 flex items-center gap-2 text-sm font-bold text-cyan-200"><BrainCircuit size={18} /> איינשטיין דרופ · מנוע נתונים אוטומטי</p>
               <h1 className="mt-2 text-4xl font-black tracking-tight text-white sm:text-6xl"><span className="bg-gradient-to-l from-cyan-200 via-cyan-400 to-lime-300 bg-clip-text text-transparent">בנקר AI</span></h1>
-              <p className="mt-3 text-lg font-bold text-slate-200">{report.picks.length ? `סריקת AI · ${report.picks.length} בחירות שערים` : status?.state === "no-picks" && report.watchlist?.length ? `מעקב ניסיוני · ${report.watchlist.length} משחקים` : "סריקת AI · משחקי היום"}</p>
-              <p className="mt-2 max-w-xl text-sm leading-7 text-slate-400">{report.picks.length ? `${report.picks.map((pick) => `${pick.home}–${pick.away}`).join(" ו־")}: בחינת קו מעל 2.5 שערים, ספי האיזון והסיכון בטופס משולב.` : status?.state === "no-picks" && report.watchlist?.length ? "משחקי היום מוצגים ככרטיסי מעקב עם מחירי שוק, נתוני מודל כשזמינים, והסבר ברור למידע שטרם אומת." : "בחירות יופיעו כאן רק לאחר אימות משחקים קרובים, נתוני שחקנים ויחסים עדכניים."} {status ? statusSummary(status, report) : ""}</p>
+              <p className="mt-3 text-lg font-bold text-slate-200">
+                {visiblePicks.length
+                  ? `סריקת AI · ${visiblePicks.length} בחירות שערים`
+                  : state === "no-picks" && report.watchlist?.length
+                    ? `מעקב ניסיוני · ${report.watchlist.length} משחקים`
+                    : state === "unavailable"
+                      ? "סריקת AI · ממתינים לנתוני הספק"
+                      : state === "stale"
+                        ? "סריקת AI · ממתינים לסריקה הבאה"
+                        : state === "started"
+                          ? "סריקת AI · משחקי היום כבר התחילו"
+                          : "סריקת AI · משחקי היום"}
+              </p>
+              <p className="mt-2 max-w-xl text-sm leading-7 text-slate-400">
+                {visiblePicks.length
+                  ? `${visiblePicks.map((pick) => `${pick.home}–${pick.away}`).join(" ו־")}: בחינת קו מעל 2.5 שערים, ספי האיזון והסיכון בטופס משולב.`
+                  : state === "no-picks" && report.watchlist?.length
+                    ? "משחקי היום מוצגים ככרטיסי מעקב עם מחירי שוק, נתוני מודל כשזמינים, והסבר ברור למידע שטרם אומת."
+                    : state === "unavailable"
+                      ? "הסריקה לא השלימה קבלת נתונים מהספק, ולכן לא נפתח היום טופס מהמרות. הסקירה תחזור אוטומטית בפעימה הבאה."
+                      : state === "stale"
+                        ? "הדוח שפורסם בסריקה האחרונה מוצג כמות שהוא. נתוני היום ייכנסו לכאן מיד לאחר שהסריקה המתוזמנת הבאה תסתיים."
+                        : state === "started"
+                          ? "כל משחקי הסריקה כבר התחילו, ולכן לא ניתן יותר להמר עליהם. הבחירות יעודכנו כאן בפעימת הסריקה הבאה."
+                          : "בחירות יופיעו כאן רק לאחר אימות משחקים קרובים, נתוני שחקנים ויחסים עדכניים."}
+                {status ? ` ${statusSummary(status, report)}` : ""}
+              </p>
             </div>
             <motion.div
               animate={{ y: [0, -8, 0], rotate: [0, 3, 0] }}

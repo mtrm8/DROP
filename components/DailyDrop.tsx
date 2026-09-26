@@ -11,6 +11,7 @@ import { BACKEND_ENABLED, getRolledPrize, isValidCommunityCode, redeemCode, roll
 import { ItemIcon, RARITIES, BOX_ITEMS, pickWeighted } from "./drop/boxItems";
 import type { BoxItem } from "./drop/boxItems";
 import { DROP_PRIZE_COPY, DROP_TITLE } from "./drop/copy";
+import { clearDropVerified, markDropVerified } from "./drop/session";
 import { useFreshPageView } from "./useFreshPageView";
 
 function CardEmblem() {
@@ -232,6 +233,7 @@ export default function DailyDrop() {
     entryGuard.current = false;
     setEnteringBunker(false);
     setStage("idle");
+    clearDropVerified();
     try {
       window.localStorage.removeItem(ACTIVE_KEY);
       window.localStorage.removeItem(COMPLETED_KEY);
@@ -262,6 +264,7 @@ export default function DailyDrop() {
     };
     const enter = (won: BoxItem, resumed: boolean) => {
       rememberActive(value, won);
+      markDropVerified();
       setPrize(won);
       setUnlocked(true);
       setResumed(resumed);
@@ -400,7 +403,7 @@ export default function DailyDrop() {
                 : "הדרופ פתוח לחברי קהילת הכדורגל — הזינו את קוד הגישה שקיבלתם."}
             </p>
 
-            <AnimatePresence initial={false}>
+            <AnimatePresence mode="wait" initial={false}>
                 {unlocked ? (
                   <motion.div
                     key="verified"
@@ -427,8 +430,8 @@ export default function DailyDrop() {
                           boxShadow: "0 0 34px rgba(52,211,153,0.45)",
                         }}
                         initial={{ scale: 0 }}
-                        animate={{ scale: [0, 1.14, 1] }}
-                        transition={{ type: "spring", stiffness: 320, damping: 15 }}
+                        animate={{ scale: 1 }}
+                        transition={{ type: "spring", stiffness: 320, damping: 24, mass: 0.7 }}
                       >
                         <svg viewBox="0 0 24 24" fill="none" className="h-8 w-8">
                           <motion.path
