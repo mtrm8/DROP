@@ -45,16 +45,41 @@ export function startingPlayerStats(rows, lineupIds, leagueId, season) {
   return players.length >= 9 ? players : null;
 }
 
-export function createProvider(key, request = fetch) {
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// A daily scan issues dozens of sequential calls, so a single rate-limited or
+// 5xx response used to abort the whole day and leave the site on a waiting
+// state. Transient failures are retried a few times with a growing pause, which
+// is what "not immediately fetched" usually turns out to be.
+const TRANSIENT = (status) => status === 429 || status >= 500;
+const RETRY_DELAYS = [1000, 4000, 12000];
+
+export function createProvider(key, request = fetch, { retries = RETRY_DELAYS } = {}) {
   if (!key) throw new Error("API_FOOTBALL_KEY is required for live data");
+  const call = async (url) => {
+    for (let attempt = 0; ; attempt++) {
+      let response;
+      try {
+        response = await request(url, {
+          headers: { "x-apisports-key": key }, signal: AbortSignal.timeout(15000), cache: "no-store",
+        });
+      } catch (error) {
+        // Network and timeout blips are transient too.
+        if (attempt >= retries.length) throw error;
+        await sleep(retries[attempt]);
+        continue;
+      }
+      if (response.ok) return response;
+      if (!TRANSIENT(response.status) || attempt >= retries.length) {
+        throw new Error(`Football provider ${url.pathname}: HTTP ${response.status}`);
+      }
+      await sleep(retries[attempt]);
+    }
+  };
   return async function api(path, params) {
     const url = new URL(path, BASE);
     for (const [name, value] of Object.entries(params)) url.searchParams.set(name, String(value));
-    const response = await request(url, {
-      headers: { "x-apisports-key": key }, signal: AbortSignal.timeout(15000), cache: "no-store",
-    });
-    if (!response.ok) throw new Error(`Football provider ${path}: HTTP ${response.status}`);
-    const body = await response.json();
+    const body = await (await call(url)).json();
     if (body.errors && Object.keys(body.errors).length) throw new Error(`Football provider ${path}: ${JSON.stringify(body.errors)}`);
     if (!Array.isArray(body.response)) throw new Error(`Football provider ${path}: invalid response`);
     // Fixture-scoped endpoints usually have one page, but odds can be paginated.
@@ -62,11 +87,7 @@ export function createProvider(key, request = fetch) {
     if (pages > 10) throw new Error(`Football provider ${path}: too many result pages`);
     const items = [...body.response];
     for (let page = 2; page <= pages; page++) {
-      const next = await request(new URL(`${url}&page=${page}`), {
-        headers: { "x-apisports-key": key }, signal: AbortSignal.timeout(15000), cache: "no-store",
-      });
-      if (!next.ok) throw new Error(`Football provider ${path}: page ${page} HTTP ${next.status}`);
-      const more = await next.json();
+      const more = await (await call(new URL(`${url}&page=${page}`))).json();
       if (more.errors && Object.keys(more.errors).length) throw new Error(`Football provider ${path}: ${JSON.stringify(more.errors)}`);
       if (!Array.isArray(more.response)) throw new Error(`Football provider ${path}: invalid page ${page}`);
       items.push(...more.response);
@@ -175,11 +196,15 @@ export function selectValuePicks(candidates, asOf, minEdge = 0.04, timeZone = "A
  * leaving yesterday's finished matches on screen, and it is a valid live
  * report, so the daily build can still publish it.
  */
-export function unavailableInput(now = new Date(), timeZone = "Asia/Jerusalem") {
+export function unavailableInput(now = new Date(), timeZone = "Asia/Jerusalem", reason = "") {
+  // Say *why* the scan could not finish. "Data not completed" on its own gives
+  // a reader nothing to act on, and a wrong key looks identical to a provider
+  // outage unless the message carries the cause.
+  const why = reason ? ` (${reason.slice(0, 90)})` : "";
   return {
     mode: "live",
     status: "unavailable",
-    statusMessage: "לא ניתן להשלים את עדכון הנתונים היום. הבנקר יתעדכן שוב בסריקה היומית הבאה.",
+    statusMessage: `לא ניתן להשלים את עדכון הנתונים היום${why}. הבנקר יתעדכן שוב בסריקה היומית הבאה.`,
     source: "עדכון נתוני הספק לא הושלם",
     asOf: now.toISOString(),
     timeZone,
@@ -200,7 +225,7 @@ export async function gatherLiveInput({ key, leagues = DEFAULT_LEAGUES, timeZone
     .sort((a, b) => a.fixture.date.localeCompare(b.fixture.date));
   // "No picks" and "nothing could be evaluated" look identical on the page
   // unless the scan says which one happened, so every early exit is counted.
-  const scan = { seen: fixtures.length, eligible: upcoming.length, evaluated: 0, quotes: 0 };
+  const scan = { seen: fixtures.length, eligible: upcoming.length, evaluated: 0, quotes: 0, errors: 0 };
   const dropped = { league: 0, noQuote: 0, noHistory: 0, noPriorXI: 0, noPlayers: 0, tooManyChanges: 0, noModel: 0 };
 
   const past = new Map();
@@ -237,122 +262,130 @@ export async function gatherLiveInput({ key, leagues = DEFAULT_LEAGUES, timeZone
   const fixtures_ = [];
   for (const match of upcoming) {
     scan.evaluated++;
-    const current = await lineupFor(match.fixture.id);
-    const confirmedHomeIds = starters(current.find((entry) => entry.team?.id === match.teams.home.id));
-    const confirmedAwayIds = starters(current.find((entry) => entry.team?.id === match.teams.away.id));
+    try {
+      const current = await lineupFor(match.fixture.id);
+      const confirmedHomeIds = starters(current.find((entry) => entry.team?.id === match.teams.home.id));
+      const confirmedAwayIds = starters(current.find((entry) => entry.team?.id === match.teams.away.id));
 
-    const listings = await api("/odds", { fixture: match.fixture.id });
-    const quotes = listings.flatMap((listing) => (listing.bookmakers ?? []).flatMap((bookmaker) =>
-      (bookmaker.bets ?? []).filter((bet) => bet.id === 5 || bet.name === "Goals Over/Under").map((bet) => ({
-        bookmaker, odds: Number(bet.values?.find((value) => value.value === "Over 2.5")?.odd),
-        oddsUpdatedAt: listing.update ?? bet.update,
-      })))).filter(({ bookmaker, odds, oddsUpdatedAt }) =>
-      Number.isInteger(bookmaker.id) && bookmaker.name && Number.isFinite(odds) && odds > 1.01 && odds <= 100 &&
-      oddsUpdatedAt && Number.isFinite(Date.parse(oddsUpdatedAt)) && Date.parse(oddsUpdatedAt) <= now.getTime() &&
-      now.getTime() - Date.parse(oddsUpdatedAt) <= ODDS_AGE_MS);
-    const bestQuote = quotes.reduce((best, item) => (!best || item.odds > best.odds ? item : best), null);
-    // A fixture is a candidate for the watchlist from the moment its identity
-    // and kickoff are known; later stages only enrich it.
-    const fixture = {
-      home: match.teams.home.name, away: match.teams.away.name,
-      competition: match.league.name, kickoff: match.fixture.date,
-      odds: bestQuote?.odds ?? null, bookmaker: bestQuote?.bookmaker.name ?? null,
-      probability: null, mean: null, edge: null, note: null,
-    };
-    fixtures_.push(fixture);
-    const reject = (reason) => {
-      fixture.note = reason;
-      return reason;
-    };
-    if (!quotes.length) {
-      dropped.noQuote++;
-      reject("אין מחיר Over 2.5 עדכני");
-      continue;
-    }
-    scan.quotes += quotes.length;
-
-    const [homeResults, awayResults] = await Promise.all([
-      teamHistory(match.teams.home), teamHistory(match.teams.away),
-    ]);
-    if (homeResults.filter((row) => row.home === match.teams.home.name).length < 3 ||
-        awayResults.filter((row) => row.away === match.teams.away.name).length < 3) {
-      dropped.noHistory++;
-      reject("אין מספיק היסטוריית שערים");
-      continue;
-    }
-    // Use the most recent match that actually published a starting XI. A single
-    // fixture with missing lineup data was enough to discard the whole day.
-    const priorXI = async (rows, teamId) => {
-      for (const row of rows.slice(0, 5)) {
-        const entries = await lineupFor(row.fixtureId);
-        const ids = starters(entries.find((entry) => entry.team?.id === teamId));
-        if (new Set(ids).size === 11) return { ids, fixtureId: row.fixtureId };
+      const listings = await api("/odds", { fixture: match.fixture.id });
+      const quotes = listings.flatMap((listing) => (listing.bookmakers ?? []).flatMap((bookmaker) =>
+        (bookmaker.bets ?? []).filter((bet) => bet.id === 5 || bet.name === "Goals Over/Under").map((bet) => ({
+          bookmaker, odds: Number(bet.values?.find((value) => value.value === "Over 2.5")?.odd),
+          oddsUpdatedAt: listing.update ?? bet.update,
+        })))).filter(({ bookmaker, odds, oddsUpdatedAt }) =>
+        Number.isInteger(bookmaker.id) && bookmaker.name && Number.isFinite(odds) && odds > 1.01 && odds <= 100 &&
+        oddsUpdatedAt && Number.isFinite(Date.parse(oddsUpdatedAt)) && Date.parse(oddsUpdatedAt) <= now.getTime() &&
+        now.getTime() - Date.parse(oddsUpdatedAt) <= ODDS_AGE_MS);
+      const bestQuote = quotes.reduce((best, item) => (!best || item.odds > best.odds ? item : best), null);
+      // A fixture is a candidate for the watchlist from the moment its identity
+      // and kickoff are known; later stages only enrich it.
+      const fixture = {
+        home: match.teams.home.name, away: match.teams.away.name,
+        competition: match.league.name, kickoff: match.fixture.date,
+        odds: bestQuote?.odds ?? null, bookmaker: bestQuote?.bookmaker.name ?? null,
+        probability: null, mean: null, edge: null, note: null,
+      };
+      fixtures_.push(fixture);
+      const reject = (reason) => {
+        fixture.note = reason;
+        return reason;
+      };
+      if (!quotes.length) {
+        dropped.noQuote++;
+        reject("אין מחיר Over 2.5 עדכני");
+        continue;
       }
-      return null;
-    };
-    const [priorHome, priorAway] = await Promise.all([
-      priorXI(homeResults, match.teams.home.id), priorXI(awayResults, match.teams.away.id),
-    ]);
-    if (!priorHome || !priorAway) {
-      dropped.noPriorXI++;
-      reject("אין הרכב מאומת בהיסטוריה");
-      continue;
-    }
-    const lastHomeIds = priorHome.ids;
-    const lastAwayIds = priorAway.ids;
-    const homeConfirmed = new Set(confirmedHomeIds).size === 11;
-    const awayConfirmed = new Set(confirmedAwayIds).size === 11;
-    const homeIds = homeConfirmed ? confirmedHomeIds : lastHomeIds;
-    const awayIds = awayConfirmed ? confirmedAwayIds : lastAwayIds;
-    const lineup = {
-      homeStarters: 11, awayStarters: 11,
-      homeKind: homeConfirmed ? "confirmed" : "projected",
-      awayKind: awayConfirmed ? "confirmed" : "projected",
-      homeChanges: homeConfirmed ? homeIds.filter((id) => !lastHomeIds.includes(id)).length : 0,
-      awayChanges: awayConfirmed ? awayIds.filter((id) => !lastAwayIds.includes(id)).length : 0,
-    };
-    if (lineup.homeChanges > 4 || lineup.awayChanges > 4) {
-      dropped.tooManyChanges++;
-      reject("יותר מ־4 שינויים בהרכב המשוער");
-      continue;
-    }
+      scan.quotes += quotes.length;
 
-    const [homeSeason, awaySeason] = await Promise.all([
-      playerSeason(match.teams.home, match.league), playerSeason(match.teams.away, match.league),
-    ]);
-    const homePlayers = startingPlayerStats(homeSeason, homeIds, match.league.id, match.league.season);
-    const awayPlayers = startingPlayerStats(awaySeason, awayIds, match.league.id, match.league.season);
-    if (!homePlayers || !awayPlayers) {
-      dropped.noPlayers++;
-      reject("אין נתוני שחקנים מלאים");
-      continue;
-    }
-    const players = { season: match.league.season, home: homePlayers, away: awayPlayers };
+      const [homeResults, awayResults] = await Promise.all([
+        teamHistory(match.teams.home), teamHistory(match.teams.away),
+      ]);
+      if (homeResults.filter((row) => row.home === match.teams.home.name).length < 3 ||
+          awayResults.filter((row) => row.away === match.teams.away.name).length < 3) {
+        dropped.noHistory++;
+        reject("אין מספיק היסטוריית שערים");
+        continue;
+      }
+      // Use the most recent match that actually published a starting XI. A single
+      // fixture with missing lineup data was enough to discard the whole day.
+      const priorXI = async (rows, teamId) => {
+        for (const row of rows.slice(0, 5)) {
+          const entries = await lineupFor(row.fixtureId);
+          const ids = starters(entries.find((entry) => entry.team?.id === teamId));
+          if (new Set(ids).size === 11) return { ids, fixtureId: row.fixtureId };
+        }
+        return null;
+      };
+      const [priorHome, priorAway] = await Promise.all([
+        priorXI(homeResults, match.teams.home.id), priorXI(awayResults, match.teams.away.id),
+      ]);
+      if (!priorHome || !priorAway) {
+        dropped.noPriorXI++;
+        reject("אין הרכב מאומת בהיסטוריה");
+        continue;
+      }
+      const lastHomeIds = priorHome.ids;
+      const lastAwayIds = priorAway.ids;
+      const homeConfirmed = new Set(confirmedHomeIds).size === 11;
+      const awayConfirmed = new Set(confirmedAwayIds).size === 11;
+      const homeIds = homeConfirmed ? confirmedHomeIds : lastHomeIds;
+      const awayIds = awayConfirmed ? confirmedAwayIds : lastAwayIds;
+      const lineup = {
+        homeStarters: 11, awayStarters: 11,
+        homeKind: homeConfirmed ? "confirmed" : "projected",
+        awayKind: awayConfirmed ? "confirmed" : "projected",
+        homeChanges: homeConfirmed ? homeIds.filter((id) => !lastHomeIds.includes(id)).length : 0,
+        awayChanges: awayConfirmed ? awayIds.filter((id) => !lastAwayIds.includes(id)).length : 0,
+      };
+      if (lineup.homeChanges > 4 || lineup.awayChanges > 4) {
+        dropped.tooManyChanges++;
+        reject("יותר מ־4 שינויים בהרכב המשוער");
+        continue;
+      }
 
-    const results = [...new Map([...homeResults, ...awayResults].map((row) => [row.fixtureId, row])).values()];
-    const base = {
-      mode: "demo", source: "חישוב ביניים", asOf: now.toISOString(), combinedOdds: quotes[0].odds,
-      picks: [{ id: "01", home: match.teams.home.name, away: match.teams.away.name,
-        homeCode: match.teams.home.code ?? "TEAM", awayCode: match.teams.away.code ?? "TEAM",
-        homeFlag: "", awayFlag: "", odds: quotes[0].odds }],
-      results: results.map(({ date, home, away, homeGoals, awayGoals }) => ({ date, home, away, homeGoals, awayGoals })),
-    };
-    const model = analyze(base).picks[0].model;
-    if (!model) {
-      dropped.noModel++;
-      reject("אין מספיק נתונים למודל");
-      continue;
-    }
-    // Fully evaluated: the watchlist row can now carry real model numbers.
-    fixture.probability = model.probability;
-    fixture.mean = model.mean;
-    fixture.edge = model.probability * bestQuote.odds - 1;
-    fixture.note = null;
-    for (const { bookmaker, odds, oddsUpdatedAt } of quotes) {
-      candidates.push({ fixtureId: match.fixture.id, home: match.teams.home, away: match.teams.away,
-        kickoff: match.fixture.date, competition: match.league.name, bookmaker: { id: bookmaker.id, name: bookmaker.name },
-        oddsUpdatedAt, odds, probability: model.probability, mean: model.mean,
-        edge: model.probability * odds - 1, lineup, players, results });
+      const [homeSeason, awaySeason] = await Promise.all([
+        playerSeason(match.teams.home, match.league), playerSeason(match.teams.away, match.league),
+      ]);
+      const homePlayers = startingPlayerStats(homeSeason, homeIds, match.league.id, match.league.season);
+      const awayPlayers = startingPlayerStats(awaySeason, awayIds, match.league.id, match.league.season);
+      if (!homePlayers || !awayPlayers) {
+        dropped.noPlayers++;
+        reject("אין נתוני שחקנים מלאים");
+        continue;
+      }
+      const players = { season: match.league.season, home: homePlayers, away: awayPlayers };
+
+      const results = [...new Map([...homeResults, ...awayResults].map((row) => [row.fixtureId, row])).values()];
+      const base = {
+        mode: "demo", source: "חישוב ביניים", asOf: now.toISOString(), combinedOdds: quotes[0].odds,
+        picks: [{ id: "01", home: match.teams.home.name, away: match.teams.away.name,
+          homeCode: match.teams.home.code ?? "TEAM", awayCode: match.teams.away.code ?? "TEAM",
+          homeFlag: "", awayFlag: "", odds: quotes[0].odds }],
+        results: results.map(({ date, home, away, homeGoals, awayGoals }) => ({ date, home, away, homeGoals, awayGoals })),
+      };
+      const model = analyze(base).picks[0].model;
+      if (!model) {
+        dropped.noModel++;
+        reject("אין מספיק נתונים למודל");
+        continue;
+      }
+      // Fully evaluated: the watchlist row can now carry real model numbers.
+      fixture.probability = model.probability;
+      fixture.mean = model.mean;
+      fixture.edge = model.probability * bestQuote.odds - 1;
+      fixture.note = null;
+      for (const { bookmaker, odds, oddsUpdatedAt } of quotes) {
+        candidates.push({ fixtureId: match.fixture.id, home: match.teams.home, away: match.teams.away,
+          kickoff: match.fixture.date, competition: match.league.name, bookmaker: { id: bookmaker.id, name: bookmaker.name },
+          oddsUpdatedAt, odds, probability: model.probability, mean: model.mean,
+          edge: model.probability * odds - 1, lineup, players, results });
+      }
+    } catch (error) {
+      // One unreachable fixture, a rate-limited odds call or a lineup
+      // that never arrived must not throw away the rest of the day. The
+      // fixture keeps its place in the watchlist and the scan continues.
+      scan.errors++;
+      console.warn(`Skipped ${match.teams.home.name} v ${match.teams.away.name}: ${error.message}`);
     }
   }
   const input = selectValuePicks(candidates, now, 0.04, timeZone, { fallbackFixtures: fixtures_ });
@@ -383,6 +416,7 @@ function buildScanNote(scan, dropped, legs, selected) {
     dropped.noPlayers && `${dropped.noPlayers} ללא נתוני שחקנים`,
     dropped.tooManyChanges && `${dropped.tooManyChanges} עם יותר מ־4 שינויי הרכב`,
   ].filter(Boolean);
+  const failed = scan.errors ? ` · ${scan.errors} נכשלו בשלב אחד` : "";
   const why = reasons.length ? ` · ${reasons.join(" · ")}` : legs ? ` · ${legs} שערים ללא יתרון` : "";
-  return `סריקה: ${scan.eligible} פריצים · ${scan.evaluated} נבדקו${why}`;
+  return `סריקה: ${scan.eligible} פריצים · ${scan.evaluated} נבדקו${why}${failed}`;
 }

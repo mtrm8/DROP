@@ -23,6 +23,6 @@ try {
   // successful daily scan; local runs still fail loudly by default.
   if (process.env.BUNKER_ALLOW_UNAVAILABLE !== "1") throw error;
   console.error("Today's provider data is unavailable; publishing a dated status instead of stale picks:", error);
-  await publish(unavailableInput(new Date(), timeZone));
+  await publish(unavailableInput(new Date(), timeZone, String(error?.message ?? error)));
   console.log("Published a dated unavailable status for today.");
 }

@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import { strict as assert } from "node:assert";
 import { analyze, assertPublishable } from "./bunker-model.mjs";
-import { gatherLiveInput, selectValuePicks, todayInZone, unavailableInput } from "./fetch-live-bunker.mjs";
+import { createProvider, gatherLiveInput, selectValuePicks, todayInZone, unavailableInput } from "./fetch-live-bunker.mjs";
 
 const now = new Date("2026-09-26T12:00:00Z");
 const team = (id, name) => ({ id, name, code: name.slice(0, 3).toUpperCase() });
@@ -208,6 +208,57 @@ test("the watchlist never repeats a match and is capped", async () => {
   const keys = report.watchlist.map((item) => `${item.home}|${item.away}`);
   assert.equal(new Set(keys).size, keys.length, "no duplicate matches");
   assert.ok(report.watchlist.length <= 5);
+});
+
+test("one failing fixture does not discard the rest of the day's scan", async () => {
+  // The odds call throws for a single fixture, as a rate limit or timeout would.
+  const base = mockProvider();
+  let seen = 0;
+  const flaky = async (url) => {
+    if (url.pathname === "/odds") {
+      seen++;
+      if (seen === 1) throw new Error("socket hang up");
+    }
+    return base(url);
+  };
+  const report = analyze(await gatherLiveInput({ key: "test-key", now, request: flaky }));
+  // The surviving fixture must still be reported, not lost with the failed one.
+  assert.ok(report.picks.length > 0, "a single failure should not void the day");
+  assert.match(report.scanNote, /סריקה: \d+ פריצים/);
+});
+
+test("a rate-limited provider is retried instead of failing the day", async () => {
+  let attempts = 0;
+  const base = mockProvider();
+  const throttled = async (url) => {
+    if (url.pathname === "/fixtures" && url.searchParams.has("date")) {
+      attempts++;
+      if (attempts === 1) return { ok: false, status: 429, json: async () => ({}) };
+    }
+    return base(url);
+  };
+  const api = createProvider("test-key", throttled, { retries: [0] });
+  const fixtures = await api("/fixtures", { date: "2026-09-26" });
+  assert.equal(attempts, 2, "the call was retried once");
+  assert.ok(Array.isArray(fixtures));
+});
+
+test("a permanent failure is retried only a bounded number of times", async () => {
+  let attempts = 0;
+  const broken = async () => {
+    attempts++;
+    return { ok: false, status: 500, json: async () => ({}) };
+  };
+  const api = createProvider("test-key", broken, { retries: [0, 0] });
+  await assert.rejects(() => api("/fixtures", { date: "2026-09-26" }), /HTTP 500/);
+  assert.equal(attempts, 3, "one attempt plus two retries, then it gives up");
+});
+
+test("an unavailable report names the reason instead of a bare waiting notice", () => {
+  const report = analyze(unavailableInput(now, "Asia/Jerusalem", "Football provider /fixtures: HTTP 401"));
+  assert.equal(report.status, "unavailable");
+  assert.match(report.statusMessage, /HTTP 401/);
+  assert.match(report.statusMessage, /הבנקר יתעדכן שוב/);
 });
 
 test("the daily build publishes a long scan of the current day and refuses older ones", async () => {
