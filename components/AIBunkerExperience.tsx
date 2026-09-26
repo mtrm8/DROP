@@ -12,9 +12,10 @@ import type { Report } from "./bunker/reportData";
 import { evaluateReport, statusLabel, statusSummary, supersedes } from "./bunker/reportStatus";
 import type { ReportStatus } from "./bunker/reportStatus";
 import { useFreshPageView } from "./useFreshPageView";
-import { consumeBunkerEntry } from "./drop/bunkerEntry";
 
 type AccessState = "checking" | "granted" | "locked";
+const MEMBER_CODE = "ADIR-DROP-2026";
+const MEMBER_SESSION_KEY = "ai-bunker-member-access";
 
 function LocalClock() {
   const [time, setTime] = useState("--:--:--");
@@ -29,9 +30,11 @@ function LocalClock() {
   return <span className="text-cyan-100/50">שעה מקומית: <bdi className="font-mono">{time}</bdi></span>;
 }
 
-export default function BunkerExperience() {
+export default function AIBunkerExperience() {
   useFreshPageView();
   const [access, setAccess] = useState<AccessState>("checking");
+  const [memberCode, setMemberCode] = useState("");
+  const [codeError, setCodeError] = useState(false);
   const [report, setReport] = useState<Report>(initialReport);
   const [status, setStatus] = useState<ReportStatus | null>(null);
 
@@ -45,13 +48,33 @@ export default function BunkerExperience() {
   }, [report]);
 
   useEffect(() => {
-    setAccess(consumeBunkerEntry() ? "granted" : "locked");
-    const onPageShow = (event: PageTransitionEvent) => {
-      if (event.persisted) setAccess("locked");
-    };
-    window.addEventListener("pageshow", onPageShow);
-    return () => window.removeEventListener("pageshow", onPageShow);
+    try {
+      setAccess(window.sessionStorage.getItem(MEMBER_SESSION_KEY) === "granted" ? "granted" : "locked");
+    } catch {
+      setAccess("locked");
+    }
   }, []);
+
+  const handleUnlock = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (memberCode.trim() !== MEMBER_CODE) {
+      setCodeError(true);
+      return;
+    }
+    try {
+      window.sessionStorage.setItem(MEMBER_SESSION_KEY, "granted");
+    } catch {
+      // The current view can still open if storage is disabled.
+    }
+    setMemberCode("");
+    setCodeError(false);
+    setAccess("granted");
+  };
+
+  const handleLock = () => {
+    try { window.sessionStorage.removeItem(MEMBER_SESSION_KEY); } catch { /* storage may be disabled */ }
+    setAccess("locked");
+  };
 
   // The build publishes the processed report as static JSON, so an open session
   // can pick up a newer daily scan without a reload and without losing access.
@@ -105,13 +128,19 @@ export default function BunkerExperience() {
     return (
       <main className="min-h-screen">
         <Navbar />
-        <section className="mx-auto flex min-h-[70vh] max-w-xl flex-col items-center justify-center px-6 text-center">
+        <section className="mx-auto flex min-h-[70vh] max-w-xl flex-col items-center justify-center px-5 py-10 text-center">
           <div className="flex h-20 w-20 items-center justify-center rounded-3xl border border-cyan-300/25 bg-cyan-300/[0.07] text-cyan-200 shadow-[0_0_48px_rgba(34,211,238,0.12)]"><LockKeyhole size={34} /></div>
-          <p className="mt-6 text-xs font-black text-cyan-300">הגישה לדוח נעולה</p>
-          <h1 className="mt-3 text-3xl font-black text-white">הבנקר נפתח לאחר אימות קוד ודרופ</h1>
-          <p className="mt-3 max-w-sm text-sm leading-7 text-slate-400">הזינו קוד גישה והשלימו את הדרופ בכל כניסה מחדש. רענון וקישור שמור אינם פותחים את הדוח.</p>
-          <Link href="/drop" className="mt-7 inline-flex items-center gap-2 rounded-xl bg-gradient-to-l from-cyan-300 to-lime-300 px-6 py-3 font-black text-slate-950 transition hover:brightness-110">
-            <ArrowLeft size={18} /> מעבר לדרופ
+          <p className="mt-6 rounded-full border border-amber-200/25 bg-amber-200/[0.07] px-3 py-1.5 text-xs font-black text-amber-100">בפיתוח · IN DEVELOPMENT</p>
+          <h1 className="mt-4 text-3xl font-black text-white">בנקר AI · גישה לחברים ולמפתחים</h1>
+          <p className="mt-3 max-w-md text-sm leading-7 text-slate-400">מנוע הנתונים האוטומטי זמין כעת לתצוגה מוקדמת בלבד. הזינו קוד גישה כדי לצפות בסריקה הניסיונית ובבחירות מבוססות API.</p>
+          <form onSubmit={handleUnlock} className="mt-7 w-full max-w-md text-right">
+            <label htmlFor="ai-bunker-member-code" className="text-xs font-bold text-cyan-100">קוד גישה לחברים</label>
+            <input id="ai-bunker-member-code" type="text" value={memberCode} onChange={(event) => { setMemberCode(event.target.value); setCodeError(false); }} autoComplete="off" spellCheck={false} dir="ltr" className="mt-2 w-full rounded-xl border border-cyan-300/20 bg-slate-950 px-4 py-3 text-center font-mono text-base tracking-wide text-white outline-none focus-visible:border-cyan-300 focus-visible:ring-2 focus-visible:ring-cyan-300/20" />
+            {codeError && <p role="alert" className="mt-2 text-xs text-rose-300">קוד הגישה שגוי. בדקו את הקוד ונסו שוב.</p>}
+            <button type="submit" className="mt-4 w-full rounded-xl bg-gradient-to-l from-cyan-300 to-lime-300 px-6 py-3 font-black text-slate-950 transition hover:brightness-110">כניסה לבנקר AI</button>
+          </form>
+          <Link href="/bunker" className="mt-5 inline-flex items-center gap-2 text-sm font-bold text-cyan-200 hover:text-white">
+            <ArrowLeft size={18} /> מעבר לבנקר האנליסט
           </Link>
         </section>
         <CommunityFooter />
@@ -137,10 +166,10 @@ export default function BunkerExperience() {
           <div className="pointer-events-none absolute inset-0 opacity-40" style={{ backgroundImage: "linear-gradient(rgba(34,211,238,.08) 1px, transparent 1px),linear-gradient(90deg,rgba(34,211,238,.08) 1px,transparent 1px)", backgroundSize: "34px 34px", maskImage: "linear-gradient(to bottom,black,transparent 80%)" }} />
           <div className="relative flex flex-col items-start justify-between gap-7 sm:flex-row sm:items-center">
             <div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-emerald-300/25 bg-emerald-300/[0.07] px-3 py-1.5 text-[10px] font-black text-emerald-200"><ShieldCheck size={13} /> הדרופ הושלם · הדוח פתוח לצפייה</div>
-              <p className="mt-5 flex items-center gap-2 text-sm font-bold text-cyan-200"><BrainCircuit size={18} /> איינשטיין דרופ · שולחן האנליסט</p>
-              <h1 className="mt-2 text-4xl font-black tracking-tight text-white sm:text-6xl"><span className="bg-gradient-to-l from-cyan-200 via-cyan-400 to-lime-300 bg-clip-text text-transparent">הבנקר</span></h1>
-              <p className="mt-3 text-lg font-bold text-slate-200">{report.picks.length ? `דוח קדם־משחק · ניתוח ${report.picks.length} בחירות שערים` : status?.state === "no-picks" && report.watchlist?.length ? `מעקב יומי · ${report.watchlist.length} משחקים בסריקת האנליסט` : "דוח קדם־משחק · סריקת משחקי היום"}</p>
+              <div className="inline-flex items-center gap-2 rounded-full border border-amber-200/25 bg-amber-200/[0.07] px-3 py-1.5 text-[10px] font-black text-amber-100"><ShieldCheck size={13} /> בפיתוח · גישת חברים פעילה</div>
+              <p className="mt-5 flex items-center gap-2 text-sm font-bold text-cyan-200"><BrainCircuit size={18} /> איינשטיין דרופ · מנוע נתונים אוטומטי</p>
+              <h1 className="mt-2 text-4xl font-black tracking-tight text-white sm:text-6xl"><span className="bg-gradient-to-l from-cyan-200 via-cyan-400 to-lime-300 bg-clip-text text-transparent">בנקר AI</span></h1>
+              <p className="mt-3 text-lg font-bold text-slate-200">{report.picks.length ? `סריקת AI · ${report.picks.length} בחירות שערים` : status?.state === "no-picks" && report.watchlist?.length ? `מעקב ניסיוני · ${report.watchlist.length} משחקים` : "סריקת AI · משחקי היום"}</p>
               <p className="mt-2 max-w-xl text-sm leading-7 text-slate-400">{report.picks.length ? `${report.picks.map((pick) => `${pick.home}–${pick.away}`).join(" ו־")}: בחינת קו מעל 2.5 שערים, ספי האיזון והסיכון בטופס משולב.` : status?.state === "no-picks" && report.watchlist?.length ? "משחקי היום מוצגים ככרטיסי מעקב עם מחירי שוק, נתוני מודל כשזמינים, והסבר ברור למידע שטרם אומת." : "בחירות יופיעו כאן רק לאחר אימות משחקים קרובים, נתוני שחקנים ויחסים עדכניים."} {status ? statusSummary(status, report) : ""}</p>
             </div>
             <motion.div
@@ -159,8 +188,9 @@ export default function BunkerExperience() {
                 animate={{ opacity: [.45, 1, .45] }}
                 transition={{ duration: 1.8, repeat: Infinity }}
               />
-              {status ? statusLabel(status, report) : "דוח אנליסט · טוענים את מצב הסריקה"}
+              {status ? statusLabel(status, report) : "בנקר AI · טוענים את מצב הסריקה"}
             </span>
+            <button type="button" onClick={handleLock} className="rounded-lg border border-white/[0.09] px-3 py-1.5 font-semibold text-slate-300 hover:border-cyan-300/30 hover:text-white">נעילת תצוגת AI</button>
             <LocalClock />
           </div>
         </motion.header>

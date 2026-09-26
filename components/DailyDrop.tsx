@@ -8,7 +8,6 @@ import { Atom, KeyRound, Lock, Sparkles } from "lucide-react";
 import { CardRevealAnimation } from "./CardRevealAnimation";
 import EinsteinConfetti from "./EinsteinConfetti";
 import { BACKEND_ENABLED, getRolledPrize, isValidCommunityCode, redeemCode, rollPrize } from "./drop/backend";
-import { prepareBunkerEntry } from "./drop/bunkerEntry";
 import { ItemIcon, RARITIES, BOX_ITEMS, pickWeighted } from "./drop/boxItems";
 import type { BoxItem } from "./drop/boxItems";
 import { DROP_PRIZE_COPY, DROP_TITLE } from "./drop/copy";
@@ -50,7 +49,7 @@ type CompletedRecord = {
 const COMPLETED_KEY = "drop-completed";
 const ACTIVE_KEY = "drop-in-progress";
 
-function CompletedView({ record, onStartNew, onEnterBunker, entryError }: { record: CompletedRecord; onStartNew: () => void; onEnterBunker: (event: React.MouseEvent<HTMLAnchorElement>) => void; entryError: boolean }) {
+function CompletedView({ record, onStartNew, onEnterBunker }: { record: CompletedRecord; onStartNew: () => void; onEnterBunker: (event: React.MouseEvent<HTMLAnchorElement>) => void }) {
   const rarity = RARITIES[record.item.rarity];
   return (
     <section className="mx-auto w-full max-w-7xl px-4 pb-4 pt-4 sm:px-5 sm:pt-6 lg:px-8">
@@ -133,7 +132,7 @@ function CompletedView({ record, onStartNew, onEnterBunker, entryError }: { reco
 
           <div className="mt-7 w-full max-w-2xl">
             <p className="mb-2 text-center text-[10px] font-black uppercase tracking-[0.3em] text-cyan-200/75">
-              ACCESS UNLOCKED · EINSTEIN DROP LAB
+              COMMUNITY DROP · ANALYST BUNKER
             </p>
             <Link
               href="/bunker"
@@ -142,11 +141,10 @@ function CompletedView({ record, onStartNew, onEnterBunker, entryError }: { reco
             >
               <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/55 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
               <Atom size={27} className="relative transition-transform duration-500 group-hover:rotate-90" />
-              <span className="relative">כניסה לבנקר</span>
-              <span className="relative text-[10px] font-extrabold uppercase tracking-[0.12em] sm:text-xs sm:tracking-[0.18em]">ENTER THE BUNKER</span>
+              <span className="relative">מעבר לבנקר האנליסט</span>
+              <span className="relative text-[10px] font-extrabold uppercase tracking-[0.12em] sm:text-xs sm:tracking-[0.18em]">ANALYST REPORT</span>
               <Sparkles size={19} className="relative animate-pulse" />
             </Link>
-            {entryError && <p className="mt-3 text-sm text-rose-200" role="alert">לא ניתן לפתוח מעבר מאובטח במכשיר הזה. אפשרו אחסון בדפדפן ונסו שוב.</p>}
           </div>
         </div>
       </motion.div>
@@ -223,12 +221,6 @@ export default function DailyDrop() {
   const handleEnterBunker = (event: React.MouseEvent<HTMLAnchorElement>) => {
     event.preventDefault();
     if (!completed || entryGuard.current) return;
-    try {
-      prepareBunkerEntry();
-    } catch {
-      setErrorKind("server_error");
-      return;
-    }
     entryGuard.current = true;
     setEnteringBunker(true);
     entryTimer.current = window.setTimeout(() => router.push("/bunker"), 900);
@@ -353,7 +345,7 @@ export default function DailyDrop() {
   }
 
   if (completed) {
-    return <CompletedView record={completed} onStartNew={handleStartNew} onEnterBunker={handleEnterBunker} entryError={errorKind === "server_error"} />;
+    return <CompletedView record={completed} onStartNew={handleStartNew} onEnterBunker={handleEnterBunker} />;
   }
 
   return (

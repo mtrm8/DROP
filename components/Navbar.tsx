@@ -1,13 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { BrainCircuit, MessageCircle } from "lucide-react";
+import { usePathname } from "next/navigation";
+import { BrainCircuit, Bot, ChartNoAxesCombined, Layers3, MessageCircle } from "lucide-react";
 import { WHATSAPP_URL } from "./drop/community";
 
 export default function Navbar() {
+  const pathname = usePathname();
+  const sections = [
+    { href: "/drop", label: "דרופים · כדורגל ופוקר", mobileLabel: "דרופים", icon: Layers3 },
+    { href: "/bunker", label: "בנקר האנליסט", mobileLabel: "אנליסט", icon: ChartNoAxesCombined },
+    { href: "/ai-bunker", label: "בנקר AI", mobileLabel: "AI · בפיתוח", icon: Bot, developing: true },
+  ];
   return (
     <header className="sticky top-0 z-50 premium-hairline border-b border-white/[0.06] texture-metal bg-[#07111b]/90 backdrop-blur-md px-4 lg:px-8">
-      <div className="max-w-7xl mx-auto h-16 flex items-center justify-between gap-6">
+      <div className="max-w-7xl mx-auto flex min-h-16 items-center justify-between gap-6">
         {/* Einstein Drop wordmark */}
         <Link href="/" className="flex items-center gap-3 shrink-0 group">
           <div className="relative">
@@ -24,7 +31,6 @@ export default function Navbar() {
           </div>
         </Link>
 
-        {/* Centered nav */}
         <nav className="hidden md:flex items-center gap-1 text-sm font-medium">
           <a
             href={WHATSAPP_URL}
@@ -37,6 +43,17 @@ export default function Navbar() {
           </a>
         </nav>
       </div>
+      <nav aria-label="אזורי האתר" className="mx-auto grid w-full max-w-7xl grid-cols-3 gap-2 pb-3 pt-1 text-xs font-bold sm:flex sm:overflow-x-auto sm:text-sm">
+        {sections.map(({ href, label, mobileLabel, icon: Icon, developing }) => {
+          const active = pathname === href || pathname?.startsWith(`${href}/`);
+          return <Link key={href} href={href} aria-current={active ? "page" : undefined}
+            className={`inline-flex min-h-11 min-w-0 flex-col items-center justify-center gap-1 rounded-xl border px-1 py-2 text-center transition sm:min-h-10 sm:shrink-0 sm:flex-row sm:gap-2 sm:whitespace-nowrap sm:px-4 ${active ? "border-cyan-300/40 bg-cyan-300/[0.1] text-cyan-100" : "border-white/[0.08] bg-white/[0.025] text-slate-300 hover:border-cyan-300/25 hover:text-white"}`}>
+            <Icon size={16} className="shrink-0 text-cyan-300" />
+            <span className="text-[10px] sm:hidden">{mobileLabel}</span><span className="hidden sm:inline">{label}</span>
+            {developing && <span className="hidden rounded-full bg-amber-200/[0.1] px-1.5 py-0.5 text-[9px] text-amber-100 sm:inline">בפיתוח</span>}
+          </Link>;
+        })}
+      </nav>
     </header>
   );
 }

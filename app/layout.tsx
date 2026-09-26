@@ -4,18 +4,18 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Einstein Drop | איינשטיין דרופ",
   description:
-    "Einstein Drop — איינשטיין דרופ. חוויית קלפים חכמה לקהילת הכדורגל והפוקר: בחרו קלפים, הפעילו את המכונה וחשפו את הפרס.",
+    "Einstein Drop — דרופים לקהילת הכדורגל והפוקר, בנקר אנליסט לבחירות ידניות ובנקר AI ניסיוני בגישת חברים.",
   applicationName: "Einstein Drop",
   openGraph: {
     title: "Einstein Drop | איינשטיין דרופ",
-    description: "חוויית קלפים חכמה, מדעית ומלאת הפתעות לקהילה.",
+    description: "דרופים קהילתיים, בחירות אנליסט ידניות ובנקר AI ניסיוני.",
     locale: "he_IL",
     type: "website",
   },
   twitter: {
     card: "summary",
     title: "Einstein Drop | איינשטיין דרופ",
-    description: "חוויית קלפים חכמה, מדעית ומלאת הפתעות לקהילה.",
+    description: "דרופים קהילתיים, בחירות אנליסט ידניות ובנקר AI ניסיוני.",
   },
 };
 

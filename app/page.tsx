@@ -1,7 +1,8 @@
 "use client";
 
 import { motion, useMotionValue, useSpring, useTransform } from "framer-motion";
-import { Atom, ArrowLeft, BrainCircuit, ChevronDown, ShieldCheck, Sparkles } from "lucide-react";
+import Link from "next/link";
+import { Atom, ArrowLeft, Bot, BrainCircuit, ChartNoAxesCombined, ChevronDown, Layers3, ShieldCheck, Sparkles } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import CommunityFooter from "@/components/CommunityFooter";
 import { DROP_TITLE, DROP_PRIZE_COPY } from "@/components/drop/copy";
@@ -204,6 +205,26 @@ export default function LandingPage() {
         <div className="pointer-events-none absolute bottom-6 left-1/2 z-10 hidden -translate-x-1/2 sm:block">
           <div className="animate-bob">
             <ChevronDown size={22} className="text-amber-400/60" />
+          </div>
+        </div>
+      </section>
+
+      {/* Three independent experiences: community drop, human picks and AI preview. */}
+      <section className="cv-auto relative w-full px-4 py-12 sm:px-6" aria-labelledby="site-sections-title">
+        <div className="mx-auto max-w-6xl">
+          <p className="text-center text-[10px] font-black tracking-widest text-cyan-200">EINSTEIN DROP · שלושה אזורים</p>
+          <h2 id="site-sections-title" className="mt-2 text-center text-2xl font-black text-white sm:text-3xl">בחרו את החוויה שלכם</h2>
+          <div className="mt-7 grid gap-4 md:grid-cols-3">
+            {[
+              { href: "/drop", title: "דרופים קהילתיים", description: "הדרופ החי של קהילת הכדורגל והפוקר: קוד גישה, קלפים ופרס כספי.", icon: Layers3, tag: "פעיל" },
+              { href: "/bunker", title: "בנקר האנליסט", description: "בחירות יומיות שהוזנו ידנית בידי אנליסט, עם הסברים, נתונים וגרפים.", icon: ChartNoAxesCombined, tag: "ניתוח אנושי" },
+              { href: "/ai-bunker", title: "בנקר AI", description: "מנוע ניתוח אוטומטי מבוסס נתוני API. תצוגה מוקדמת עם קוד גישה לחברים.", icon: Bot, tag: "בפיתוח · גישת חברים" },
+            ].map(({ href, title, description, icon: Icon, tag }) => <Link key={href} href={href} className="group flex min-h-56 flex-col rounded-2xl border border-cyan-300/15 bg-gradient-to-br from-[#101c21] via-[#0b1218] to-[#0a0d12] p-5 shadow-[0_18px_50px_rgba(0,0,0,.25)] transition hover:-translate-y-1 hover:border-cyan-300/35 sm:p-6">
+              <div className="flex items-center justify-between gap-3"><Icon size={25} className="text-cyan-200" /><span className="rounded-full border border-amber-200/20 bg-amber-200/[0.06] px-2.5 py-1 text-[10px] font-bold text-amber-100">{tag}</span></div>
+              <h3 className="mt-5 text-lg font-black text-white">{title}</h3>
+              <p className="mt-2 flex-1 text-xs leading-6 text-slate-400">{description}</p>
+              <span className="mt-4 inline-flex items-center gap-2 text-xs font-black text-cyan-200">כניסה לאזור <ArrowLeft size={14} className="transition group-hover:-translate-x-1" /></span>
+            </Link>)}
           </div>
         </div>
       </section>

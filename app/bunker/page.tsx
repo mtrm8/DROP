@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
-import BunkerExperience from "@/components/BunkerExperience";
+import AnalystBunker from "@/components/AnalystBunker";
 
 export const metadata: Metadata = {
-  title: "הבנקר · דוח אנליסט | איינשטיין דרופ",
-  description: "דוח קדם־משחק מבוסס נתונים: קו מעל 2.5 שערים, מודל פואסון, ספי איזון, סיכון ותשואה ומעבדת שערים אינטראקטיבית.",
+  title: "בנקר האנליסט · בחירות ידניות | איינשטיין דרופ",
+  description: "בחירות האנליסט האנושי: נתוני כושר, נימוקים, סיכונים וגרפים על בסיס דוח שהוזן ידנית.",
 };
 
 export default function BunkerPage() {
-  return <BunkerExperience />;
+  return <AnalystBunker />;
 }

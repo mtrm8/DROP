@@ -14,7 +14,7 @@ await import("./run-live-bunker.mjs");
 await import("./generate-bunker.mjs");
 // A rerun in the same workspace must not feed a previous export's _next assets
 // back into Next's public/ directory (Next rejects public/_next outright).
-for (const name of ["_next", "404", "404.html", "bunker", "bunker.html", "bunker-data.json", "drop", "index.html", "index.txt"]) {
+for (const name of ["_next", "404", "404.html", "ai-bunker", "ai-bunker.html", "bunker", "bunker.html", "bunker-data.json", "drop", "index.html", "index.txt"]) {
   await rm(`public/${name}`, { recursive: true, force: true });
 }
 execFileSync("npm", ["run", "build:static"], { stdio: "inherit", timeout: 180_000 });
