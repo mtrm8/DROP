@@ -7,11 +7,13 @@ import { ArrowLeft, Atom, BrainCircuit, LockKeyhole, ShieldCheck } from "lucide-
 import Navbar from "./Navbar";
 import CommunityFooter from "./CommunityFooter";
 import BunkerDeepDive from "./BunkerDeepDive";
+import { useFreshPageView } from "./useFreshPageView";
 
 const COMPLETED_KEY = "drop-completed";
 type AccessState = "checking" | "granted" | "locked";
 
 export default function BunkerExperience() {
+  useFreshPageView();
   const [access, setAccess] = useState<AccessState>("checking");
   const reduced = useReducedMotion();
 
