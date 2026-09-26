@@ -9,32 +9,34 @@ import CommunityFooter from "./CommunityFooter";
 import BunkerDeepDive from "./BunkerDeepDive";
 import report from "./bunker/reportData";
 import { useFreshPageView } from "./useFreshPageView";
+import { consumeBunkerEntry } from "./drop/bunkerEntry";
 
-const COMPLETED_KEY = "drop-completed";
 type AccessState = "checking" | "granted" | "locked";
+
+function LocalClock() {
+  const [time, setTime] = useState("--:--:--");
+  useEffect(() => {
+    const update = () => setTime(new Intl.DateTimeFormat("he-IL", {
+      hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
+    }).format(new Date()));
+    update();
+    const interval = window.setInterval(update, 1000);
+    return () => window.clearInterval(interval);
+  }, []);
+  return <span className="text-cyan-100/50">שעה מקומית: <bdi className="font-mono">{time}</bdi></span>;
+}
 
 export default function BunkerExperience() {
   useFreshPageView();
   const [access, setAccess] = useState<AccessState>("checking");
-  const [localTime, setLocalTime] = useState("--:--:--");
 
   useEffect(() => {
-    try {
-      const raw = window.localStorage.getItem(COMPLETED_KEY);
-      const record = raw ? JSON.parse(raw) as { code?: unknown; item?: { name?: unknown } } : null;
-      setAccess(record && typeof record.code === "string" && typeof record.item?.name === "string" ? "granted" : "locked");
-    } catch {
-      setAccess("locked");
-    }
-  }, []);
-
-  useEffect(() => {
-    const updateLocalTime = () => setLocalTime(new Intl.DateTimeFormat("he-IL", {
-      hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
-    }).format(new Date()));
-    updateLocalTime();
-    const interval = window.setInterval(updateLocalTime, 1000);
-    return () => window.clearInterval(interval);
+    setAccess(consumeBunkerEntry() ? "granted" : "locked");
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) setAccess("locked");
+    };
+    window.addEventListener("pageshow", onPageShow);
+    return () => window.removeEventListener("pageshow", onPageShow);
   }, []);
 
   if (access === "checking") {
@@ -56,8 +58,8 @@ export default function BunkerExperience() {
         <section className="mx-auto flex min-h-[70vh] max-w-xl flex-col items-center justify-center px-6 text-center">
           <div className="flex h-20 w-20 items-center justify-center rounded-3xl border border-cyan-300/25 bg-cyan-300/[0.07] text-cyan-200 shadow-[0_0_48px_rgba(34,211,238,0.12)]"><LockKeyhole size={34} /></div>
           <p className="mt-6 text-xs font-black text-cyan-300">הגישה לדוח נעולה</p>
-          <h1 className="mt-3 text-3xl font-black text-white">הבנקר נפתח אחרי דרופ</h1>
-          <p className="mt-3 max-w-sm text-sm leading-7 text-slate-400">השלימו דרופ ושמרו את תוצאת הזכייה במכשיר הזה כדי לפתוח את דוח האנליסט של איינשטיין דרופ.</p>
+          <h1 className="mt-3 text-3xl font-black text-white">הבנקר נפתח לאחר אימות קוד ודרופ</h1>
+          <p className="mt-3 max-w-sm text-sm leading-7 text-slate-400">הזינו קוד גישה והשלימו את הדרופ בכל כניסה מחדש. רענון וקישור שמור אינם פותחים את הדוח.</p>
           <Link href="/drop" className="mt-7 inline-flex items-center gap-2 rounded-xl bg-gradient-to-l from-cyan-300 to-lime-300 px-6 py-3 font-black text-slate-950 transition hover:brightness-110">
             <ArrowLeft size={18} /> מעבר לדרופ
           </Link>
@@ -102,7 +104,7 @@ export default function BunkerExperience() {
           </div>
           <div className="relative mt-7 flex flex-wrap items-center justify-between gap-3 border-t border-white/[0.08] pt-4 text-[10px] font-semibold text-cyan-100/60">
             <span className="flex items-center gap-2"><motion.span className="h-2 w-2 rounded-full bg-emerald-300 shadow-[0_0_12px_rgba(52,211,153,.8)]" animate={{ opacity: [.45, 1, .45] }} transition={{ duration: 1.8, repeat: Infinity }} />דוח אנליסט · {report.mode === "demo" ? "סביבת הדגמה" : report.status === "unavailable" ? "ממתינים לסריקת נתונים" : "נתוני משחקים ויחסים עדכניים"}</span>
-            <span className="text-cyan-100/50">שעה מקומית: <bdi className="font-mono">{localTime}</bdi></span>
+            <LocalClock />
           </div>
         </motion.header>
 

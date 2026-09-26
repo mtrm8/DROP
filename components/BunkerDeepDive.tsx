@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import {
   Activity,
   AlertCircle,
@@ -23,12 +23,13 @@ const percent = (value: number) => `${(value * 100).toFixed(2)}%`;
 const demo = report.mode === "demo";
 
 function Reveal({ children, delay = 0 }: { children: React.ReactNode; delay?: number }) {
+  const reduced = useReducedMotion();
   return (
     <motion.div
-      initial={{ opacity: 0, y: 22 }}
+      initial={reduced ? false : { opacity: 0, y: 22 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, amount: 0.16 }}
-      transition={{ duration: 0.55, delay, ease: [0.22, 1, 0.36, 1] }}
+      transition={{ duration: reduced ? 0 : 0.55, delay: reduced ? 0 : delay, ease: [0.22, 1, 0.36, 1] }}
     >
       {children}
     </motion.div>
@@ -173,13 +174,17 @@ function MatchAnalysis({ pick, index }: { pick: (typeof PICKS)[number]; index: n
 export default function BunkerDeepDive() {
   const [stake, setStake] = useState(100);
   const [expired, setExpired] = useState(false);
+  const [checked, setChecked] = useState(demo || report.status === "unavailable");
   useEffect(() => {
     if (!demo) {
       const localDate = (date: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem", year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
-      const check = () => setExpired(report.status !== "unavailable" && (localDate(new Date(report.asOf)) !== localDate(new Date()) ||
-        PICKS.some((pick) => !pick.fixture ||
-        Date.parse(pick.fixture.kickoff) <= Date.now() ||
-        Date.now() - Date.parse(pick.fixture.oddsUpdatedAt) > 2 * 60 * 60 * 1000)));
+      const check = () => {
+        setExpired(report.status !== "unavailable" && (localDate(new Date(report.asOf)) !== localDate(new Date()) ||
+          PICKS.some((pick) => !pick.fixture ||
+          Date.parse(pick.fixture.kickoff) <= Date.now() ||
+          Date.now() - Date.parse(pick.fixture.oddsUpdatedAt) > 2 * 60 * 60 * 1000)));
+        setChecked(true);
+      };
       check();
       const interval = window.setInterval(check, 60_000);
       return () => window.clearInterval(interval);
@@ -190,12 +195,14 @@ export default function BunkerDeepDive() {
   const roundedCombinedImplied = report.breakEven * 100;
   const sourceInputs = PICKS;
 
+  if (!checked) return <section className="rounded-2xl border border-cyan-300/20 bg-slate-950 p-7 text-sm text-slate-300" role="status">מאמתים את עדכניות המשחקים והיחסים…</section>;
+
+  if (expired) return <section className="rounded-2xl border border-amber-200/20 bg-slate-950 p-7 text-sm leading-7 text-amber-100">הדוח הקודם אינו עדכני עוד. בחירות חדשות יופיעו לאחר סריקת משחקי היום, ההרכבים והיחסים הזמינים.</section>;
+
   if (!PICKS.length) return <section className="rounded-2xl border border-cyan-300/20 bg-slate-950 p-7 text-sm leading-7 text-slate-200">
     <h2 className="text-xl font-black text-white">{report.status === "unavailable" ? "ממתינים לנתוני משחקים מאומתים להיום" : "אין היום שתי בחירות שעומדות בתנאי הניתוח"}</h2>
     <p className="mt-2">{report.status === "unavailable" ? "דוח משחקים יופיע כאן לאחר סריקת נתוני הספק הקרובה. עד אז לא מוצגים משחקים או יחסים ישנים." : `הנתונים נבדקו מחדש ב־${new Date(report.asOf).toLocaleString("he-IL")}. לא נמצאו משחקים עם הרכבים מאושרים, נתוני שחקנים מספקים ויחסים עדכניים שנותנים יתרון מחושב אצל אותו מפעיל. הדוח יתעדכן אוטומטית בריצה הבאה.`}</p>
   </section>;
-
-  if (expired) return <section className="rounded-2xl border border-amber-200/20 bg-slate-950 p-7 text-sm leading-7 text-amber-100">הדוח הקודם אינו עדכני עוד. בחירות חדשות יופיעו לאחר סריקת משחקי היום, ההרכבים והיחסים הזמינים.</section>;
 
   return (
     <div className="space-y-7">

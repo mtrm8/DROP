@@ -29,9 +29,7 @@ drop policy if exists "Allow anon and authenticated select on drop_codes" on pub
 drop policy if exists "Allow anon and authenticated insert on drop_codes" on public.drop_codes;
 drop policy if exists "Allow anon and authenticated update on drop_codes" on public.drop_codes;
 
-create policy "Allow anon and authenticated select on drop_codes" on public.drop_codes for select using (true);
-create policy "Allow anon and authenticated insert on drop_codes" on public.drop_codes for insert with check (true);
-create policy "Allow anon and authenticated update on drop_codes" on public.drop_codes for update using (true);
+-- Codes are private; anon clients may only call SECURITY DEFINER RPCs.
 
 -- Case-insensitive lookups mean 'ADIR-NEW-2026' and 'adir-new-2026' can both
 -- exist (the UNIQUE constraint is case-sensitive). Two rows for one code used
@@ -176,19 +174,6 @@ begin
    for update;
 
   if not found then
-    insert into public.drop_codes (code, used)
-    values (v_trimmed, false)
-    on conflict (code) do nothing;
-
-    select * into v_row
-      from public.drop_codes
-     where lower(code) = lower(v_trimmed)
-     order by used asc nulls first, created_at asc, id asc
-     limit 1
-     for update;
-  end if;
-
-  if not found then
     return json_build_object('success', false, 'error', 'not_found');
   end if;
 
@@ -331,7 +316,8 @@ grant execute on function public.get_prize(text) to anon, authenticated, service
 revoke all on function public.code_status(text) from public;
 grant execute on function public.code_status(text) to anon, authenticated, service_role;
 
-grant select, insert, update on public.drop_codes to anon, authenticated, service_role;
+revoke select, insert, update on public.drop_codes from anon, authenticated;
+grant select, insert, update on public.drop_codes to service_role;
 grant select on public.drop_prizes to anon, authenticated, service_role;
 grant select on public.drop_prize_odds to anon, authenticated, service_role;
 

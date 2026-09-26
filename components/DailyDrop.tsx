@@ -1,11 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { Atom, KeyRound, Lock, Sparkles } from "lucide-react";
 import { CardRevealAnimation } from "./CardRevealAnimation";
 import EinsteinConfetti from "./EinsteinConfetti";
-import { getRolledPrize, redeemCode, rollPrize } from "./drop/backend";
+import { BACKEND_ENABLED, getRolledPrize, isValidCommunityCode, redeemCode, rollPrize } from "./drop/backend";
+import { prepareBunkerEntry } from "./drop/bunkerEntry";
 import { ItemIcon, RARITIES, BOX_ITEMS, pickWeighted } from "./drop/boxItems";
 import type { BoxItem } from "./drop/boxItems";
 import { useFreshPageView } from "./useFreshPageView";
@@ -46,10 +49,10 @@ type CompletedRecord = {
 const COMPLETED_KEY = "drop-completed";
 const ACTIVE_KEY = "drop-in-progress";
 
-function CompletedView({ record, onStartNew }: { record: CompletedRecord; onStartNew: () => void }) {
+function CompletedView({ record, onStartNew, onEnterBunker, entryError }: { record: CompletedRecord; onStartNew: () => void; onEnterBunker: (event: React.MouseEvent<HTMLAnchorElement>) => void; entryError: boolean }) {
   const rarity = RARITIES[record.item.rarity];
   return (
-    <section className="mx-auto w-full max-w-5xl px-3 pb-6 pt-5 sm:px-6 sm:pt-8 lg:px-8">
+    <section className="mx-auto w-full max-w-7xl px-2 pb-4 pt-4 sm:px-5 sm:pt-6 lg:px-8">
       <motion.div
         className="premium-panel relative overflow-hidden rounded-3xl"
         initial={{ opacity: 0, y: 16, scale: 0.98 }}
@@ -131,8 +134,9 @@ function CompletedView({ record, onStartNew }: { record: CompletedRecord; onStar
             <p className="mb-2 text-center text-[10px] font-black uppercase tracking-[0.3em] text-cyan-200/75">
               ACCESS UNLOCKED · EINSTEIN DROP LAB
             </p>
-            <a
-              href="/DROP/bunker/"
+            <Link
+              href="/bunker"
+              onClick={onEnterBunker}
               className="group relative flex min-h-[76px] w-full items-center justify-center gap-3 overflow-hidden rounded-2xl border-2 border-cyan-100/70 bg-gradient-to-br from-cyan-200 via-cyan-400 to-lime-300 px-6 py-5 text-xl font-black text-slate-950 shadow-[0_0_24px_rgba(34,211,238,0.65),0_0_70px_rgba(34,211,238,0.32)] ring-4 ring-cyan-300/15 transition duration-300 hover:scale-[1.02] hover:brightness-110 hover:shadow-[0_0_34px_rgba(34,211,238,0.8),0_0_90px_rgba(34,211,238,0.42)] active:scale-[0.99]"
             >
               <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/55 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
@@ -140,7 +144,8 @@ function CompletedView({ record, onStartNew }: { record: CompletedRecord; onStar
               <span className="relative">כניסה לבנקר</span>
               <span className="relative text-xs font-extrabold uppercase tracking-[0.18em]">ENTER THE BUNKER</span>
               <Sparkles size={19} className="relative animate-pulse" />
-            </a>
+            </Link>
+            {entryError && <p className="mt-3 text-sm text-rose-200" role="alert">לא ניתן לפתוח מעבר מאובטח במכשיר הזה. אפשרו אחסון בדפדפן ונסו שוב.</p>}
           </div>
         </div>
       </motion.div>
@@ -150,6 +155,7 @@ function CompletedView({ record, onStartNew }: { record: CompletedRecord; onStar
 
 export default function DailyDrop() {
   useFreshPageView();
+  const router = useRouter();
   const [unlocked, setUnlocked] = useState(false);
   const [stage, setStage] = useState<"idle" | "cinematic">("idle");
   const [code, setCode] = useState("");
@@ -161,50 +167,26 @@ export default function DailyDrop() {
   const [completed, setCompleted] = useState<CompletedRecord | null>(null);
   const [prize, setPrize] = useState<BoxItem | null>(null);
   const [resumed, setResumed] = useState(false);
-  const [authorizationConfirmed, setAuthorizationConfirmed] = useState(false);
-  const [showWinConfetti, setShowWinConfetti] = useState(false);
-  const winConfettiTimer = useRef<number | null>(null);
-  const authorizationTimer = useRef<number | null>(null);
+  const [enteringBunker, setEnteringBunker] = useState(false);
+  const entryTimer = useRef<number | null>(null);
+  const entryGuard = useRef(false);
   // Guards against a double-click / Enter+click firing two redeems for the same
   // code, which would burn it and then report a bogus "already used".
   const submitGuard = useRef(false);
 
-  // Keep the completed record only for Bunker access; never restore the UI
-  // after a completed refresh. An unfinished drop must resume with its locked
-  // choices so refreshing cannot be used to choose new cards or reroll.
+  // An unfinished drop retains its locked deck, but code entry is required
+  // again after every refresh before that deck can be resumed.
   useEffect(() => {
     try {
       window.localStorage.removeItem("drop-burned");
-      const raw = window.localStorage.getItem(COMPLETED_KEY);
-      if (raw) {
-        const rec = JSON.parse(raw) as CompletedRecord;
-        if (rec && rec.item && rec.item.name) {
-          const savedAmount = Number(String(rec.item.amount ?? rec.item.name).replace(/[^\d.]/g, ""));
-          if (savedAmount === 20) {
-            window.localStorage.removeItem(COMPLETED_KEY);
-          }
-        }
-      }
-      const active = window.localStorage.getItem(ACTIVE_KEY);
-      if (active) {
-        const pending = JSON.parse(active) as { code?: unknown; prize?: BoxItem };
-        if (typeof pending.code === "string" && pending.prize && typeof pending.prize.id === "string" &&
-          typeof pending.prize.name === "string" && pending.prize.rarity in RARITIES) {
-          setCode(pending.code);
-          setPrize(pending.prize);
-          setStage("cinematic");
-        } else {
-          window.localStorage.removeItem(ACTIVE_KEY);
-        }
-      }
+      window.localStorage.removeItem(COMPLETED_KEY);
     } catch {
       // ignore private-mode / storage errors
     }
   }, []);
 
   useEffect(() => () => {
-    if (winConfettiTimer.current !== null) window.clearTimeout(winConfettiTimer.current);
-    if (authorizationTimer.current !== null) window.clearTimeout(authorizationTimer.current);
+    if (entryTimer.current !== null) window.clearTimeout(entryTimer.current);
   }, []);
 
   const startOpening = () => {
@@ -214,7 +196,9 @@ export default function DailyDrop() {
 
   const rememberActive = (value: string, won: BoxItem) => {
     try {
-      window.localStorage.setItem(ACTIVE_KEY, JSON.stringify({ code: value, prize: won }));
+      const previous = JSON.parse(window.localStorage.getItem(ACTIVE_KEY) || "null");
+      const cards = previous?.code === value && previous?.prize?.id === won.id ? previous.cards : undefined;
+      window.localStorage.setItem(ACTIVE_KEY, JSON.stringify({ code: value, prize: won, cards }));
     } catch {
       // Browser storage may be disabled; the in-memory flow still works.
     }
@@ -223,7 +207,6 @@ export default function DailyDrop() {
   const finishDrop = (winner: BoxItem) => {
     const record: CompletedRecord = { code, item: winner };
     try {
-      window.localStorage.setItem(COMPLETED_KEY, JSON.stringify(record));
       window.localStorage.removeItem(ACTIVE_KEY);
     } catch {
       // ignore private-mode / storage errors
@@ -234,25 +217,31 @@ export default function DailyDrop() {
 
   const handleDropFinished = (winner: BoxItem) => {
     finishDrop(winner);
-    setShowWinConfetti(true);
-    if (winConfettiTimer.current !== null) window.clearTimeout(winConfettiTimer.current);
-    winConfettiTimer.current = window.setTimeout(() => {
-      setShowWinConfetti(false);
-      winConfettiTimer.current = null;
-    }, 3800);
+  };
+
+  const handleEnterBunker = (event: React.MouseEvent<HTMLAnchorElement>) => {
+    event.preventDefault();
+    if (!completed || entryGuard.current) return;
+    try {
+      prepareBunkerEntry();
+    } catch {
+      setErrorKind("server_error");
+      return;
+    }
+    entryGuard.current = true;
+    setEnteringBunker(true);
+    entryTimer.current = window.setTimeout(() => router.push("/bunker"), 900);
   };
 
   const handleStartNew = () => {
-    if (winConfettiTimer.current !== null) window.clearTimeout(winConfettiTimer.current);
-    winConfettiTimer.current = null;
-    if (authorizationTimer.current !== null) window.clearTimeout(authorizationTimer.current);
-    authorizationTimer.current = null;
-    setAuthorizationConfirmed(false);
+    if (entryTimer.current !== null) window.clearTimeout(entryTimer.current);
+    entryTimer.current = null;
+    entryGuard.current = false;
+    setEnteringBunker(false);
     setStage("idle");
-    setShowWinConfetti(false);
     try {
-      window.localStorage.removeItem(COMPLETED_KEY);
       window.localStorage.removeItem(ACTIVE_KEY);
+      window.localStorage.removeItem(COMPLETED_KEY);
     } catch {
       // ignore private-mode / storage errors
     }
@@ -268,7 +257,7 @@ export default function DailyDrop() {
   const handleCodeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (submitGuard.current) return;
-    const value = code.trim();
+    const value = code.trim().toUpperCase();
     if (!value) return;
     submitGuard.current = true;
     setErrorKind(null);
@@ -287,123 +276,89 @@ export default function DailyDrop() {
       settle();
     };
 
-    const upperVal = value.toUpperCase();
-    // These public community codes intentionally bypass RPC verification so
-    // backend availability cannot block the prize-reveal experience.
-    if (upperVal === "ADIR-DROP-2026") {
-      const won = pickWeighted(BOX_ITEMS);
-      rememberActive(value, won);
-      setPrize(won);
-      setCode(value);
+    if (!isValidCommunityCode(value)) {
+      setErrorKind("invalid");
       settle();
-      setAuthorizationConfirmed(true);
-      if (authorizationTimer.current !== null) window.clearTimeout(authorizationTimer.current);
-      authorizationTimer.current = window.setTimeout(() => {
-        setAuthorizationConfirmed(false);
-        setStage("cinematic");
-        authorizationTimer.current = null;
-      }, 650);
       return;
     }
 
     try {
-      // 1. Try rolling prize first (self-heal / already redeemed)
-      let rolled = await rollPrize(value);
-      if (rolled.status === "ok") {
-        enter(rolled.prize, false);
+      let pending: { code?: string; prize?: BoxItem } | null = null;
+      try {
+        pending = JSON.parse(window.localStorage.getItem(ACTIVE_KEY) || "null");
+      } catch {
+        // The code may still be verified when browser storage is unavailable.
+      }
+      if (pending?.code && pending.code !== value) {
+        setErrorKind("invalid");
+        settle();
         return;
       }
-
-      // 2. Try redeeming code
-      const result = await redeemCode(value);
-      if (result.status === "already_used") {
-        const existing = await getRolledPrize(value);
-        if (existing.status === "ok") {
+      if (pending?.code === value) {
+        if (BACKEND_ENABLED) {
+          const existing = pending.prize ? await getRolledPrize(value) : await rollPrize(value);
+          if (existing.status !== "ok" || (pending.prize && existing.prize.id !== pending.prize.id)) {
+            setErrorKind("prize_missing");
+            settle();
+            return;
+          }
           enter(existing.prize, true);
+        } else if (pending.prize) {
+          enter(pending.prize, true);
+        } else {
+          setErrorKind("prize_missing");
+          settle();
           return;
         }
-      }
-
-      // 3. Roll prize after redeem
-      rolled = await rollPrize(value);
-      if (rolled.status === "ok") {
-        enter(rolled.prize, false);
+        setStage("cinematic");
         return;
       }
 
-      // Keep the established fallback for non-community codes.
-      enter(pickWeighted(BOX_ITEMS), false);
+      if (BACKEND_ENABLED) {
+        const result = await redeemCode(value);
+        if (result.status !== "ok") {
+          setErrorKind(result.status === "already_used" ? "already_used" : "invalid");
+          settle();
+          return;
+        }
+        try {
+          window.localStorage.setItem(ACTIVE_KEY, JSON.stringify({ code: value }));
+        } catch {
+          // A server-verified drop can still complete without local resume.
+        }
+        const rolled = await rollPrize(value);
+        if (rolled.status !== "ok") {
+          setErrorKind("roll_failed");
+          settle();
+          return;
+        }
+        enter(rolled.prize, false);
+      } else {
+        enter(pickWeighted(BOX_ITEMS), false);
+      }
     } catch (err) {
-      console.warn("[drop] handleCodeSubmit safe fallback:", err);
-      enter(pickWeighted(BOX_ITEMS), false);
+      console.warn("[drop] code validation failed:", err);
+      setErrorKind("server_error");
+      settle();
     }
   };
 
+  if (enteringBunker) {
+    return <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-[#06130f] px-6 text-center" role="status">
+      <EinsteinConfetti />
+      <Atom className="relative z-10 text-cyan-200" size={64} />
+      <h2 className="relative z-10 mt-6 text-2xl font-black text-white sm:text-4xl">הגישה לבנקר נפתחת</h2>
+    </div>;
+  }
+
   if (completed) {
-    return (
-      <>
-        <CompletedView record={completed} onStartNew={handleStartNew} />
-        {showWinConfetti && <EinsteinConfetti />}
-      </>
-    );
+    return <CompletedView record={completed} onStartNew={handleStartNew} onEnterBunker={handleEnterBunker} entryError={errorKind === "server_error"} />;
   }
 
   return (
     <>
-      <AnimatePresence>
-        {authorizationConfirmed && (
-          <motion.div
-            key="test-code-authorized"
-            className="fixed inset-0 z-[100] flex flex-col items-center justify-center overflow-hidden bg-[#03140f]/95 px-6 text-center backdrop-blur-xl"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.22 }}
-            role="status"
-            aria-live="polite"
-          >
-            <div className="pointer-events-none absolute h-72 w-72 rounded-full bg-emerald-400/15 blur-[90px]" />
-            <motion.div
-              className="relative flex h-24 w-24 items-center justify-center rounded-full border-2 border-emerald-300/80 bg-emerald-400/10 text-emerald-200 shadow-[0_0_70px_rgba(52,211,153,0.38)]"
-              initial={{ scale: 0.45, rotate: -18 }}
-              animate={{ scale: [0.45, 1.12, 1], rotate: 0 }}
-              transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
-            >
-              <svg viewBox="0 0 48 48" className="h-14 w-14" fill="none" aria-hidden="true">
-                <motion.path
-                  d="m10 25 9 9L38 14"
-                  stroke="currentColor"
-                  strokeWidth="4"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  initial={{ pathLength: 0, opacity: 0 }}
-                  animate={{ pathLength: 1, opacity: 1 }}
-                  transition={{ delay: 0.18, duration: 0.38, ease: "easeOut" }}
-                />
-              </svg>
-            </motion.div>
-            <motion.p
-              className="relative mt-7 text-xs font-black uppercase tracking-[0.34em] text-emerald-300"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.28, duration: 0.3 }}
-            >
-              AUTHORIZATION VERIFIED
-            </motion.p>
-            <motion.h2
-              className="relative mt-2 text-2xl font-black text-white sm:text-3xl"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.34, duration: 0.3 }}
-            >
-              הגישה אושרה
-            </motion.h2>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <section id="drop" className="mx-auto w-full max-w-5xl px-3 pb-6 pt-5 sm:px-6 sm:pt-8 lg:px-8">
-        <div className="premium-panel relative overflow-hidden rounded-3xl">
+    <section id="drop" className="mx-auto w-full max-w-7xl px-2 pb-4 pt-4 sm:px-5 sm:pt-6 lg:px-8">
+        <div className="premium-panel relative flex min-h-[calc(100svh-13rem)] flex-col justify-center overflow-hidden rounded-3xl">
           {/* Restrained luxury ambience */}
           <div className="pointer-events-none absolute -top-28 left-1/2 h-48 w-[420px] -translate-x-1/2" style={{ background: "radial-gradient(closest-side, rgba(34,211,238,0.09), transparent 72%)" }} />
           <div className="pointer-events-none absolute -bottom-24 -right-16 h-64 w-64" style={{ background: "radial-gradient(closest-side, rgba(255,255,255,0.025), transparent 70%)" }} />
@@ -456,7 +411,7 @@ export default function DailyDrop() {
                 {unlocked ? (
                   <motion.div
                     key="verified"
-                    className="flex w-full max-w-2xl flex-col items-center pt-2 pb-1 text-center"
+                    className="flex w-full max-w-4xl flex-col items-center pt-2 pb-1 text-center"
                     initial={{ opacity: 0, y: 12 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.94, y: -8 }}
@@ -531,7 +486,7 @@ export default function DailyDrop() {
                 ) : (
                   <motion.div
                     key="locked"
-                    className="w-full max-w-2xl text-right"
+                    className="w-full max-w-4xl text-right"
                     exit={{ opacity: 0, scale: 0.97, y: 8 }}
                     transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
                   >

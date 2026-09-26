@@ -4,7 +4,6 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, Lock, Sparkles } from "lucide-react";
 import { BOX_ITEMS, BoxItem, ItemIcon, RARITIES, pickWeighted } from "./drop/boxItems";
-import EinsteinConfetti from "./EinsteinConfetti";
 
 const CARDS_COUNT = 10;
 const SELECT_COUNT = 5;
@@ -17,9 +16,10 @@ const SELECT_COUNT = 5;
 // can be as large as the screen allows instead of being shrunk to fit room the
 // selection view never uses.
 const STAGE_W = 960;
+const MACHINE_STAGE_W = 668; /* 620px body plus 24px glow on each side */
 const GRID_H = 880;
-const MACHINE_H = 1450; /* 360 entry headroom + 1090 content */
-const ENTRY_PAD = 360;
+const MACHINE_H = 1140; /* animated entry headroom + machine + result */
+const ENTRY_PAD = 260;
 const ACTIVE_KEY = "drop-in-progress";
 
 type Phase = "grid" | "collect" | "revealSelection" | "shuffle" | "suspense" | "reveal" | "done";
@@ -133,28 +133,6 @@ function CardFront({ item }: { item: BoxItem }) {
   );
 }
 
-function GoldBurst({ glow }: { glow: string }) {
-  return (
-    <div className="pointer-events-none absolute inset-0 z-[30] overflow-hidden">
-      {Array.from({ length: 24 }).map((_, i) => {
-        const ang = (i / 24) * Math.PI * 2;
-        const dist = 50 + (i % 5) * 16;
-        const size = 3 + (i % 3) * 2.5;
-        return (
-          <motion.span
-            key={i}
-            className="absolute left-1/2 top-1/2 rounded-full"
-            style={{ width: size, height: size, marginLeft: -size / 2, marginTop: -size / 2, background: "#ffd97a", boxShadow: `0 0 10px 2px ${glow}` }}
-            initial={{ x: 0, y: 0, scale: 0, opacity: 1 }}
-            animate={{ x: Math.cos(ang) * dist, y: Math.sin(ang) * dist, scale: 1, opacity: 0 }}
-            transition={{ duration: 1.1 + (i % 4) * 0.15, ease: "easeOut" }}
-          />
-        );
-      })}
-    </div>
-  );
-}
-
 // The deck always contains the server-rolled prize at a random slot; the other
 // cards are purely cosmetic decoys drawn from the same cash pool.
 function buildDeck(prize: BoxItem): DealCard[] {
@@ -211,7 +189,8 @@ export function CardRevealAnimation({ onFinished, prize }: CardRevealProps) {
       const vw = window.visualViewport?.width ?? window.innerWidth;
       const vh = window.visualViewport?.height ?? window.innerHeight;
       const needed = phase === "grid" ? GRID_H : MACHINE_H;
-      const scale = Math.min(1, (vh - 80) / needed, (vw - 24) / STAGE_W);
+      const width = phase === "grid" ? STAGE_W : MACHINE_STAGE_W;
+      const scale = Math.min(1, (vh - 72) / needed, (vw - 16) / width);
       setFit(Math.max(0.1, scale));
     };
     compute();
@@ -284,10 +263,6 @@ export function CardRevealAnimation({ onFinished, prize }: CardRevealProps) {
         <div className="absolute inset-0" style={{ background: "radial-gradient(120% 90% at 50% 0%, transparent 55%, rgba(0,0,0,0.55) 100%)" }} />
       </div>
 
-      {(phase === "reveal" || phase === "done") && winnerCard && (
-        <EinsteinConfetti key={`confetti-${winnerCard.id}`} />
-      )}
-
       {/* header */}
       <div className="relative z-20 flex items-center justify-between border-b border-white/[0.06] px-4 py-3 sm:px-8">
         <div className="flex items-center gap-3">
@@ -304,7 +279,7 @@ export function CardRevealAnimation({ onFinished, prize }: CardRevealProps) {
       <div className="relative z-10 flex min-h-0 flex-1 items-center justify-center overflow-visible px-3">
         <div
           className="flex flex-col items-center justify-center"
-          style={{ width: STAGE_W, height: phase === "grid" ? GRID_H : MACHINE_H, transform: `scale(${fit})`, transformOrigin: "center center" }}
+          style={{ width: phase === "grid" ? STAGE_W : MACHINE_STAGE_W, height: phase === "grid" ? GRID_H : MACHINE_H, transform: `scale(${fit})`, transformOrigin: "center center" }}
         >
         <AnimatePresence mode="wait">
           {phase === "grid" ? (
@@ -413,7 +388,7 @@ export function CardRevealAnimation({ onFinished, prize }: CardRevealProps) {
               transition={{ duration: 0.4 }}
             >
               {/* drop machine */}
-              <div className="relative h-[620px] w-[min(94vw,480px)]">
+              <div data-testid="drop-machine-body" className="relative h-[570px] w-[620px]">
                 {/* ambient glow */}
                 <motion.div
                   className="pointer-events-none absolute -inset-6 rounded-[44px]"
@@ -583,7 +558,6 @@ export function CardRevealAnimation({ onFinished, prize }: CardRevealProps) {
                   })}
                 </div>
 
-                {(phase === "reveal" || phase === "done") && winnerCard && <GoldBurst glow={RARITIES[winnerCard.item.rarity].glow} />}
               </div>
 
               {/* status */}
@@ -608,7 +582,7 @@ export function CardRevealAnimation({ onFinished, prize }: CardRevealProps) {
               </div>
 
               {/* win panel slot — reserved space keeps the layout perfectly stable */}
-              <div className="mt-2 flex min-h-[252px] w-full max-w-sm flex-col items-center">
+              <div className="mt-2 flex min-h-[210px] w-full max-w-sm flex-col items-center">
               {(phase === "reveal" || phase === "done") && winnerCard && (() => {
                 const rarity = RARITIES[winnerCard.item.rarity];
                 const ready = phase === "done";
