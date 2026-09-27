@@ -57,12 +57,11 @@ alter table public.drop_prizes add column if not exists icon text;
 -- Defaults for a new installation. Never overwrite an existing configured pool.
 insert into public.drop_prizes (id, name, amount, chance, weight, rarity, icon)
 select sample.* from (values
-  ('cash-30',  '30 ₪',  30, '43.1%',  2500, 'common',     '💵'),
-  ('cash-50',  '50 ₪',  50, '27.59%', 1600, 'uncommon',   '💰'),
-  ('cash-100', '100 ₪', 100, '17.24%', 1000, 'rare',       '💸'),
-  ('cash-200', '200 ₪', 200, '8.62%',   500, 'classified', '💎'),
-  ('cash-350', '350 ₪', 350, '2.59%',   150, 'covert',     '💎'),
-  ('cash-500', '500 ₪', 500, '0.86%',    50, 'special',    '🔥')
+  ('cash-50',  '50 ₪',  50, '48.48%', 1600, 'uncommon',   '💰'),
+  ('cash-100', '100 ₪', 100, '30.30%', 1000, 'rare',       '💸'),
+  ('cash-200', '200 ₪', 200, '15.15%',  500, 'classified', '💎'),
+  ('cash-350', '350 ₪', 350, '4.55%',   150, 'covert',     '💎'),
+  ('cash-500', '500 ₪', 500, '1.52%',    50, 'special',    '🔥')
 ) as sample(id, name, amount, chance, weight, rarity, icon)
 where not exists (select 1 from public.drop_prizes existing where existing.id = sample.id)
 on conflict do nothing;
@@ -76,14 +75,22 @@ update public.drop_prizes p
        rarity = coalesce(p.rarity, sample.rarity),
        icon = coalesce(p.icon, sample.icon)
   from (values
-    ('cash-30',  '30 ₪',  30, '43.1%',  2500, 'common',     '💵'),
-    ('cash-50',  '50 ₪',  50, '27.59%', 1600, 'uncommon',   '💰'),
-    ('cash-100', '100 ₪', 100, '17.24%', 1000, 'rare',       '💸'),
-    ('cash-200', '200 ₪', 200, '8.62%',   500, 'classified', '💎'),
-    ('cash-350', '350 ₪', 350, '2.59%',   150, 'covert',     '💎'),
-    ('cash-500', '500 ₪', 500, '0.86%',    50, 'special',    '🔥')
+    ('cash-50',  '50 ₪',  50, '48.48%', 1600, 'uncommon',   '💰'),
+    ('cash-100', '100 ₪', 100, '30.30%', 1000, 'rare',       '💸'),
+    ('cash-200', '200 ₪', 200, '15.15%',  500, 'classified', '💎'),
+    ('cash-350', '350 ₪', 350, '4.55%',   150, 'covert',     '💎'),
+    ('cash-500', '500 ₪', 500, '1.52%',    50, 'special',    '🔥')
   ) as sample(id, name, amount, chance, weight, rarity, icon)
  where p.id = sample.id;
+
+update public.drop_prizes set name = '50 ₪', amount = 50 where id = 'cash-50';
+update public.drop_codes
+   set prize_id = 'cash-50', prize_rolled_at = coalesce(prize_rolled_at, used_at, now())
+ where prize_id in (select id from public.drop_prizes where amount < 50)
+    or prize_id in ('cash-20', 'cash-30');
+delete from public.drop_prizes where amount < 50 or id in ('cash-20', 'cash-30');
+alter table public.drop_prizes drop constraint if exists drop_prizes_min_amount;
+alter table public.drop_prizes add constraint drop_prizes_min_amount check (amount >= 50);
 
 -- Provision example community codes without reactivating previously used codes.
 insert into public.drop_codes (code)
@@ -112,11 +119,15 @@ as $$
   end || '%'
   from (
     select round(100.0 * p.weight / nullif((select sum(weight) from public.drop_prizes
-                                          where id is not null and name is not null
-                                            and amount is not null and weight > 0), 0), 2) as pct
-    from public.drop_prizes p where p.id = p_id and p.weight > 0
+                                           where id is not null and name is not null
+                                             and amount >= 50 and weight > 0), 0), 2) as pct
+    from public.drop_prizes p where p.id = p_id and p.amount >= 50 and p.weight > 0
   ) odds;
 $$;
+
+update public.drop_prizes
+   set chance = public.drop_prize_chance(id)
+ where id is not null and amount >= 50 and weight > 0;
 
 -- The row lock serializes competing redeems. The prize and code update commit
 -- together; an empty pool or any other SQL error rolls the whole attempt back.
@@ -147,7 +158,7 @@ begin
   end if;
 
   select * into v_prize from public.drop_prizes
-   where id is not null and name is not null and amount is not null and weight > 0
+   where id is not null and name is not null and amount >= 50 and weight > 0
    order by -ln(greatest(random(), 1e-12)) / weight::double precision
    limit 1;
   if not found then
@@ -185,7 +196,7 @@ as $$
     'icon', p.icon, 'drop_content', c.drop_content
   )
     from public.drop_codes c
-    join public.drop_prizes p on p.id = c.prize_id
+    join public.drop_prizes p on p.id = c.prize_id and p.amount >= 50
    where lower(c.code) = lower(trim(p_code)) and c.used = true
      and c.prize_rolled_at >= c.used_at
    order by c.used_at desc nulls last

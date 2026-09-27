@@ -26,7 +26,7 @@ const rarities = ["common", "uncommon", "rare", "classified", "covert", "special
 function toDrop(row: DropRow): VerifiedDrop | null {
   const id = row.prize_id;
   const amount = row.amount;
-  if (!id || typeof amount !== "number" || !Number.isFinite(amount)) return null;
+  if (!id || typeof amount !== "number" || !Number.isFinite(amount) || amount < 50) return null;
   const content = row.drop_content && typeof row.drop_content === "object" && !Array.isArray(row.drop_content)
     ? row.drop_content as Record<string, unknown> : {};
   const text = (key: string) => typeof content[key] === "string" ? content[key] as string : undefined;

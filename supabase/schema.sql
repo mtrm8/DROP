@@ -57,8 +57,7 @@ alter table public.drop_codes add column if not exists prize_rolled_at timestamp
 alter table public.drop_codes add column if not exists drop_content jsonb not null default '{}'::jsonb;
 
 -- Cash prize pool. The real weighted roll happens here (roll_prize), never in
--- the browser. Retire the 20₪ tier, including old persisted assignments, before
--- seeding so it cannot re-enter a draw after this schema is applied.
+-- the browser. All assigned and future prizes must be at least 50₪.
 create table if not exists public.drop_prizes (
   id text primary key,
   name text not null,
@@ -71,23 +70,17 @@ create table if not exists public.drop_prizes (
 
 alter table public.drop_prizes enable row level security;
 
-update public.drop_codes
-   set prize_id = null, prize_rolled_at = null
- where prize_id in (select id from public.drop_prizes where amount = 20 or id = 'cash-20');
-delete from public.drop_prizes where amount = 20 or id = 'cash-20';
-
 drop policy if exists "Allow anon and authenticated select on drop_prizes" on public.drop_prizes;
 create policy "Allow anon and authenticated select on drop_prizes" on public.drop_prizes for select using (true);
 
 -- Rarity curve: the everyday tiers carry the volume, and high tiers are
 -- genuinely hard to hit (exponentially rarer drop rates).
 insert into public.drop_prizes (id, name, amount, chance, weight, rarity, icon) values
-  ('cash-30',   '30 ₪',   30,   '43.1%',   2500, 'common',     '💵'),
-  ('cash-50',   '50 ₪',   50,   '27.59%',  1600, 'uncommon',   '💰'),
-  ('cash-100',  '100 ₪',  100,  '17.24%',  1000, 'rare',       '💸'),
-  ('cash-200',  '200 ₪',  200,  '8.62%',    500, 'classified', '💎'),
-  ('cash-350',  '350 ₪',  350,  '2.59%',    150, 'covert',     '💎'),
-  ('cash-500',  '500 ₪',  500,  '0.86%',     50, 'special',    '🔥')
+  ('cash-50',   '50 ₪',   50,   '48.48%', 1600, 'uncommon',   '💰'),
+  ('cash-100',  '100 ₪',  100,  '30.30%', 1000, 'rare',       '💸'),
+  ('cash-200',  '200 ₪',  200,  '15.15%',  500, 'classified', '💎'),
+  ('cash-350',  '350 ₪',  350,  '4.55%',   150, 'covert',     '💎'),
+  ('cash-500',  '500 ₪',  500,  '1.52%',    50, 'special',    '🔥')
 on conflict (id) do update set
   name = excluded.name,
   amount = excluded.amount,
@@ -95,6 +88,17 @@ on conflict (id) do update set
   weight = excluded.weight,
   rarity = excluded.rarity,
   icon = excluded.icon;
+
+-- Honor already redeemed low-tier codes with the new 50₪ minimum rather than
+-- clearing their prize and leaving their used code with nothing to display.
+update public.drop_codes
+   set prize_id = 'cash-50', prize_rolled_at = coalesce(prize_rolled_at, used_at, now())
+ where prize_id in (select id from public.drop_prizes where amount < 50)
+    or prize_id in ('cash-20', 'cash-30');
+delete from public.drop_prizes where amount < 50 or id in ('cash-20', 'cash-30');
+
+alter table public.drop_prizes drop constraint if exists drop_prizes_min_amount;
+alter table public.drop_prizes add constraint drop_prizes_min_amount check (amount >= 50);
 
 -- The single source of truth for displayed odds: probability derived from the
 -- live weights, so the number shown on a card can never drift from the roll.
@@ -106,7 +110,8 @@ create or replace view public.drop_prize_odds as
          p.rarity,
          p.icon,
          round(100.0 * p.weight / nullif(sum(p.weight) over (), 0), 2) as chance_pct
-    from public.drop_prizes p;
+    from public.drop_prizes p
+   where p.amount >= 50;
 
 -- Formats the derived probability for display: 42 -> "42%", 3.3 -> "3.3%",
 -- 0.4 -> "0.4%". Both prize RPCs return this, never a hand-written label.
@@ -123,10 +128,13 @@ as $$
          end || '%'
     from public.drop_prize_odds o
    where o.id = p_id;
-$$;
+ $$;
 
--- Install-time guard: the pool must be populated and the retired 20₪ tier must
--- not be present. Live odds are always derived from the pool weights above.
+update public.drop_prizes
+   set chance = public.drop_prize_chance(id)
+ where id is not null and amount >= 50 and weight > 0;
+
+-- Install-time guard: the pool must be populated and contain no prize below 50₪.
 do $$
 declare
   v_total numeric;
@@ -136,8 +144,8 @@ begin
   if v_total is null or v_total <= 0 then
     raise exception 'drop_prizes is empty';
   end if;
-  if exists (select 1 from public.drop_prizes where amount = 20 or id = 'cash-20') then
-    raise exception 'retired prize remains in drop_prizes';
+  if exists (select 1 from public.drop_prizes where amount < 50) then
+    raise exception 'prize below 50 remains in drop_prizes';
   end if;
 
   select string_agg(format('%s claims %s but its real odds are %s',
@@ -237,12 +245,13 @@ begin
      and v_code.prize_rolled_at >= v_code.used_at then
     select * into v_prize
       from public.drop_prizes
-     where id = v_code.prize_id;
+      where id = v_code.prize_id and amount >= 50;
   end if;
 
   if v_prize.id is null then
     select * into v_prize
       from public.drop_prizes
+     where amount >= 50
      order by -ln(random()) / greatest(weight::double precision, 0.0001)
      limit 1;
 
@@ -273,7 +282,7 @@ set search_path = public
 as $$
   select p.id, p.name, p.amount, public.drop_prize_chance(p.id), p.rarity, p.icon
     from public.drop_codes c
-    join public.drop_prizes p on p.id = c.prize_id
+     join public.drop_prizes p on p.id = c.prize_id and p.amount >= 50
    where lower(c.code) = lower(trim(p_code))
      and c.used = true
    order by c.used_at desc nulls last, c.created_at asc
@@ -334,7 +343,7 @@ as $$
     'icon', p.icon, 'drop_content', c.drop_content
   )
     from public.drop_codes c
-    join public.drop_prizes p on p.id = c.prize_id
+    join public.drop_prizes p on p.id = c.prize_id and p.amount >= 50
    where lower(c.code) = lower(trim(p_code)) and c.used = true
      and c.prize_rolled_at >= c.used_at
    limit 1;

@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import { Check, Lock, Sparkles } from "lucide-react";
 import { BOX_ITEMS, BoxItem, ItemIcon, RARITIES, moneyEmojiFor, pickWeighted } from "./drop/boxItems";
-import { DROP_COMMUNITY, DROP_PRIZE_COPY, DROP_TITLE } from "./drop/copy";
+import { DROP_COMMUNITY, DROP_TITLE } from "./drop/copy";
 
 const CARDS_COUNT = 10;
 const SELECT_COUNT = 5;
@@ -17,14 +17,15 @@ const MACHINE_H = 1140; /* animated entry headroom + machine + result */
 const ENTRY_PAD = 260;
 const ACTIVE_KEY = "drop-in-progress";
 
-type Phase = "grid" | "collect" | "revealSelection" | "shuffle" | "suspense" | "reveal" | "done";
+type Phase = "grid" | "collect" | "revealSelection" | "close" | "shuffle" | "suspense" | "reveal" | "done";
 const TIMELINE: { at: number; phase: Phase }[] = [
   { at: 0, phase: "collect" },
   { at: 1400, phase: "revealSelection" },
-  { at: 2800, phase: "shuffle" },
-  { at: 7500, phase: "suspense" },
-  { at: 8600, phase: "reveal" },
-  { at: 10300, phase: "done" },
+  { at: 2700, phase: "close" },
+  { at: 3700, phase: "shuffle" },
+  { at: 8500, phase: "suspense" },
+  { at: 9600, phase: "reveal" },
+  { at: 11400, phase: "done" },
 ];
 
 interface DealCard {
@@ -316,19 +317,16 @@ export function CardRevealAnimation({ onFinished, prize }: CardRevealProps) {
           className={phase === "grid" ? "mx-auto flex w-full min-w-0 max-w-5xl flex-col items-center" : "relative flex shrink-0 flex-col items-center justify-center"}
           style={phase === "grid" ? undefined : { width: MACHINE_STAGE_W, height: MACHINE_H, transform: `scale(${fit})`, transformOrigin: "center center" }}
         >
-        {/* The machine overlays the selection grid instead of waiting for its
-            exit to finish, so the run always begins on the click that started
-            it even on a slow frame budget. */}
-        <AnimatePresence>
+        {/* Unmount the ten-card selection grid before mounting the five-card
+            machine; no face-up or unselected grid cards linger under it. */}
+        <>
           {phase === "grid" ? (
             <motion.div
               key="grid"
               className="flex w-full flex-col items-center"
-              exit={{ opacity: 0, y: 24 }}
-              transition={{ duration: 0.3 }}
             >
               <p className="mb-4 max-w-lg text-center text-sm leading-relaxed text-slate-300 sm:text-[15px]">
-                {DROP_COMMUNITY}: <span className="font-bold text-amber-300">10 קלפים</span> לפניכם. {DROP_PRIZE_COPY}
+                {DROP_COMMUNITY}: <span className="font-bold text-amber-300">10 קלפים</span> לפניכם. בחרו 5 כדי להפעיל את המכונה.
               </p>
               <p className="mb-5 flex items-center gap-1.5 rounded-full border border-amber-400/20 bg-amber-400/[0.06] px-3.5 py-1.5 text-xs font-semibold text-amber-300/90">
                 <Lock size={12} />
@@ -521,8 +519,8 @@ export function CardRevealAnimation({ onFinished, prize }: CardRevealProps) {
                           className="relative h-full w-full [transform-style:preserve-3d]"
                           initial={
                             phase === "collect"
-                              ? { x: tossX, y: tossY, rotateZ: tossRot, rotateY: 0, scale: 1, opacity: 0 }
-                              : { x: (i - 2) * 3, y: 0, rotateZ: (i - 2) * 4, rotateY: 0, scale: 1, opacity: 1 }
+                              ? { x: tossX, y: tossY, rotateZ: tossRot, rotateY: 180, scale: 1, opacity: 0 }
+                              : { x: (i - 2) * 3, y: 0, rotateZ: (i - 2) * 4, rotateY: 180, scale: 1, opacity: 1 }
                           }
                           animate={
                             phase === "collect"
@@ -530,13 +528,15 @@ export function CardRevealAnimation({ onFinished, prize }: CardRevealProps) {
                                   x: [tossX, tossX * 0.4, (i - 2) * 3],
                                   y: [tossY, tossY * 0.9 - 46, 0],
                                   rotateZ: [tossRot, tossRot * 0.35, (i - 2) * 4],
-                                  rotateY: 0,
+                                  rotateY: 180,
                                   scale: 1,
                                   opacity: [0, 1, 1],
                                 }
                                 : phase === "revealSelection"
                                   ? { x: (i - 2) * 50, y: -6, rotateZ: (i - 2) * 13, rotateY: 180, scale: 1.2, opacity: 1 }
-                                : phase === "shuffle"
+                                 : phase === "close"
+                                   ? { x: (i - 2) * 2, y: 0, rotateZ: (i - 2) * 5, rotateY: 0, scale: 1, opacity: 1 }
+                                 : phase === "shuffle"
                                   ? { x: shuffleX(i), y: shuffleY(i), rotateZ: shuffleZ(i), rotateY: 0, scale: shuffleScale(), opacity: 1 }
                                   : phase === "suspense"
                                     ? { x: (i - 2) * 5, y: 0, rotateZ: (i - 2) * 6, rotateY: 0, scale: 1, opacity: 1 }
@@ -549,13 +549,15 @@ export function CardRevealAnimation({ onFinished, prize }: CardRevealProps) {
                               ? { delay, duration: 0.85, ease: "easeOut" }
                               : phase === "revealSelection"
                                 ? { duration: 1.0, ease: [0.4, 0, 0.2, 1] }
+                                : phase === "close"
+                                  ? { duration: 0.7, ease: [0.22, 1, 0.36, 1] }
                                 : phase === "shuffle"
                                   ? {
                                        x: { duration: 4.6, repeat: Infinity, ease: "easeInOut", times: SHUFFLE_TIMES },
                                        y: { duration: 4.6, repeat: Infinity, ease: "easeInOut", times: SHUFFLE_TIMES },
                                        rotateZ: { duration: 4.6, repeat: Infinity, ease: "easeInOut", times: SHUFFLE_TIMES },
                                        scale: { duration: 4.6, repeat: Infinity, ease: "easeInOut", times: SHUFFLE_TIMES },
-                                      rotateY: { duration: 0.6, ease: "easeOut" },
+                                       rotateY: { duration: 0 },
                                       opacity: { duration: 0.3 },
                                     }
                                   : phase === "suspense"
@@ -607,8 +609,10 @@ export function CardRevealAnimation({ onFinished, prize }: CardRevealProps) {
                   {phase === "collect"
                     ? "5 הקלפים שנבחרו ממהרים לתוך המכונה..."
                     : phase === "revealSelection"
-                      ? "אלה הפרסים שבחרתם — המכונה שומרת את הסוד"
-: phase === "shuffle"
+                      ? "אלה הקלפים שבחרתם — המכונה שומרת את הסוד"
+                    : phase === "close"
+                      ? "כל הקלפים נסגרים ונאספים לערבוב..."
+                    : phase === "shuffle"
                       ? "החפיסה נטרפת — ריפל של דילר מקצועי, קלפים זולגים הלוך ושוב..."
                         : phase === "suspense"
                           ? "רגע האמת... המכונה בוחרת את הקלף הזוכה"
@@ -670,7 +674,7 @@ export function CardRevealAnimation({ onFinished, prize }: CardRevealProps) {
               </div>
             </motion.div>
           )}
-        </AnimatePresence>
+        </>
         </div>
       </div>
     </div>

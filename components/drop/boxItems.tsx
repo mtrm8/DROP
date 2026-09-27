@@ -117,8 +117,7 @@ export interface BoxItem {
   rarity: RarityName;
 }
 
-// Active client prize pool: strictly 50, 100, 200, 300 and 400 ₪. Displayed
-// odds are the normalized weight shares and always sum to 100%.
+// Cosmetic card pool mirrors the server's active prize amounts and weights.
 export const BOX_ITEMS: BoxItem[] = [
   {
     id: "cash-50",
@@ -154,23 +153,23 @@ export const BOX_ITEMS: BoxItem[] = [
     rarity: "classified",
   },
   {
-    id: "cash-300",
-    name: "300 ₪",
+    id: "cash-350",
+    name: "350 ₪",
     category: "cash",
     icon: "gem",
     emoji: "💎",
-    amount: 300,
+    amount: 350,
     chance: "4.55%",
     weight: 150,
     rarity: "covert",
   },
   {
-    id: "cash-400",
-    name: "400 ₪",
+    id: "cash-500",
+    name: "500 ₪",
     category: "cash",
     icon: "fire",
     emoji: "🔥",
-    amount: 400,
+    amount: 500,
     chance: "1.52%",
     weight: 50,
     rarity: "special",
