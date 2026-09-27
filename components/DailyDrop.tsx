@@ -133,7 +133,7 @@ function CompletedView({ record, onStartNew }: { record: CompletedRecord; onStar
           <div className="mt-5 flex w-full max-w-2xl flex-col items-center rounded-2xl border border-amber-300/40 bg-amber-300/[0.08] px-5 py-4 text-amber-100" role="note">
             <Camera size={26} aria-hidden="true" />
             <p className="mt-2 text-base font-black">צלמו עכשיו צילום מסך של הזכייה והקוד</p>
-            <p className="mt-1 text-sm leading-6">שמרו את הצילום והציגו אותו לצוות הקהילה כדי לדרוש ולממש את הפרס.</p>
+            <p className="mt-1 text-sm leading-6">שמרו את הצילום והציגו אותו לצוות הקהילה כדי לממש את הפרס.</p>
           </div>
           <DropDetails content={record.content} />
 
