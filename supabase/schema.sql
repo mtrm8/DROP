@@ -2,8 +2,8 @@
 -- Run this once in the Supabase SQL editor, then set these env vars:
 --   NEXT_PUBLIC_SUPABASE_URL
 --   NEXT_PUBLIC_SUPABASE_ANON_KEY
--- The RPC is sealed with SECURITY DEFINER + RLS so anonymous clients can only
--- attempt a redeem (never read code hashes or other rows). atomic single-use
+-- The RPCs are sealed with SECURITY DEFINER + RLS so anonymous clients can
+-- redeem or resume by code (never list codes or read other rows). Atomic single-use
 -- is enforced by the UPDATE ... WHERE used = false guard inside a transaction
 -- (the WHERE clause makes concurrent redeems safe: exactly one wins).
 --
@@ -54,6 +54,7 @@ create unique index if not exists drop_codes_code_lower_key
 -- Prize assignment columns (idempotent upgrades for existing installs).
 alter table public.drop_codes add column if not exists prize_id text;
 alter table public.drop_codes add column if not exists prize_rolled_at timestamptz;
+alter table public.drop_codes add column if not exists drop_content jsonb not null default '{}'::jsonb;
 
 -- Cash prize pool. The real weighted roll happens here (roll_prize), never in
 -- the browser. Retire the 20₪ tier, including old persisted assignments, before
@@ -277,7 +278,70 @@ as $$
      and c.used = true
    order by c.used_at desc nulls last, c.created_at asc
    limit 1;
+ $$;
+
+-- Redeem and assign a prize atomically. A failed roll aborts the transaction,
+-- leaving the code unused. Content is stored per code, not in a static bundle.
+create or replace function public.redeem_code(p_code text)
+returns json
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_row public.drop_codes%rowtype;
+  v_prize record;
+begin
+  if nullif(trim(p_code), '') is null then
+    return json_build_object('success', false, 'error', 'not_found');
+  end if;
+
+  select * into v_row from public.drop_codes
+   where lower(code) = lower(trim(p_code))
+   limit 1 for update;
+  if not found then
+    return json_build_object('success', false, 'error', 'not_found');
+  end if;
+  if v_row.used then
+    return json_build_object('success', false, 'error', 'already_redeemed');
+  end if;
+
+  update public.drop_codes set used = true, used_at = now()
+   where id = v_row.id and used = false;
+  select * into v_prize from public.roll_prize(v_row.code);
+  if v_prize.prize_id is null then
+    raise exception 'prize_pool_empty';
+  end if;
+  return json_build_object(
+    'success', true, 'prize_id', v_prize.prize_id,
+    'prize_name', v_prize.prize_name, 'amount', v_prize.amount,
+    'chance', v_prize.chance, 'rarity', v_prize.rarity, 'icon', v_prize.icon,
+    'drop_content', v_row.drop_content
+  );
+end;
 $$;
+
+-- Resume only an already-assigned prize; never re-roll on a read.
+create or replace function public.get_drop(p_code text)
+returns json
+language sql
+security definer
+set search_path = public
+as $$
+  select json_build_object(
+    'prize_id', p.id, 'prize_name', p.name, 'amount', p.amount,
+    'chance', public.drop_prize_chance(p.id), 'rarity', p.rarity,
+    'icon', p.icon, 'drop_content', c.drop_content
+  )
+    from public.drop_codes c
+    join public.drop_prizes p on p.id = c.prize_id
+   where lower(c.code) = lower(trim(p_code)) and c.used = true
+     and c.prize_rolled_at >= c.used_at
+   limit 1;
+$$;
+
+revoke all on function public.get_drop(text) from public;
+grant execute on function public.get_drop(text) to anon, authenticated, service_role;
 
 -- Read-only diagnostics: exact stored state of a code (never burns anything),
 -- so a reset can be verified without redeeming. Returns the row as stored, the

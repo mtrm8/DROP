@@ -6,15 +6,21 @@ import { Atom, BrainCircuit, LockKeyhole, ShieldCheck } from "lucide-react";
 import Navbar from "./Navbar";
 import CommunityFooter from "./CommunityFooter";
 import BunkerDeepDive from "./BunkerDeepDive";
-import initialReport from "./bunker/reportData";
 import type { Report } from "./bunker/reportData";
-import { evaluateReport, statusLabel, statusSummary, supersedes } from "./bunker/reportStatus";
+import { evaluateReport, statusLabel, statusSummary } from "./bunker/reportStatus";
 import type { ReportStatus } from "./bunker/reportStatus";
 import { useFreshPageView } from "./useFreshPageView";
 
 type AccessState = "checking" | "granted" | "locked";
 const MEMBER_CODE = "ADIR-DROP-2026";
 const MEMBER_SESSION_KEY = "ai-bunker-member-access";
+const initialReport: Report = {
+  mode: "demo", source: "", asOf: new Date(0).toISOString(), timeZone: "Asia/Jerusalem",
+  picks: [], combinedOdds: 0, productOdds: 0, breakEven: 0,
+  jointProbability: null, jointFairOdds: null, jointEdge: null,
+  status: "no-picks", statusMessage: null, watchlist: [], scanNote: null,
+  methodology: "",
+};
 
 function LocalClock() {
   const [time, setTime] = useState("--:--:--");
@@ -34,7 +40,7 @@ export default function AIBunkerExperience() {
   const [access, setAccess] = useState<AccessState>("checking");
   const [memberCode, setMemberCode] = useState("");
   const [codeError, setCodeError] = useState(false);
-  const [report, setReport] = useState<Report>(initialReport);
+  const report = initialReport;
   const [status, setStatus] = useState<ReportStatus | null>(null);
 
   // The published report is a daily snapshot: resolve what it means for the
@@ -76,42 +82,6 @@ export default function AIBunkerExperience() {
     try { window.sessionStorage.removeItem(MEMBER_SESSION_KEY); } catch { /* storage may be disabled */ }
     setAccess("locked");
   };
-
-  // The build publishes the processed report as static JSON, so an open session
-  // can pick up a newer daily scan without a reload and without losing access.
-  useEffect(() => {
-    if (access !== "granted") return;
-    let active = true;
-    const update = async () => {
-      try {
-        const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
-        const response = await fetch(`${basePath}/bunker-data.json?updated=${Date.now()}`, { cache: "no-store" });
-        if (!response.ok) return;
-        const latest = await response.json() as Report;
-        if (active && latest.mode === "live" && Array.isArray(latest.picks) &&
-          (!latest.watchlist || Array.isArray(latest.watchlist)) &&
-          ["ready", "no-picks", "unavailable"].includes(latest.status) && Number.isFinite(Date.parse(latest.asOf))) {
-          setReport((current) => supersedes(current, latest) ? latest : current);
-        }
-      } catch {
-        // Keep the last verified snapshot if Pages is between deployments.
-      }
-    };
-    void update();
-    // Check more often while a pre-match card is missing a confirmed XI or a
-    // fresh quote. This checks the public export only; the API key stays server-side.
-    const pending = report.watchlist?.some((item) =>
-      Date.parse(item.kickoff) > Date.now() &&
-      (item.lineup?.home.status !== "confirmed" || item.lineup?.away.status !== "confirmed" || item.oddsStatus !== "recent"));
-    const interval = window.setInterval(() => void update(), pending ? 60_000 : 5 * 60_000);
-    const onVisible = () => { if (document.visibilityState === "visible") void update(); };
-    document.addEventListener("visibilitychange", onVisible);
-    return () => {
-      active = false;
-      window.clearInterval(interval);
-      document.removeEventListener("visibilitychange", onVisible);
-    };
-  }, [access, report]);
 
   // Header copy is driven by the evaluated state: a stale or provider-blocked
   // scan must never claim to show "today's games".

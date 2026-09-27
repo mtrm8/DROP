@@ -1,14 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { Atom, KeyRound, Lock, Sparkles } from "lucide-react";
+import { KeyRound, Lock, Sparkles } from "lucide-react";
 import { CardRevealAnimation } from "./CardRevealAnimation";
-import EinsteinConfetti from "./EinsteinConfetti";
-import { BACKEND_ENABLED, getRolledPrize, isValidCommunityCode, redeemCode, rollPrize } from "./drop/backend";
-import { ItemIcon, RARITIES, BOX_ITEMS, pickWeighted } from "./drop/boxItems";
+import { getRolledPrize, redeemCode } from "./drop/backend";
+import type { DropContent } from "./drop/backend";
+import { ItemIcon, RARITIES } from "./drop/boxItems";
 import type { BoxItem } from "./drop/boxItems";
 import { DROP_PRIZE_COPY, DROP_TITLE } from "./drop/copy";
 import { clearDropVerified, markDropVerified } from "./drop/session";
@@ -45,12 +43,22 @@ function CardEmblem() {
 type CompletedRecord = {
   code: string;
   item: BoxItem;
+  content: DropContent;
 };
 
 const COMPLETED_KEY = "drop-completed";
 const ACTIVE_KEY = "drop-in-progress";
 
-function CompletedView({ record, onStartNew, onEnterBunker }: { record: CompletedRecord; onStartNew: () => void; onEnterBunker: (event: React.MouseEvent<HTMLAnchorElement>) => void }) {
+function DropDetails({ content }: { content: DropContent }) {
+  if (!content.title && !content.description && !content.analysis) return null;
+  return <div className="mt-6 w-full max-w-2xl rounded-2xl border border-cyan-300/20 bg-cyan-300/[0.05] p-5 text-right text-slate-200">
+    {content.title && <h3 className="text-lg font-black text-cyan-100">{content.title}</h3>}
+    {content.description && <p className="mt-2 whitespace-pre-line text-sm leading-7">{content.description}</p>}
+    {content.analysis && <p className="mt-3 whitespace-pre-line text-sm leading-7">{content.analysis}</p>}
+  </div>;
+}
+
+function CompletedView({ record, onStartNew }: { record: CompletedRecord; onStartNew: () => void }) {
   const rarity = RARITIES[record.item.rarity];
   return (
     <section className="mx-auto w-full max-w-7xl px-4 pb-4 pt-4 sm:px-5 sm:pt-6 lg:px-8">
@@ -117,6 +125,7 @@ function CompletedView({ record, onStartNew, onEnterBunker }: { record: Complete
           <p className="text-xs text-slate-400 mt-4 max-w-sm leading-relaxed">
             הפרס הכספי יופיע בהפקדה הבאה. שמרו את פרטי הקהילה לידכם — הזכייה תוכרז ותועבר בקרוב.
           </p>
+          <DropDetails content={record.content} />
 
           <p className="flex items-center justify-center gap-1.5 text-[11px] text-slate-500 mt-4">
             <Lock size={12} className="text-red-400/80" />
@@ -131,22 +140,6 @@ function CompletedView({ record, onStartNew, onEnterBunker }: { record: Complete
             התחל דרופ חדש
           </button>
 
-          <div className="mt-7 w-full max-w-2xl">
-            <p className="mb-2 text-center text-[10px] font-black uppercase tracking-[0.3em] text-cyan-200/75">
-              COMMUNITY DROP · ANALYST BUNKER
-            </p>
-            <Link
-              href="/bunker"
-              onClick={onEnterBunker}
-              className="group relative flex min-h-[76px] w-full flex-wrap items-center justify-center gap-x-3 gap-y-1 overflow-hidden rounded-2xl border-2 border-cyan-100/70 bg-gradient-to-br from-cyan-200 via-cyan-400 to-lime-300 px-3 py-4 text-base font-black text-slate-950 shadow-[0_0_24px_rgba(34,211,238,0.65),0_0_70px_rgba(34,211,238,0.32)] ring-4 ring-cyan-300/15 transition duration-300 hover:scale-[1.02] hover:brightness-110 hover:shadow-[0_0_34px_rgba(34,211,238,0.8),0_0_90px_rgba(34,211,238,0.42)] active:scale-[0.99] sm:flex-nowrap sm:px-6 sm:py-5 sm:text-xl"
-            >
-              <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/55 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
-              <Atom size={27} className="relative transition-transform duration-500 group-hover:rotate-90" />
-              <span className="relative">מעבר לבנקר האנליסט</span>
-              <span className="relative text-[10px] font-extrabold uppercase tracking-[0.12em] sm:text-xs sm:tracking-[0.18em]">ANALYST REPORT</span>
-              <Sparkles size={19} className="relative animate-pulse" />
-            </Link>
-          </div>
         </div>
       </motion.div>
     </section>
@@ -155,21 +148,15 @@ function CompletedView({ record, onStartNew, onEnterBunker }: { record: Complete
 
 export default function DailyDrop() {
   useFreshPageView();
-  const router = useRouter();
   const [unlocked, setUnlocked] = useState(false);
   const [stage, setStage] = useState<"idle" | "cinematic">("idle");
   const [code, setCode] = useState("");
-  const [errorKind, setErrorKind] = useState<
-    null | "invalid" | "already_used" | "roll_failed" | "prize_missing" | "server_error"
-  >(null);
+  const [errorKind, setErrorKind] = useState<null | "invalid" | "already_used" | "server_error">(null);
   const [unlocking, setUnlocking] = useState(false);
-  const [errorDetail, setErrorDetail] = useState<string | null>(null);
   const [completed, setCompleted] = useState<CompletedRecord | null>(null);
   const [prize, setPrize] = useState<BoxItem | null>(null);
+  const [content, setContent] = useState<DropContent>({});
   const [resumed, setResumed] = useState(false);
-  const [enteringBunker, setEnteringBunker] = useState(false);
-  const entryTimer = useRef<number | null>(null);
-  const entryGuard = useRef(false);
   // Guards against a double-click / Enter+click firing two redeems for the same
   // code, which would burn it and then report a bogus "already used".
   const submitGuard = useRef(false);
@@ -183,10 +170,6 @@ export default function DailyDrop() {
     } catch {
       // ignore private-mode / storage errors
     }
-  }, []);
-
-  useEffect(() => () => {
-    if (entryTimer.current !== null) window.clearTimeout(entryTimer.current);
   }, []);
 
   const startOpening = () => {
@@ -205,7 +188,7 @@ export default function DailyDrop() {
   };
 
   const finishDrop = (winner: BoxItem) => {
-    const record: CompletedRecord = { code, item: winner };
+    const record: CompletedRecord = { code, item: winner, content };
     try {
       window.localStorage.removeItem(ACTIVE_KEY);
     } catch {
@@ -219,19 +202,7 @@ export default function DailyDrop() {
     finishDrop(winner);
   };
 
-  const handleEnterBunker = (event: React.MouseEvent<HTMLAnchorElement>) => {
-    event.preventDefault();
-    if (!completed || entryGuard.current) return;
-    entryGuard.current = true;
-    setEnteringBunker(true);
-    entryTimer.current = window.setTimeout(() => router.push("/bunker"), 900);
-  };
-
   const handleStartNew = () => {
-    if (entryTimer.current !== null) window.clearTimeout(entryTimer.current);
-    entryTimer.current = null;
-    entryGuard.current = false;
-    setEnteringBunker(false);
     setStage("idle");
     clearDropVerified();
     try {
@@ -244,8 +215,8 @@ export default function DailyDrop() {
     setUnlocked(false);
     setCode("");
     setErrorKind(null);
-    setErrorDetail(null);
     setPrize(null);
+    setContent({});
     setResumed(false);
   };
 
@@ -256,85 +227,50 @@ export default function DailyDrop() {
     if (!value) return;
     submitGuard.current = true;
     setErrorKind(null);
-    setErrorDetail(null);
     setUnlocking(true);
     const settle = () => {
       submitGuard.current = false;
       setUnlocking(false);
     };
-    const enter = (won: BoxItem, resumed: boolean) => {
-      rememberActive(value, won);
+    const enter = (drop: { prize: BoxItem; content: DropContent }, resumed: boolean) => {
+      rememberActive(value, drop.prize);
       markDropVerified();
-      setPrize(won);
+      setPrize(drop.prize);
+      setContent(drop.content);
       setUnlocked(true);
       setResumed(resumed);
       setCode(value);
       settle();
     };
 
-    // Offline demo mode only: when Supabase is configured every code must be
-    // verified server-side by the redeem_code RPC (matching code, used = false),
-    // so the local allowlist must never reject it here first.
-    if (!BACKEND_ENABLED && !isValidCommunityCode(value)) {
-      setErrorKind("invalid");
-      settle();
-      return;
-    }
-
     try {
-      let pending: { code?: string; prize?: BoxItem } | null = null;
+      let pending: { code?: string } | null = null;
       try {
         pending = JSON.parse(window.localStorage.getItem(ACTIVE_KEY) || "null");
       } catch {
         // The code may still be verified when browser storage is unavailable.
       }
-      if (pending?.code && pending.code !== value) {
-        setErrorKind("invalid");
+      if (pending?.code === value) {
+        const existing = await getRolledPrize(value);
+        if (existing.status === "ok") {
+          enter(existing.drop, true);
+          setStage("cinematic");
+          return;
+        }
+        if (existing.status === "error") {
+          setErrorKind("server_error");
+          settle();
+          return;
+        }
+      }
+
+      const result = await redeemCode(value);
+      if (result.status !== "ok") {
+        setErrorKind(result.status === "already_used" ? "already_used" : result.status === "invalid" ? "invalid" : "server_error");
         settle();
         return;
       }
-      if (pending?.code === value) {
-        if (BACKEND_ENABLED) {
-          const existing = pending.prize ? await getRolledPrize(value) : await rollPrize(value);
-          if (existing.status !== "ok" || (pending.prize && existing.prize.id !== pending.prize.id)) {
-            setErrorKind("prize_missing");
-            settle();
-            return;
-          }
-          enter(existing.prize, true);
-        } else if (pending.prize) {
-          enter(pending.prize, true);
-        } else {
-          setErrorKind("prize_missing");
-          settle();
-          return;
-        }
-        setStage("cinematic");
-        return;
-      }
-
-      if (BACKEND_ENABLED) {
-        const result = await redeemCode(value);
-        if (result.status !== "ok") {
-          setErrorKind(result.status === "already_used" ? "already_used" : "invalid");
-          settle();
-          return;
-        }
-        try {
-          window.localStorage.setItem(ACTIVE_KEY, JSON.stringify({ code: value }));
-        } catch {
-          // A server-verified drop can still complete without local resume.
-        }
-        const rolled = await rollPrize(value);
-        if (rolled.status !== "ok") {
-          setErrorKind("roll_failed");
-          settle();
-          return;
-        }
-        enter(rolled.prize, false);
-      } else {
-        enter(pickWeighted(BOX_ITEMS), false);
-      }
+      enter(result.drop, false);
     } catch (err) {
       console.warn("[drop] code validation failed:", err);
       setErrorKind("server_error");
@@ -342,16 +278,8 @@ export default function DailyDrop() {
     }
   };
 
-  if (enteringBunker) {
-    return <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-[#06130f] px-6 text-center" role="status">
-      <EinsteinConfetti />
-      <Atom className="relative z-10 text-cyan-200" size={64} />
-      <h2 className="relative z-10 mt-6 text-2xl font-black text-white sm:text-4xl">הגישה לבנקר נפתחת</h2>
-    </div>;
-  }
-
   if (completed) {
-    return <CompletedView record={completed} onStartNew={handleStartNew} onEnterBunker={handleEnterBunker} />;
+    return <CompletedView record={completed} onStartNew={handleStartNew} />;
   }
 
   return (
@@ -461,6 +389,12 @@ export default function DailyDrop() {
                         ? "הקוד כבר אומת בעבר — ממשיכים את הדרופ"
                         : "הקוד אומת — הגישה מאושרת"}
                     </motion.p>
+                    {prize && <div className="mt-4 rounded-xl border border-amber-300/25 bg-amber-300/[0.06] px-6 py-3 text-amber-100" role="status">
+                      <p className="text-xs font-bold">הפרס המשויך לקוד שלך</p>
+                      <p className="mt-1 text-xl font-black">{prize.emoji} {prize.name}</p>
+                      {prize.chance && <p className="mt-1 text-xs">סיכוי: {prize.chance}</p>}
+                    </div>}
+                    <DropDetails content={content} />
 
                     <motion.button
                       onClick={startOpening}
@@ -552,19 +486,10 @@ export default function DailyDrop() {
                           <p className="text-[11px] font-bold text-red-400">
                             {errorKind === "already_used"
                               ? "הקוד כבר נוצל — הקוד הזה כבר הופעל בעבר ולא ניתן להשתמש בו שוב"
-                              : errorKind === "roll_failed"
-                                ? "תקלה זמנית במערכת הפרסים — אם כבר אימתתם את הקוד, נסו שוב (אפשר להמשיך את הדרופ)"
-                                : errorKind === "prize_missing"
-                                  ? "הקוד אומת, אך מערכת הפרסים לא החזירה פרס לאחר מכן — נסו שוב, ואם זו לא התקלה הראשונה פנו לצוות הדרופ"
-                                  : errorKind === "server_error"
-                                    ? "מערכת הפרסים לא זמינה כרגע — הקוד שלך לא נצרך ולא נשלם; נסו שוב עוד מעט"
-                                    : "קוד שגוי – נא לבדוק את הקוד שהתקבל"}
+                              : errorKind === "server_error"
+                                ? "לא ניתן לאמת את הקוד כרגע — נסו שוב בעוד רגע"
+                                : "קוד שגוי – נא לבדוק את הקוד שהתקבל"}
                           </p>
-                          {errorDetail ? (
-                            <p className="mt-1 font-mono text-[10px] text-slate-600" dir="ltr">
-                              {errorDetail}
-                            </p>
-                          ) : null}
                         </div>
                       )}
 

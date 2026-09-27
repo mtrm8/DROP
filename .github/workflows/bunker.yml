@@ -1,9 +1,9 @@
-name: Build and Publish Bunker Report
+name: Build and Publish Drop Site
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
-  schedule:
-    - cron: '0 */6 * * *'
 
 permissions:
   contents: write
@@ -24,11 +24,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run Bunker Analyst Script
-        env:
-          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
-        run: node scripts/bunker-model.mjs
-
       - name: Build static site
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
@@ -40,4 +35,4 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./out
-          commit_message: "Auto-update bunker report and site [skip ci]"
+          commit_message: "Publish drop site [skip ci]"

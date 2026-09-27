@@ -1,4 +1,3 @@
-import generated from "./generatedReport.json";
 
 export type Model = {
   homeGames: number;
@@ -104,7 +103,3 @@ export type Report = {
   scanNote: string | null;
   methodology: string;
 };
-
-// Runtime validation is performed by generate-bunker.mjs before writing this file.
-const report: Report = generated as Report;
-export default report;

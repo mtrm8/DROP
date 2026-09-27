@@ -7,7 +7,3 @@ await copyFile("out/ai-bunker/index.html", "out/ai-bunker.html");
 
 // Keep a static-site fallback so direct client routes do not stop at Pages 404.
 await copyFile("out/index.html", "out/404.html");
-
-// The automated AI report is also a public static JSON asset. Open member
-// sessions can pick up a newer processed build without refreshing the page.
-await copyFile("components/bunker/generatedReport.json", "out/bunker-data.json");
