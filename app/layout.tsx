@@ -4,18 +4,18 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Einstein Drop | איינשטיין דרופ",
   description:
-    "Einstein Drop — דרופים לקהילת הכדורגל, בנקר אנליסט לבחירות ידניות ובנקר AI ניסיוני.",
+    "Einstein Drop — דרופים לקהילת הכדורגל, בונקר אנליסט לבחירות ידניות ובונקר AI ניסיוני.",
   applicationName: "Einstein Drop",
   openGraph: {
     title: "Einstein Drop | איינשטיין דרופ",
-    description: "דרופים קהילתיים, בחירות אנליסט ידניות ובנקר AI ניסיוני.",
+    description: "דרופים קהילתיים, בחירות אנליסט ידניות ובונקר AI ניסיוני.",
     locale: "he_IL",
     type: "website",
   },
   twitter: {
     card: "summary",
     title: "Einstein Drop | איינשטיין דרופ",
-    description: "דרופים קהילתיים, בחירות אנליסט ידניות ובנקר AI ניסיוני.",
+    description: "דרופים קהילתיים, בחירות אנליסט ידניות ובונקר AI ניסיוני.",
   },
 };
 

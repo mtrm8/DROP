@@ -107,13 +107,13 @@ export default function AIBunkerExperience() {
         <section className="mx-auto flex min-h-[70vh] max-w-xl flex-col items-center justify-center px-5 py-10 text-center">
           <div className="flex h-20 w-20 items-center justify-center rounded-3xl border border-cyan-300/25 bg-cyan-300/[0.07] text-cyan-200 shadow-[0_0_48px_rgba(34,211,238,0.12)]"><LockKeyhole size={34} /></div>
           <p className="mt-6 rounded-full border border-amber-200/25 bg-amber-200/[0.07] px-3 py-1.5 text-xs font-black text-amber-100">בפיתוח · IN DEVELOPMENT</p>
-          <h1 className="mt-4 text-3xl font-black text-white">בנקר AI - גישה למפתחים</h1>
+           <h1 className="mt-4 text-3xl font-black text-white">בונקר AI - גישה למפתחים</h1>
           <p className="mt-3 max-w-md text-sm leading-7 text-slate-400">מנוע הנתונים האוטומטי זמין כעת לתצוגה מוקדמת בלבד. הזינו קוד גישה כדי לצפות בסריקה הניסיונית ובבחירות האוטומטיות.</p>
           <form onSubmit={handleUnlock} className="mt-7 w-full max-w-md text-right">
             <label htmlFor="ai-bunker-member-code" className="text-xs font-bold text-cyan-100">קוד זה מיועד רק למפתחים</label>
             <input id="ai-bunker-member-code" type="text" value={memberCode} onChange={(event) => { setMemberCode(event.target.value); setCodeError(false); }} autoComplete="off" spellCheck={false} dir="ltr" className="mt-2 w-full rounded-xl border border-cyan-300/20 bg-slate-950 px-4 py-3 text-center font-mono text-base tracking-wide text-white outline-none focus-visible:border-cyan-300 focus-visible:ring-2 focus-visible:ring-cyan-300/20" />
             {codeError && <p role="alert" className="mt-2 text-xs text-rose-300">קוד הגישה שגוי. בדקו את הקוד ונסו שוב.</p>}
-            <button type="submit" className="mt-4 w-full rounded-xl bg-gradient-to-l from-cyan-300 to-lime-300 px-6 py-3 font-black text-slate-950 transition hover:brightness-110">כניסה לבנקר AI</button>
+             <button type="submit" className="mt-4 w-full rounded-xl bg-gradient-to-l from-cyan-300 to-lime-300 px-6 py-3 font-black text-slate-950 transition hover:brightness-110">כניסה לבונקר AI</button>
           </form>
         </section>
         <CommunityFooter />
@@ -141,7 +141,7 @@ export default function AIBunkerExperience() {
             <div>
               <div className="inline-flex items-center gap-2 rounded-full border border-amber-200/25 bg-amber-200/[0.07] px-3 py-1.5 text-[10px] font-black text-amber-100"><ShieldCheck size={13} /> בפיתוח · גישת מפתחים פעילה</div>
               <p className="mt-5 flex items-center gap-2 text-sm font-bold text-cyan-200"><BrainCircuit size={18} /> איינשטיין דרופ · מנוע נתונים אוטומטי</p>
-              <h1 className="mt-2 text-4xl font-black tracking-tight text-white sm:text-6xl"><span className="bg-gradient-to-l from-cyan-200 via-cyan-400 to-lime-300 bg-clip-text text-transparent">בנקר AI</span></h1>
+               <h1 className="mt-2 text-4xl font-black tracking-tight text-white sm:text-6xl"><span className="bg-gradient-to-l from-cyan-200 via-cyan-400 to-lime-300 bg-clip-text text-transparent">בונקר AI</span></h1>
               <p className="mt-3 text-lg font-bold text-slate-200">
                 {visiblePicks.length
                   ? `סריקת AI · ${visiblePicks.length} בחירות שערים`
@@ -186,7 +186,7 @@ export default function AIBunkerExperience() {
                 animate={{ opacity: [.45, 1, .45] }}
                 transition={{ duration: 1.8, repeat: Infinity }}
               />
-              {status ? statusLabel(status, report) : "בנקר AI · טוענים את מצב הסריקה"}
+               {status ? statusLabel(status, report) : "בונקר AI · טוענים את מצב הסריקה"}
             </span>
             <button type="button" onClick={handleLock} className="rounded-lg border border-white/[0.09] px-3 py-1.5 font-semibold text-slate-300 hover:border-cyan-300/30 hover:text-white">נעילת תצוגת AI</button>
             <LocalClock />

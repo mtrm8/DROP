@@ -1,5 +1,5 @@
 import { moneyEmojiFor, moneyIconFor } from "./boxItems";
-import type { BoxItem, ItemIconName, RarityName } from "./boxItems";
+import type { BoxItem, RarityName } from "./boxItems";
 
 export type DropContent = { title?: string; description?: string; analysis?: string };
 export type VerifiedDrop = { prize: BoxItem; content: DropContent };
@@ -22,17 +22,11 @@ type DropRow = {
 };
 
 const rarities = ["common", "uncommon", "rare", "classified", "covert", "special"];
-const icons = ["crest", "ball", "chip", "card", "stack", "gem", "fire", "king"];
-const emojiIcons: Record<string, ItemIconName> = {
-  "👑": "crest", "⚽": "ball", "🪙": "chip", "🃏": "card",
-  "💵": "stack", "💰": "stack", "💸": "stack", "💎": "gem", "🔥": "fire", "🤴": "king",
-};
 
 function toDrop(row: DropRow): VerifiedDrop | null {
   const id = row.prize_id;
   const amount = row.amount;
   if (!id || typeof amount !== "number" || !Number.isFinite(amount)) return null;
-  const icon = row.icon ?? "";
   const content = row.drop_content && typeof row.drop_content === "object" && !Array.isArray(row.drop_content)
     ? row.drop_content as Record<string, unknown> : {};
   const text = (key: string) => typeof content[key] === "string" ? content[key] as string : undefined;
@@ -46,8 +40,9 @@ function toDrop(row: DropRow): VerifiedDrop | null {
       chance: row.chance ?? "",
       weight: 0,
       rarity: rarities.includes(row.rarity ?? "") ? row.rarity as RarityName : "common",
-      icon: icons.includes(icon) ? icon as ItemIconName : emojiIcons[icon] ?? moneyIconFor(amount),
-      emoji: emojiIcons[icon] ? icon : moneyEmojiFor(amount),
+      // The cash tier determines its glyph even if a legacy DB icon is garbled.
+      icon: moneyIconFor(amount),
+      emoji: moneyEmojiFor(amount),
     },
     content: { title: text("title"), description: text("description"), analysis: text("analysis") },
   };

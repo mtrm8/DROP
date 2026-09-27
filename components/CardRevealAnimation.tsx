@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, Lock, Sparkles } from "lucide-react";
-import { BOX_ITEMS, BoxItem, ItemIcon, RARITIES, pickWeighted } from "./drop/boxItems";
+import { BOX_ITEMS, BoxItem, ItemIcon, RARITIES, moneyEmojiFor, pickWeighted } from "./drop/boxItems";
 import { DROP_COMMUNITY, DROP_PRIZE_COPY, DROP_TITLE } from "./drop/copy";
 
 const CARDS_COUNT = 10;
@@ -122,10 +122,10 @@ function CardFront({ item, compact = false }: { item: BoxItem; compact?: boolean
           style={{ borderColor: rarity.color, background: "radial-gradient(circle at 35% 28%, rgba(255,255,255,0.15), rgba(15,17,24,0.98) 78%)", boxShadow: `0 0 35px ${rarity.glow}` }}
         >
           <span
-            className={`leading-none drop-shadow-[0_0_16px_rgba(255,214,102,0.5)] ${compact ? "text-3xl sm:text-5xl" : "text-5xl"}`}
+            className={`drop-emoji leading-none drop-shadow-[0_0_16px_rgba(255,214,102,0.5)] ${compact ? "text-3xl sm:text-5xl" : "text-5xl"}`}
             aria-hidden="true"
           >
-            {item.emoji}
+            {item.category === "cash" ? moneyEmojiFor(item.amount) : item.emoji}
           </span>
         </div>
         <div className={`line-clamp-2 font-black leading-tight ${compact ? "text-sm sm:text-base" : "text-base"}`} style={{ color: rarity.color, textShadow: `0 0 16px ${rarity.glow}` }}>
@@ -136,37 +136,21 @@ function CardFront({ item, compact = false }: { item: BoxItem; compact?: boolean
   );
 }
 
-// The deck always contains the server-rolled prize at a random slot; the other
-// cards are purely cosmetic decoys drawn from the same cash pool.
+// Selection only shows decoys. The server-assigned prize stays hidden until
+// the winning card flips in the final reveal phase.
 function buildDeck(prize: BoxItem): DealCard[] {
-  const prizeSlot = Math.floor(Math.random() * CARDS_COUNT);
-  const decoys = BOX_ITEMS.filter((item) => item.id !== prize.id);
+  const decoys = BOX_ITEMS.filter((item) => item.id !== prize.id && item.amount !== prize.amount);
   return Array.from({ length: CARDS_COUNT }, (_, i) => ({
     id: i,
-    item: i === prizeSlot ? prize : pickWeighted(decoys),
+    item: pickWeighted(decoys),
     selected: false,
   }));
 }
 
-// Pick which locked card will visually carry the server-rolled prize and move
-// the prize into that slot. Pure, and it always returns a winner id, so the
-// reveal can never end up without a card to show. The prize itself is never
-// re-rolled: the amount was already decided by the server.
-function placePrize(cards: DealCard[], prize: BoxItem): { cards: DealCard[]; winnerId: number } {
+// The winning slot is cosmetic; the server has already assigned the prize.
+function pickWinner(cards: DealCard[]): number {
   const selected = cards.filter((card) => card.selected);
-  const fallback = selected[0] ?? cards[0];
-  if (!fallback) return { cards, winnerId: -1 };
-  const holder = selected.find((card) => card.item.id === prize.id);
-  if (holder) return { cards, winnerId: holder.id };
-  const original = cards.find((card) => card.item.id === prize.id);
-  const target = selected[Math.floor(Math.random() * selected.length)] ?? fallback;
-  if (!original) return { cards, winnerId: target.id };
-  return {
-    winnerId: target.id,
-    cards: cards.map((card) => card.id === target.id
-      ? { ...card, item: prize }
-      : card.id === original.id ? { ...card, item: target.item } : card),
-  };
+  return selected[Math.floor(Math.random() * selected.length)]?.id ?? -1;
 }
 
 // Resolve the phase from elapsed time alone, so the machine state can always be
@@ -184,11 +168,18 @@ export function CardRevealAnimation({ onFinished, prize }: CardRevealProps) {
   const [cards, setCards] = useState<DealCard[]>(() => {
     try {
       const saved = JSON.parse(window.localStorage.getItem(ACTIVE_KEY) || "null");
-      if (saved?.prize?.id === prize.id && Array.isArray(saved.cards) && saved.cards.length === CARDS_COUNT &&
-        saved.cards.every((card: DealCard, index: number) => card?.id === index && typeof card.selected === "boolean" && card.item?.id) &&
-        saved.cards.filter((card: DealCard) => card.selected).length <= SELECT_COUNT &&
-        saved.cards.some((card: DealCard) => card.item.id === prize.id)) {
-        return saved.cards;
+      if (saved?.prize?.id === prize.id && Array.isArray(saved.cards) && saved.cards.length === CARDS_COUNT) {
+        const restored = saved.cards.map((card: DealCard, index: number) => ({
+          id: index,
+          selected: card?.id === index && card.selected === true,
+          item: BOX_ITEMS.find((item) => item.id === card?.item?.id),
+        }));
+        if (restored.every((card: { item?: BoxItem }, index: number) => card.item &&
+          saved.cards[index]?.id === index && typeof saved.cards[index]?.selected === "boolean" &&
+          card.item.id !== prize.id && card.item.amount !== prize.amount) &&
+          restored.filter((card: { selected: boolean }) => card.selected).length <= SELECT_COUNT) {
+          return restored as DealCard[];
+        }
       }
     } catch {
       // Private browsing may disable storage; generate a fresh in-memory deck.
@@ -205,8 +196,10 @@ export function CardRevealAnimation({ onFinished, prize }: CardRevealProps) {
   const finished = useRef(false);
 
   const selectedCount = cards.filter((c) => c.selected).length;
-  const selectedCards = cards.filter((c) => c.selected);
-  const winnerCard = cards.find((c) => c.id === winnerId) ?? null;
+  const prizeRevealed = phase === "reveal" || phase === "done";
+  const selectedCards = cards.filter((c) => c.selected).map((c) =>
+    prizeRevealed && c.id === winnerId ? { ...c, item: prize } : c);
+  const winnerCard = prizeRevealed ? selectedCards.find((c) => c.id === winnerId) ?? null : null;
   const isComplete = selectedCount === SELECT_COUNT;
 
   useEffect(() => {
@@ -260,14 +253,11 @@ export function CardRevealAnimation({ onFinished, prize }: CardRevealProps) {
 
   const startMachine = () => {
     if (machine !== "idle" || !isComplete) return;
-    // The result was already rolled by the server. Resolve the winning slot and
-    // the clock in the same batch, so from here on the reveal is fully
-    // determined and cannot stall waiting for a prize that is not on the tray.
-    const prepared = placePrize(cards, prize);
-    if (prepared.winnerId < 0) return;
+    // Choose a visual slot now; only render its assigned prize at the reveal.
+    const chosen = pickWinner(cards);
+    if (chosen < 0) return;
     startedAt.current = Date.now();
-    setWinnerId(prepared.winnerId);
-    setCards(prepared.cards);
+    setWinnerId(chosen);
     setMachine("running");
     setPhase("collect");
   };
@@ -650,7 +640,8 @@ export function CardRevealAnimation({ onFinished, prize }: CardRevealProps) {
                     >
                       <ItemIcon icon={winnerCard.item.icon} size={30} className="text-amber-300" />
                     </div>
-                    <h3 className="mt-2 text-lg font-black text-white leading-snug">{winnerCard.item.name}</h3>
+                     <h3 className="mt-2 text-lg font-black text-white leading-snug">{winnerCard.item.name}</h3>
+                     <p className="mt-2 text-xs font-bold leading-5 text-amber-100">צלמו מסך של הזכייה ושמרו אותו כדי לממש את הפרס.</p>
                     <p className="mt-1 text-[11px] text-slate-500">
                       {rarity.label} • {winnerCard.item.chance} • יוכרז בהפקדה הבאה
                     </p>

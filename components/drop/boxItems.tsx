@@ -211,7 +211,7 @@ export function ItemIcon({
     case "fire":
       return (
         <span
-          className={className}
+          className={`drop-emoji ${className ?? ""}`}
           style={{ fontSize: size * 1.15, lineHeight: 1 }}
           aria-hidden="true"
         >

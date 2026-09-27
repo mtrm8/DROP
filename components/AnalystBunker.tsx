@@ -174,7 +174,7 @@ export default function AnalystBunker({ embedded = false }: { embedded?: boolean
         <div className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-emerald-400/[0.08] blur-[90px]" />
         <div className="relative">
           <span className="inline-flex items-center gap-2 rounded-full border border-emerald-300/25 bg-emerald-300/[0.08] px-3 py-1.5 text-[10px] font-black text-emerald-100"><ClipboardList size={14} /> דוח אנליסט אנושי · בחירות ידניות</span>
-          <Heading className="mt-5 text-3xl font-black text-white sm:text-5xl">בנקר האנליסט</Heading>
+           <Heading className="mt-5 text-3xl font-black text-white sm:text-5xl">בונקר האנליסט</Heading>
           <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-300">הבחירות, הנתונים והנימוקים כאן נכתבים ומוזנים ידנית על ידי {report.analyst}. דוח זה נפרד ממנוע ה־AI האוטומטי.</p>
           <p className="mt-3 text-xs text-emerald-200/80">{report.asOf ? `נערך לאחרונה: ${formatDate(report.asOf)}` : "ממתינים לפרסום בחירות אנליסט מאומתות."}</p>
         </div>
@@ -195,7 +195,7 @@ export default function AnalystBunker({ embedded = false }: { embedded?: boolean
   const locked = <section className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-8 sm:py-12" role="status">
       <div className="rounded-[1.7rem] border border-emerald-300/15 bg-slate-950/80 p-7 text-center sm:p-10">
         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-emerald-300/25 bg-emerald-300/[0.07] text-emerald-200"><LockKeyhole size={24} /></div>
-        <Heading className="mt-4 text-2xl font-black text-white sm:text-3xl">בנקר האנליסט נעול</Heading>
+         <Heading className="mt-4 text-2xl font-black text-white sm:text-3xl">בונקר האנליסט נעול</Heading>
         <p className="mx-auto mt-3 max-w-xl text-sm leading-7 text-slate-400">הבחירות הידניות, הטיפס המשולב ונתוני האנליסט זמינים לאחר השלמת קוד הדרופ. השלימו את הקוד כדי לצפות בדוח המלא.</p>
         <button type="button" onClick={() => router.push("/drop")} className="mt-5 inline-flex items-center gap-2 rounded-xl bg-gradient-to-l from-emerald-300 to-cyan-300 px-6 py-3 text-sm font-black text-slate-950 transition hover:brightness-110">מעבר לעמוד הדרופ</button>
       </div>

@@ -285,3 +285,8 @@ body {
 .animate-shake {
   animation: shake 0.45s ease-in-out;
 }
+
+/* Use a color-emoji font for cash glyphs instead of inheriting a text font. */
+.drop-emoji {
+  font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', sans-serif;
+}

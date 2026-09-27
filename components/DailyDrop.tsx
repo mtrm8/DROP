@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { KeyRound, Lock, Sparkles } from "lucide-react";
+import { Camera, KeyRound, Lock, Sparkles } from "lucide-react";
 import { CardRevealAnimation } from "./CardRevealAnimation";
 import { getRolledPrize, redeemCode } from "./drop/backend";
 import type { DropContent } from "./drop/backend";
@@ -31,7 +31,7 @@ function CardEmblem() {
           <div className="absolute inset-1 rounded-lg border border-amber-500/15" />
           <div className="flex h-full flex-col items-center justify-between p-2">
             <span className="text-[9px] font-bold text-amber-400/70">K ♠</span>
-            <span className="text-lg leading-none">👑</span>
+            <span className="drop-emoji text-lg leading-none">👑</span>
             <span className="rotate-180 text-[9px] font-bold text-amber-400/70">K ♠</span>
           </div>
         </div>
@@ -125,12 +125,17 @@ function CompletedView({ record, onStartNew }: { record: CompletedRecord; onStar
           <p className="text-xs text-slate-400 mt-4 max-w-sm leading-relaxed">
             הפרס הכספי יופיע בהפקדה הבאה. שמרו את פרטי הקהילה לידכם — הזכייה תוכרז ותועבר בקרוב.
           </p>
-          <DropDetails content={record.content} />
-
           <p className="flex items-center justify-center gap-1.5 text-[11px] text-slate-500 mt-4">
             <Lock size={12} className="text-red-400/80" />
             הקוד <span dir="ltr" className="font-mono font-bold text-slate-400">{record.code}</span> נוצל — לא ניתן להפעילו שנית
           </p>
+
+          <div className="mt-5 flex w-full max-w-2xl flex-col items-center rounded-2xl border border-amber-300/40 bg-amber-300/[0.08] px-5 py-4 text-amber-100" role="note">
+            <Camera size={26} aria-hidden="true" />
+            <p className="mt-2 text-base font-black">צלמו עכשיו צילום מסך של הזכייה והקוד</p>
+            <p className="mt-1 text-sm leading-6">שמרו את הצילום והציגו אותו לצוות הקהילה כדי לדרוש ולממש את הפרס.</p>
+          </div>
+          <DropDetails content={record.content} />
 
           <button
             onClick={onStartNew}
@@ -157,6 +162,7 @@ export default function DailyDrop() {
   const [prize, setPrize] = useState<BoxItem | null>(null);
   const [content, setContent] = useState<DropContent>({});
   const [resumed, setResumed] = useState(false);
+  const [verificationStage, setVerificationStage] = useState<"confirming" | "ready">("ready");
   // Guards against a double-click / Enter+click firing two redeems for the same
   // code, which would burn it and then report a bogus "already used".
   const submitGuard = useRef(false);
@@ -172,8 +178,14 @@ export default function DailyDrop() {
     }
   }, []);
 
+  useEffect(() => {
+    if (!unlocked || verificationStage !== "confirming") return;
+    const timer = window.setTimeout(() => setVerificationStage("ready"), 2600);
+    return () => window.clearTimeout(timer);
+  }, [unlocked, verificationStage]);
+
   const startOpening = () => {
-    if (!prize) return;
+    if (!prize || verificationStage !== "ready") return;
     setStage("cinematic");
   };
 
@@ -218,6 +230,7 @@ export default function DailyDrop() {
     setPrize(null);
     setContent({});
     setResumed(false);
+    setVerificationStage("ready");
   };
 
   const handleCodeSubmit = async (e: React.FormEvent) => {
@@ -237,6 +250,7 @@ export default function DailyDrop() {
       markDropVerified();
       setPrize(drop.prize);
       setContent(drop.content);
+      setVerificationStage("confirming");
       setUnlocked(true);
       setResumed(resumed);
       setCode(value);
@@ -254,7 +268,6 @@ export default function DailyDrop() {
         const existing = await getRolledPrize(value);
         if (existing.status === "ok") {
           enter(existing.drop, true);
-          setStage("cinematic");
           return;
         }
         if (existing.status === "error") {
@@ -381,40 +394,37 @@ export default function DailyDrop() {
 
                     <motion.p
                       className="mt-3 text-sm font-black text-emerald-300"
+                      role="status"
                       initial={{ opacity: 0, y: 6 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.28, duration: 0.3 }}
                     >
-                      {resumed
-                        ? "הקוד כבר אומת בעבר — ממשיכים את הדרופ"
-                        : "הקוד אומת — הגישה מאושרת"}
+                      {verificationStage === "confirming"
+                        ? "הקוד אומת בהצלחה — מכינים את הדרופ..."
+                        : resumed
+                          ? "הקוד כבר אומת בעבר — ממשיכים את הדרופ"
+                          : "הקוד אומת — הגישה מאושרת"}
                     </motion.p>
-                    {prize && <div className="mt-4 rounded-xl border border-amber-300/25 bg-amber-300/[0.06] px-6 py-3 text-amber-100" role="status">
-                      <p className="text-xs font-bold">הפרס המשויך לקוד שלך</p>
-                      <p className="mt-1 text-xl font-black">{prize.emoji} {prize.name}</p>
-                      {prize.chance && <p className="mt-1 text-xs">סיכוי: {prize.chance}</p>}
-                    </div>}
-                    <DropDetails content={content} />
-
-                    <motion.button
-                      onClick={startOpening}
-                      className="group relative mt-6 flex min-h-14 w-full items-center justify-center gap-2.5 rounded-2xl bg-gradient-to-br from-amber-300 via-amber-400 to-amber-500 py-4 text-lg font-black text-slate-950 shadow-[0_0_35px_rgba(245,158,11,0.35)] transition hover:brightness-110 active:scale-[0.99] focus-visible:ring-2 focus-visible:ring-amber-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0c13] sm:text-xl"
-                      initial={{ opacity: 0, y: 14 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ type: "spring", stiffness: 260, damping: 20, delay: 0.42 }}
-                    >
-                      <Sparkles size={21} className="transition-transform group-hover:rotate-12" />
-                      הפעל את הדרופ
-                    </motion.button>
-
-                    <motion.p
-                      className="flex items-center justify-center text-[11px] text-slate-500 mt-3"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      transition={{ delay: 0.55, duration: 0.3 }}
-                    >
-                      הפרס יופיע בהפקדה הבאה בלבד
-                    </motion.p>
+                    <AnimatePresence mode="wait">
+                      {verificationStage === "confirming" ? (
+                        <motion.div key="preparing" className="mt-7 h-1.5 w-40 overflow-hidden rounded-full bg-emerald-400/15"
+                          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                          <motion.div className="h-full rounded-full bg-emerald-400"
+                            initial={{ width: "0%" }} animate={{ width: "100%" }} transition={{ duration: 2.6, ease: "easeInOut" }} />
+                        </motion.div>
+                      ) : (
+                        <motion.div key="activate" className="w-full" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.35 }}>
+                          <button
+                            onClick={startOpening}
+                            className="group relative mt-6 flex min-h-14 w-full items-center justify-center gap-2.5 rounded-2xl bg-gradient-to-br from-amber-300 via-amber-400 to-amber-500 py-4 text-lg font-black text-slate-950 shadow-[0_0_35px_rgba(245,158,11,0.35)] transition hover:brightness-110 active:scale-[0.99] focus-visible:ring-2 focus-visible:ring-amber-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0c13] sm:text-xl"
+                          >
+                            <Sparkles size={21} className="transition-transform group-hover:rotate-12" />
+                            הפעל את הדרופ
+                          </button>
+                          <p className="mt-3 text-[11px] text-slate-500">הפרס יופיע בהפקדה הבאה בלבד</p>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </motion.div>
                 ) : (
                   <motion.div
