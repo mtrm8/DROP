@@ -8,7 +8,7 @@ import { getRolledPrize, redeemCode } from "./drop/backend";
 import type { DropContent } from "./drop/backend";
 import { ItemIcon, RARITIES } from "./drop/boxItems";
 import type { BoxItem } from "./drop/boxItems";
-import { DROP_PRIZE_COPY, DROP_TITLE } from "./drop/copy";
+import { DROP_COMMUNITY, DROP_PRIZE_COPY, DROP_TITLE } from "./drop/copy";
 import { clearDropVerified, markDropVerified } from "./drop/session";
 import { useFreshPageView } from "./useFreshPageView";
 
@@ -344,7 +344,7 @@ export default function DailyDrop() {
             <p className="mb-6 mt-2 max-w-2xl text-sm leading-relaxed text-slate-400 sm:mb-7 sm:text-base">
               {unlocked
                 ? DROP_PRIZE_COPY
-                : "הדרופ פתוח לחברי קהילת הכדורגל — הזינו את קוד הגישה שקיבלתם."}
+                 : `הדרופ פתוח לחברי ${DROP_COMMUNITY} — הזינו את קוד הגישה שקיבלתם.`}
             </p>
 
             <AnimatePresence mode="wait" initial={false}>
