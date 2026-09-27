@@ -116,7 +116,7 @@ export function statusHeadline(status: ReportStatus, report: Report): { title: s
     case "stale":
       return {
         title: `הדוח המוצג הוא סריקת ${day}`,
-         body: `הבונקר מתעדכן בסריקות מתוזמנות. הסריקה הבאה צפויה ב־${next}, ואז יוצגו כאן נתוני היום העדכניים שפורסמו.`,
+         body: `הבאנקר מתעדכן בסריקות מתוזמנות. הסריקה הבאה צפויה ב־${next}, ואז יוצגו כאן נתוני היום העדכניים שפורסמו.`,
       };
     case "started":
       return {

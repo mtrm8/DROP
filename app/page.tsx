@@ -250,7 +250,7 @@ export default function LandingPage() {
 
       {/* Analyst Bunker sits directly beneath the Community Drops block, so the
           scroll continues from the drop straight into the human picks. */}
-       <section aria-label="בונקר האנליסט" className="cv-auto relative w-full border-t border-white/[0.06] bg-[#060a0f] px-4 pt-10 sm:px-6">
+       <section aria-label="באנקר האנליסט" className="cv-auto relative w-full border-t border-white/[0.06] bg-[#060a0f] px-4 pt-10 sm:px-6">
         <div className="mx-auto max-w-6xl">
           <p className="text-center text-[10px] font-black tracking-widest text-emerald-200">EINSTEIN DROP · המשך ישיר מההדרוף</p>
           <p className="mt-2 text-center text-xs text-slate-500">ההדרוף ננעל? גללו לבחירות האנליסט האנושי של היום.</p>
@@ -282,7 +282,7 @@ export default function LandingPage() {
             <ArrowLeft size={20} className="transition-transform group-hover:-translate-x-1" />
           </a>
           <Link href="/ai-bunker" className="mt-6 inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 transition hover:text-amber-200">
-             <LockKeyhole size={13} /> כניסת חברי בונקר AI · גישה בקוד · בפיתוח
+             <LockKeyhole size={13} /> כניסת חברי באנקר AI · גישה בקוד · בפיתוח
           </Link>
         </motion.div>
       </section>
