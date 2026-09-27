@@ -97,7 +97,7 @@ function HeroCard3D() {
               <span className="rounded-full border border-cyan-400/35 bg-cyan-400/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.3em] text-cyan-300 sm:text-xs">
                 DROP LAB · COMMUNITY
               </span>
-              <span className="mt-1.5 text-[9px] uppercase tracking-[0.3em] text-slate-500">איינשטיין דרופ · מעבדת המזל</span>
+              <span className="mt-1.5 text-[9px] uppercase tracking-[0.3em] text-slate-500">אינשטיין דרופ · מעבדת המזל</span>
             </div>
 
             <div className="pointer-events-none absolute inset-0 rounded-2xl" style={{ background: "linear-gradient(112deg, transparent 38%, rgba(255,255,255,0.09) 46%, transparent 56%)" }} />

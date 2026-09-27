@@ -2,19 +2,19 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Einstein Drop | איינשטיין דרופ",
+  title: "Einstein Drop | אינשטיין דרופ",
   description:
-    "Einstein Drop — דרופים לקהילת איינשטיין, באנקר אנליסט לבחירות ידניות ובאנקר AI ניסיוני.",
+    "Einstein Drop — דרופים לקהילת אינשטיין, באנקר אנליסט לבחירות ידניות ובאנקר AI ניסיוני.",
   applicationName: "Einstein Drop",
   openGraph: {
-    title: "Einstein Drop | איינשטיין דרופ",
+    title: "Einstein Drop | אינשטיין דרופ",
     description: "דרופים קהילתיים, בחירות אנליסט ידניות ובאנקר AI ניסיוני.",
     locale: "he_IL",
     type: "website",
   },
   twitter: {
     card: "summary",
-    title: "Einstein Drop | איינשטיין דרופ",
+    title: "Einstein Drop | אינשטיין דרופ",
     description: "דרופים קהילתיים, בחירות אנליסט ידניות ובאנקר AI ניסיוני.",
   },
 };

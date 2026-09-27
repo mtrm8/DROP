@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import AIBunkerExperience from "@/components/AIBunkerExperience";
 
 export const metadata: Metadata = {
-  title: "באנקר AI · בפיתוח | איינשטיין דרופ",
+  title: "באנקר AI · בפיתוח | אינשטיין דרופ",
   description: "מנוע AI אוטומטי לניתוח משחקים ויחסים — תצוגה מוקדמת למפתחים.",
 };
 

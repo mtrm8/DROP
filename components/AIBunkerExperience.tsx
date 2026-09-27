@@ -140,7 +140,7 @@ export default function AIBunkerExperience() {
           <div className="relative flex flex-col items-start justify-between gap-7 sm:flex-row sm:items-center">
             <div>
               <div className="inline-flex items-center gap-2 rounded-full border border-amber-200/25 bg-amber-200/[0.07] px-3 py-1.5 text-[10px] font-black text-amber-100"><ShieldCheck size={13} /> בפיתוח · גישת מפתחים פעילה</div>
-              <p className="mt-5 flex items-center gap-2 text-sm font-bold text-cyan-200"><BrainCircuit size={18} /> איינשטיין דרופ · מנוע נתונים אוטומטי</p>
+              <p className="mt-5 flex items-center gap-2 text-sm font-bold text-cyan-200"><BrainCircuit size={18} /> אינשטיין דרופ · מנוע נתונים אוטומטי</p>
                <h1 className="mt-2 text-4xl font-black tracking-tight text-white sm:text-6xl"><span className="bg-gradient-to-l from-cyan-200 via-cyan-400 to-lime-300 bg-clip-text text-transparent">באנקר AI</span></h1>
               <p className="mt-3 text-lg font-bold text-slate-200">
                 {visiblePicks.length

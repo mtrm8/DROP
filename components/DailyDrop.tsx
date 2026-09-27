@@ -307,7 +307,7 @@ export default function DailyDrop() {
             {/* Badge + status */}
             <div className="mb-6 flex flex-wrap items-center justify-center gap-2.5 sm:mb-8">
               <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-amber-400/[0.1] text-amber-400 border border-amber-400/25 uppercase tracking-[0.22em]">
-                Einstein Drop · איינשטיין דרופ
+                 Einstein Drop · אינשטיין דרופ
               </span>
               <span
                 className={`flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 rounded-full border ${

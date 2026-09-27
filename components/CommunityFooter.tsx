@@ -16,7 +16,7 @@ export default function CommunityFooter() {
         </a>
         <p className="text-[11px] text-slate-600 flex items-center gap-1.5">
           <ShieldCheck size={12} className="text-slate-500" />
-           Einstein Drop · איינשטיין דרופ — קהילת איינשטיין
+           Einstein Drop · אינשטיין דרופ — קהילת אינשטיין
         </p>
       </div>
     </footer>
