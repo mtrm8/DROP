@@ -1,21 +1,22 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
+const previewDescription = "דרופים קהילתיים, בחירות אנליסט ידניות.";
+
 export const metadata: Metadata = {
   title: "Einstein Drop | אינשטיין דרופ",
-  description:
-    "Einstein Drop — דרופים לקהילת אינשטיין, באנקר אנליסט לבחירות ידניות ובאנקר AI ניסיוני.",
+  description: previewDescription,
   applicationName: "Einstein Drop",
   openGraph: {
     title: "Einstein Drop | אינשטיין דרופ",
-    description: "דרופים קהילתיים, בחירות אנליסט ידניות ובאנקר AI ניסיוני.",
+    description: previewDescription,
     locale: "he_IL",
     type: "website",
   },
   twitter: {
     card: "summary",
     title: "Einstein Drop | אינשטיין דרופ",
-    description: "דרופים קהילתיים, בחירות אנליסט ידניות ובאנקר AI ניסיוני.",
+    description: previewDescription,
   },
 };
 

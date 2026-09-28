@@ -194,26 +194,27 @@ export default function DailyDrop() {
 
   useEffect(() => {
     if (unlocked || completed || stage !== "idle") return;
-    let frame = 0;
+    let timer: number | undefined;
     const showCodeEntry = () => {
-      window.cancelAnimationFrame(frame);
-      frame = window.requestAnimationFrame(() => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
         const input = document.getElementById("daily-drop-code");
-        if (!input) return;
-        // Leave room for the sticky header and the verification button below.
-        const offset = Math.max(150, Math.min(window.innerHeight * 0.38, 280));
-        const top = input.getBoundingClientRect().top + window.scrollY - offset;
-        window.scrollTo({
-          top: Math.max(0, top),
-          behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
-        });
-      });
+        if (!input || typeof input.scrollIntoView !== "function") return;
+        try {
+          input.scrollIntoView({
+            behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+            block: "center",
+          });
+        } catch {
+          // Scrolling is cosmetic and must never interrupt code verification.
+        }
+      }, 80);
     };
     showCodeEntry();
     // useFreshPageView resets bfcache scroll on pageshow; reposition afterward.
     window.addEventListener("pageshow", showCodeEntry);
     return () => {
-      window.cancelAnimationFrame(frame);
+      window.clearTimeout(timer);
       window.removeEventListener("pageshow", showCodeEntry);
     };
   }, [unlocked, completed, stage]);
