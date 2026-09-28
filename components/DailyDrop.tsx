@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Camera, KeyRound, Lock, Sparkles } from "lucide-react";
 import { CardRevealAnimation } from "./CardRevealAnimation";
-import { completeDrop, getRolledPrize, provisionalDrop, redeemCode, verifyCode } from "./drop/backend";
+import { completeDrop, provisionalDrop, redeemCode, verifyCode } from "./drop/backend";
 import type { DropContent, VerifiedDrop } from "./drop/backend";
 import { ItemIcon, RARITIES } from "./drop/boxItems";
 import type { BoxItem } from "./drop/boxItems";
@@ -162,20 +162,17 @@ export default function DailyDrop() {
   const [unlocked, setUnlocked] = useState(false);
   const [stage, setStage] = useState<"idle" | "cinematic">("idle");
   const [code, setCode] = useState("");
-  const [errorKind, setErrorKind] = useState<null | "invalid" | "already_used" | "expired" | "server_error">(null);
+  const [errorKind, setErrorKind] = useState<null | "invalid" | "server_error">(null);
   const [unlocking, setUnlocking] = useState(false);
   const [completed, setCompleted] = useState<CompletedRecord | null>(null);
   const [prize, setPrize] = useState<BoxItem | null>(null);
   const [content, setContent] = useState<DropContent>({});
   const [provisional, setProvisional] = useState(false);
-  const [resumed, setResumed] = useState(false);
-  const [verificationStage, setVerificationStage] = useState<"confirming" | "ready">("ready");
   // Guards against repeated submissions or activations for the same code.
   const submitGuard = useRef(false);
   const finishGuard = useRef(false);
 
-  // An unfinished drop retains its locked deck, but code entry is required
-  // again after every refresh before that deck can be resumed.
+  // Require code entry again after every refresh.
   useEffect(() => {
     try {
       window.localStorage.removeItem("drop-burned");
@@ -185,12 +182,6 @@ export default function DailyDrop() {
       // ignore private-mode / storage errors
     }
   }, []);
-
-  useEffect(() => {
-    if (!unlocked || verificationStage !== "confirming") return;
-    const timer = window.setTimeout(() => setVerificationStage("ready"), 2600);
-    return () => window.clearTimeout(timer);
-  }, [unlocked, verificationStage]);
 
   useEffect(() => {
     if (unlocked || completed || stage !== "idle") return;
@@ -229,19 +220,8 @@ export default function DailyDrop() {
     }
   };
 
-  const enterDrop = (value: string, drop: VerifiedDrop, wasResumed: boolean) => {
-    rememberActive(value, drop.prize);
-    setPrize(drop.prize);
-    setContent(drop.content);
-    setProvisional(drop.provisional === true);
-    setVerificationStage("confirming");
-    setUnlocked(true);
-    setResumed(wasResumed);
-    setCode(value);
-  };
-
   const startOpening = async () => {
-    if (verificationStage !== "ready" || submitGuard.current) return;
+    if (submitGuard.current) return;
     if (prize) {
       setStage("cinematic");
       return;
@@ -326,8 +306,6 @@ export default function DailyDrop() {
     setPrize(null);
     setContent({});
     setProvisional(false);
-    setResumed(false);
-    setVerificationStage("ready");
   };
 
   const handleCodeSubmit = async (e: React.FormEvent) => {
@@ -339,50 +317,26 @@ export default function DailyDrop() {
     setErrorKind(null);
     setUnlocking(true);
     clearDropVerified();
-    const settle = () => {
-      submitGuard.current = false;
-      setUnlocking(false);
-    };
     try {
-      let pending: { code?: string } | null = null;
-      try {
-        pending = JSON.parse(window.localStorage.getItem(ACTIVE_KEY) || "null");
-      } catch {
-        // The code may still be verified when browser storage is unavailable.
-      }
       const result = await verifyCode(value);
       if (result.status === "valid") {
-        // A code reset to used=false in Supabase must start fresh, regardless
-        // of any deck/prize left in this browser from its previous use.
+        // Start fresh as soon as the input matches an active code.
         try { window.localStorage.removeItem(ACTIVE_KEY); } catch { /* storage unavailable */ }
         setCode(value);
         setPrize(null);
         setContent({});
         setProvisional(false);
-        setResumed(false);
-        setVerificationStage("confirming");
         setUnlocked(true);
-        settle();
         return;
       }
 
-      // Resume only a drop that Supabase currently says has been consumed.
-      if (result.status === "already_used" && pending?.code === value) {
-        const existing = await getRolledPrize(value);
-        if (existing.status === "ok") {
-          enterDrop(value, existing.drop, true);
-          settle();
-          return;
-        }
-      }
-      setErrorKind(result.status === "already_used" ? "already_used"
-        : result.status === "expired" ? "expired"
-          : result.status === "invalid" ? "invalid" : "server_error");
-      settle();
+      setErrorKind(result.status === "invalid" ? "invalid" : "server_error");
     } catch (err) {
       console.warn("[drop] code validation failed:", err);
       setErrorKind("server_error");
-      settle();
+    } finally {
+      submitGuard.current = false;
+      setUnlocking(false);
     }
   };
 
@@ -492,39 +446,23 @@ export default function DailyDrop() {
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.28, duration: 0.3 }}
                     >
-                      {verificationStage === "confirming"
-                        ? "הקוד אומת בהצלחה — מכינים את הדרופ..."
-                        : resumed
-                          ? "הקוד כבר אומת בעבר — ממשיכים את הדרופ"
-                          : "הקוד אומת — הגישה מאושרת"}
+                      הקוד אומת — הגישה מאושרת
                     </motion.p>
-                    <AnimatePresence mode="wait">
-                      {verificationStage === "confirming" ? (
-                        <motion.div key="preparing" className="mt-7 h-1.5 w-40 overflow-hidden rounded-full bg-emerald-400/15"
-                          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                          <motion.div className="h-full rounded-full bg-emerald-400"
-                            initial={{ width: "0%" }} animate={{ width: "100%" }} transition={{ duration: 2.6, ease: "easeInOut" }} />
-                        </motion.div>
-                      ) : (
-                        <motion.div key="activate" className="w-full" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.35 }}>
-                          <button
-                            onClick={startOpening}
-                            disabled={unlocking}
-                            className="group relative mt-6 flex min-h-14 w-full items-center justify-center gap-2.5 rounded-2xl bg-gradient-to-br from-amber-300 via-amber-400 to-amber-500 py-4 text-lg font-black text-slate-950 shadow-[0_0_35px_rgba(245,158,11,0.35)] transition hover:brightness-110 active:scale-[0.99] focus-visible:ring-2 focus-visible:ring-amber-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0c13] sm:text-xl"
-                          >
-                            <Sparkles size={21} className="transition-transform group-hover:rotate-12" />
-                            {unlocking ? "מפעיל את הדרופ..." : "הפעל את הדרופ"}
-                          </button>
-                          {errorKind && <p role="alert" className="mt-3 text-sm font-bold text-red-400">
-                            {errorKind === "already_used" ? "הקוד הופעל ממכשיר אחר — לא ניתן להשתמש בו שוב"
-                              : errorKind === "expired" ? "הקוד פג תוקף — הזינו קוד חדש"
-                                : errorKind === "invalid" ? "הקוד כבר אינו זמין — הזינו קוד אחר"
-                                  : "לא ניתן להשלים את ההפעלה כרגע — נסו שוב עם אותו קוד"}
-                          </p>}
-                          <p className="mt-3 text-[11px] text-slate-500">הפרס יופיע בהפקדה הבאה בלבד</p>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
+                    <motion.div key="activate" className="w-full" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.35 }}>
+                      <button
+                        onClick={startOpening}
+                        disabled={unlocking}
+                        className="group relative mt-6 flex min-h-14 w-full items-center justify-center gap-2.5 rounded-2xl bg-gradient-to-br from-amber-300 via-amber-400 to-amber-500 py-4 text-lg font-black text-slate-950 shadow-[0_0_35px_rgba(245,158,11,0.35)] transition hover:brightness-110 active:scale-[0.99] focus-visible:ring-2 focus-visible:ring-amber-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0c13] sm:text-xl"
+                      >
+                        <Sparkles size={21} className="transition-transform group-hover:rotate-12" />
+                        {unlocking ? "מפעיל את הדרופ..." : "הפעל את הדרופ"}
+                      </button>
+                      {errorKind && <p role="alert" className="mt-3 text-sm font-bold text-red-400">
+                        {errorKind === "invalid" ? "הקוד כבר אינו זמין — הזינו קוד אחר"
+                          : "לא ניתן להשלים את ההפעלה כרגע — נסו שוב עם אותו קוד"}
+                      </p>}
+                      <p className="mt-3 text-[11px] text-slate-500">הפרס יופיע בהפקדה הבאה בלבד</p>
+                    </motion.div>
                   </motion.div>
                 ) : (
                   <motion.div
@@ -597,13 +535,9 @@ export default function DailyDrop() {
 {errorKind && (
                         <div className="mt-2 animate-shake">
                           <p className="text-[11px] font-bold text-red-400">
-                            {errorKind === "already_used"
-                              ? "הקוד כבר נוצל — הקוד הזה כבר הופעל בעבר ולא ניתן להשתמש בו שוב"
-                              : errorKind === "expired"
-                                ? "הקוד פג תוקף — הזינו קוד חדש"
-                                : errorKind === "server_error"
-                                  ? "לא ניתן לאמת את הקוד כרגע — נסו שוב בעוד רגע"
-                                  : "קוד שגוי – נא לבדוק את הקוד שהתקבל"}
+                            {errorKind === "server_error"
+                              ? "לא ניתן לאמת את הקוד כרגע — נסו שוב בעוד רגע"
+                              : "קוד שגוי – נא לבדוק את הקוד שהתקבל"}
                           </p>
                         </div>
                       )}
