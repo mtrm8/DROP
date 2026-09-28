@@ -139,13 +139,43 @@ function CardFront({ item, compact = false }: { item: BoxItem; compact?: boolean
 
 // Selection only shows decoys. The server-assigned prize stays hidden until
 // the winning card flips in the final reveal phase.
+function decoyItems(prize: BoxItem): BoxItem[] {
+  return BOX_ITEMS.filter((item) => item.id !== prize.id && item.amount !== prize.amount);
+}
+
 function buildDeck(prize: BoxItem): DealCard[] {
-  const decoys = BOX_ITEMS.filter((item) => item.id !== prize.id && item.amount !== prize.amount);
-  return Array.from({ length: CARDS_COUNT }, (_, i) => ({
-    id: i,
-    item: pickWeighted(decoys),
+  const decoys = decoyItems(prize);
+  // Deal each tier evenly before shuffling. Independent weighted draws could
+  // put 50₪ on all five chosen cards even though the actual prize is server-set.
+  const copies = Math.floor(CARDS_COUNT / decoys.length);
+  const deal = decoys.flatMap((item) => Array.from({ length: copies }, () => item));
+  const extras = [...decoys];
+  while (deal.length < CARDS_COUNT) {
+    const item = pickWeighted(extras);
+    deal.push(item);
+    extras.splice(extras.indexOf(item), 1);
+  }
+  for (let i = deal.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [deal[i], deal[j]] = [deal[j], deal[i]];
+  }
+  return deal.map((item, id) => ({
+    id,
+    item,
     selected: false,
   }));
+}
+
+function hasBalancedValues(cards: DealCard[], prize: BoxItem): boolean {
+  const tiers = decoyItems(prize).length;
+  const maxCopies = Math.ceil(CARDS_COUNT / tiers);
+  const counts = new Map<string, number>();
+  for (const card of cards) {
+    const count = (counts.get(card.item.id) ?? 0) + 1;
+    if (count > maxCopies) return false;
+    counts.set(card.item.id, count);
+  }
+  return counts.size === tiers;
 }
 
 // The winning slot is cosmetic; the server has already assigned the prize.
@@ -179,7 +209,10 @@ export function CardRevealAnimation({ onFinished, prize }: CardRevealProps) {
           saved.cards[index]?.id === index && typeof saved.cards[index]?.selected === "boolean" &&
           card.item.id !== prize.id && card.item.amount !== prize.amount) &&
           restored.filter((card: { selected: boolean }) => card.selected).length <= SELECT_COUNT) {
-          return restored as DealCard[];
+          const validCards = restored as DealCard[];
+          if (hasBalancedValues(validCards, prize)) return validCards;
+          // Keep the player's locked choices, but replace an older all-50 deck.
+          return buildDeck(prize).map((card, index) => ({ ...card, selected: validCards[index].selected }));
         }
       }
     } catch {
@@ -647,7 +680,7 @@ export function CardRevealAnimation({ onFinished, prize }: CardRevealProps) {
                      <h3 className="mt-2 text-lg font-black text-white leading-snug">{winnerCard.item.name}</h3>
                      <p className="mt-2 text-xs font-bold leading-5 text-amber-100">צלמו מסך של הזכייה ושמרו אותו כדי לממש את הפרס.</p>
                     <p className="mt-1 text-[11px] text-slate-500">
-                      {rarity.label} • {winnerCard.item.chance} • יוכרז בהפקדה הבאה
+                      {rarity.label} • {winnerCard.item.chance} • מימוש בהפקדה הבאה
                     </p>
                     <button
                       type="button"

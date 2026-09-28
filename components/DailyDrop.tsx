@@ -123,7 +123,7 @@ function CompletedView({ record, onStartNew }: { record: CompletedRecord; onStar
           </motion.h3>
 
           <p className="text-xs text-slate-400 mt-4 max-w-sm leading-relaxed">
-            הפרס הכספי יופיע בהפקדה הבאה. שמרו את פרטי הקהילה לידכם — הזכייה תוכרז ותועבר בקרוב.
+            הפרס הכספי תקבלו בהפקדה הבאה. שמרו את פרטי הקהילה לידכם.
           </p>
           <p className="flex items-center justify-center gap-1.5 text-[11px] text-slate-500 mt-4">
             <Lock size={12} className="text-red-400/80" />
@@ -132,8 +132,8 @@ function CompletedView({ record, onStartNew }: { record: CompletedRecord; onStar
 
           <div className="mt-5 flex w-full max-w-2xl flex-col items-center rounded-2xl border border-amber-300/40 bg-amber-300/[0.08] px-5 py-4 text-amber-100" role="note">
             <Camera size={26} aria-hidden="true" />
-            <p className="mt-2 text-base font-black">צלמו עכשיו צילום מסך של הזכייה והקוד</p>
-            <p className="mt-1 text-sm leading-6">שמרו את הצילום והציגו אותו לצוות הקהילה כדי לממש את הפרס.</p>
+            <p className="mt-2 text-base font-black">צלמו עכשיו צילום מסך של הזכייה והקוד.</p>
+            <p className="mt-1 text-sm leading-6">שמרו את הצילום והציגו אותו לצוות הקהילה כדי לממש בהפקדה הבאה.</p>
           </div>
           <DropDetails content={record.content} />
 
