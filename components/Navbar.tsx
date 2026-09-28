@@ -24,7 +24,7 @@ export default function Navbar() {
               Einstein <span className="bg-gradient-to-l from-cyan-200 via-cyan-400 to-lime-300 bg-clip-text text-transparent">Drop</span>
             </span>
             <p className="text-[9px] font-semibold text-slate-500 tracking-[0.34em] uppercase leading-tight">
-              חכמה · קלפים · קהילה
+              חוכמה · דרופים · קהילה
             </p>
           </div>
         </Link>

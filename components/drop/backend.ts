@@ -68,6 +68,16 @@ function localCheck(code: string): VerifyResult {
   return rememberedDrop(normalized) ? { status: "already_used" } : { status: "valid" };
 }
 
+// Only call after a code has passed the verification screen. This provides a
+// clearly provisional animation if the confirmation RPC cannot be completed.
+export function provisionalDrop(code: string): VerifiedDrop {
+  const existing = rememberedDrop(code);
+  if (existing) return existing;
+  const drop: VerifiedDrop = { prize: pickWeighted(BOX_ITEMS), content: {}, provisional: true };
+  rememberDrop(code, drop);
+  return drop;
+}
+
 function toDrop(row: DropRow): VerifiedDrop | null {
   const id = row.prize_id;
   const amount = row.amount;
@@ -147,17 +157,21 @@ export async function verifyCode(code: string): Promise<VerifyResult> {
 
 // redeem_code validates the row, assigns its prize and returns its content in
 // one database transaction. A failed assignment rolls back the redemption.
-export async function redeemCode(code: string): Promise<RedeemResult> {
+export async function redeemCode(code: string, verified = false): Promise<RedeemResult> {
   let result = await call(code, "redeem_code") as RedeemResult;
   if (result.status === "error") {
     // The server might have committed despite a lost response. Prefer its
     // persisted result before drawing a provisional local prize.
     const saved = await call(code, "get_drop") as RedeemResult;
     if (saved.status === "ok") result = saved;
-    else {
+  }
+  if (result.status !== "ok") {
+    if (verified) {
+      result = { status: "ok", drop: provisionalDrop(code) };
+    } else if (result.status === "error") {
       const local = localCheck(code);
       if (local.status === "valid") {
-        result = { status: "ok", drop: { prize: pickWeighted(BOX_ITEMS), content: {}, provisional: true } };
+        result = { status: "ok", drop: provisionalDrop(code) };
       } else if (local.status === "already_used") {
         result = { status: "already_used" };
       } else {

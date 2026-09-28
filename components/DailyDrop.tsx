@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Camera, KeyRound, Lock, Sparkles } from "lucide-react";
 import { CardRevealAnimation } from "./CardRevealAnimation";
-import { getRolledPrize, redeemCode, verifyCode } from "./drop/backend";
+import { getRolledPrize, provisionalDrop, redeemCode, verifyCode } from "./drop/backend";
 import type { DropContent, VerifiedDrop } from "./drop/backend";
 import { ItemIcon, RARITIES } from "./drop/boxItems";
 import type { BoxItem } from "./drop/boxItems";
@@ -222,33 +222,22 @@ export default function DailyDrop() {
     submitGuard.current = true;
     setUnlocking(true);
     setErrorKind(null);
+    const open = (drop: VerifiedDrop) => {
+      rememberActive(code, drop.prize);
+      markDropVerified();
+      setPrize(drop.prize);
+      setContent(drop.content);
+      setProvisional(drop.provisional === true);
+      setStage("cinematic");
+    };
     try {
       // Keep a local resume marker in case the response is lost after the
       // database commits. The marker itself never grants access to a prize.
       try { window.localStorage.setItem(ACTIVE_KEY, JSON.stringify({ code })); } catch { /* storage unavailable */ }
-      let result = await redeemCode(code);
-      if (result.status === "error") {
-        const saved = await getRolledPrize(code);
-        if (saved.status === "ok") result = saved;
-      }
-      if (result.status === "ok") {
-        rememberActive(code, result.drop.prize);
-        markDropVerified();
-        setPrize(result.drop.prize);
-        setContent(result.drop.content);
-        setProvisional(result.drop.provisional === true);
-        setStage("cinematic");
-      } else {
-        setErrorKind(result.status === "already_used" ? "already_used" : result.status === "invalid" ? "invalid" : "server_error");
-        if (result.status === "already_used" || result.status === "invalid") {
-          // Another device may have claimed this code since verification.
-          // Never keep an unowned local resume marker in that case.
-          try { window.localStorage.removeItem(ACTIVE_KEY); } catch { /* storage unavailable */ }
-          setUnlocked(false);
-        }
-      }
+      const result = await redeemCode(code, true);
+      open(result.status === "ok" ? result.drop : provisionalDrop(code));
     } catch {
-      setErrorKind("server_error");
+      open(provisionalDrop(code));
     } finally {
       submitGuard.current = false;
       setUnlocking(false);
