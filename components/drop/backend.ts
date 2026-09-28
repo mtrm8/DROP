@@ -28,54 +28,16 @@ const FALLBACK_CODES = new Set([
   "MMM-MMM1", "MOSIKO-DROP-1001", "RONEN-DROP-1",
   "ADIR-DROP-2026", "MOSIKO-COIN-2026",
 ]);
-const LOCAL_REDEMPTIONS_KEY = "drop-local-redemptions";
-const localRedemptions = new Map<string, VerifiedDrop>();
-
 const normalizeCode = (code: string) => code.trim().toUpperCase();
 
-function rememberedDrop(code: string): VerifiedDrop | null {
-  const normalized = normalizeCode(code);
-  if (localRedemptions.has(normalized)) return localRedemptions.get(normalized)!;
-  try {
-    const saved = JSON.parse(window.localStorage.getItem(LOCAL_REDEMPTIONS_KEY) || "{}");
-    const record = saved?.[normalized];
-    const item = BOX_ITEMS.find((prize) => prize.id === record?.prizeId);
-    if (item) {
-      // Browser storage alone cannot prove that a prize was confirmed by the
-      // server; only a live RPC response can remove the provisional label.
-      const drop: VerifiedDrop = { prize: item, content: {}, provisional: true };
-      localRedemptions.set(normalized, drop);
-      return drop;
-    }
-  } catch { /* Browser storage can be disabled. */ }
-  return null;
-}
-
-function rememberDrop(code: string, drop: VerifiedDrop): void {
-  const normalized = normalizeCode(code);
-  localRedemptions.set(normalized, drop);
-  try {
-    const saved = JSON.parse(window.localStorage.getItem(LOCAL_REDEMPTIONS_KEY) || "{}");
-    window.localStorage.setItem(LOCAL_REDEMPTIONS_KEY, JSON.stringify({
-      ...saved, [normalized]: { prizeId: drop.prize.id, provisional: drop.provisional === true },
-    }));
-  } catch { /* In-memory protection still works for this tab. */ }
-}
-
 function localCheck(code: string): VerifyResult {
-  const normalized = normalizeCode(code);
-  if (!FALLBACK_CODES.has(normalized)) return { status: "invalid" };
-  return rememberedDrop(normalized) ? { status: "already_used" } : { status: "valid" };
+  return { status: FALLBACK_CODES.has(normalizeCode(code)) ? "valid" : "invalid" };
 }
 
 // Only call after a code has passed the verification screen. This provides a
 // clearly provisional animation if the confirmation RPC cannot be completed.
-export function provisionalDrop(code: string): VerifiedDrop {
-  const existing = rememberedDrop(code);
-  if (existing) return existing;
-  const drop: VerifiedDrop = { prize: pickWeighted(BOX_ITEMS), content: {}, provisional: true };
-  rememberDrop(code, drop);
-  return drop;
+export function provisionalDrop(): VerifiedDrop {
+  return { prize: pickWeighted(BOX_ITEMS), content: {}, provisional: true };
 }
 
 function toDrop(row: DropRow): VerifiedDrop | null {
@@ -167,37 +129,26 @@ export async function redeemCode(code: string, verified = false): Promise<Redeem
   }
   if (result.status !== "ok") {
     if (verified) {
-      result = { status: "ok", drop: provisionalDrop(code) };
+      result = { status: "ok", drop: provisionalDrop() };
     } else if (result.status === "error") {
       const local = localCheck(code);
       if (local.status === "valid") {
-        result = { status: "ok", drop: provisionalDrop(code) };
-      } else if (local.status === "already_used") {
-        result = { status: "already_used" };
+        result = { status: "ok", drop: provisionalDrop() };
       } else {
         result = { status: "invalid" };
       }
     }
   }
-  if (result.status === "ok") rememberDrop(code, result.drop);
   return result;
 }
 
 // Only used to resume a code already redeemed in this browser's active session.
 export async function getRolledPrize(code: string): Promise<RedeemResult> {
-  const result = await call(code, "get_drop") as RedeemResult;
-  if (result.status === "ok") {
-    rememberDrop(code, result.drop);
-    return result;
-  }
-  const local = rememberedDrop(code);
-  return local ? { status: "ok", drop: local } : result;
+  return call(code, "get_drop") as Promise<RedeemResult>;
 }
 
 // The winning card's ID must equal the stored prize. Supabase records used and
 // used_at only when the player actually collects the finished drop.
 export async function completeDrop(code: string, prizeId: string): Promise<RedeemResult> {
-  const result = await call(code, "complete_drop", prizeId) as RedeemResult;
-  if (result.status === "ok") rememberDrop(code, result.drop);
-  return result;
+  return call(code, "complete_drop", prizeId) as Promise<RedeemResult>;
 }

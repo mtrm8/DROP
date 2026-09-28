@@ -179,6 +179,7 @@ export default function DailyDrop() {
   useEffect(() => {
     try {
       window.localStorage.removeItem("drop-burned");
+      window.localStorage.removeItem("drop-local-redemptions");
       window.localStorage.removeItem(COMPLETED_KEY);
     } catch {
       // ignore private-mode / storage errors
@@ -236,9 +237,9 @@ export default function DailyDrop() {
       // database commits. The marker itself never grants access to a prize.
       try { window.localStorage.setItem(ACTIVE_KEY, JSON.stringify({ code })); } catch { /* storage unavailable */ }
       const result = await redeemCode(code, true);
-      open(result.status === "ok" ? result.drop : provisionalDrop(code));
+      open(result.status === "ok" ? result.drop : provisionalDrop());
     } catch {
-      open(provisionalDrop(code));
+      open(provisionalDrop());
     } finally {
       submitGuard.current = false;
       setUnlocking(false);
@@ -309,6 +310,7 @@ export default function DailyDrop() {
     submitGuard.current = true;
     setErrorKind(null);
     setUnlocking(true);
+    clearDropVerified();
     const settle = () => {
       submitGuard.current = false;
       setUnlocking(false);
@@ -320,33 +322,32 @@ export default function DailyDrop() {
       } catch {
         // The code may still be verified when browser storage is unavailable.
       }
-      if (pending?.code === value) {
+      const result = await verifyCode(value);
+      if (result.status === "valid") {
+        // A code reset to used=false in Supabase must start fresh, regardless
+        // of any deck/prize left in this browser from its previous use.
+        try { window.localStorage.removeItem(ACTIVE_KEY); } catch { /* storage unavailable */ }
+        setCode(value);
+        setPrize(null);
+        setContent({});
+        setProvisional(false);
+        setResumed(false);
+        setVerificationStage("confirming");
+        setUnlocked(true);
+        settle();
+        return;
+      }
+
+      // Resume only a drop that Supabase currently says has been consumed.
+      if (result.status === "already_used" && pending?.code === value) {
         const existing = await getRolledPrize(value);
         if (existing.status === "ok") {
           enterDrop(value, existing.drop, true);
           settle();
           return;
         }
-        if (existing.status === "error") {
-          setErrorKind("server_error");
-          settle();
-          return;
-        }
       }
-
-      const result = await verifyCode(value);
-      if (result.status !== "valid") {
-        setErrorKind(result.status === "already_used" ? "already_used" : result.status === "invalid" ? "invalid" : "server_error");
-        settle();
-        return;
-      }
-      setCode(value);
-      setPrize(null);
-      setContent({});
-      setProvisional(false);
-      setResumed(false);
-      setVerificationStage("confirming");
-      setUnlocked(true);
+      setErrorKind(result.status === "already_used" ? "already_used" : result.status === "invalid" ? "invalid" : "server_error");
       settle();
     } catch (err) {
       console.warn("[drop] code validation failed:", err);
