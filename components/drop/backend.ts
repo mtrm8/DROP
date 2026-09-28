@@ -30,21 +30,59 @@ const FALLBACK_CODES = new Set([
 ]);
 const normalizeCode = (code: string) => code.trim().toUpperCase();
 
-// Independent read-only check for deployments with an outdated/missing RPC.
-// Query only active, unused rows; compare the returned code exactly after
-// normalizing so an ILIKE wildcard in user input cannot validate another code.
-async function queryActiveCode(code: string): Promise<"valid" | "absent" | "error"> {
-  const base = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
-  if (!base || !key) return "error";
+// Flags may arrive as JSON booleans, text or 0/1 depending on how the column
+// was declared. Reading them by name also survives the usual renames instead
+// of rejecting a code because a column is missing.
+const CODE_FIELDS = ["code", "drop_code", "access_code", "dropCode"] as const;
+const USED_FIELDS = ["used", "is_used", "redeemed", "consumed"] as const;
+const ACTIVE_FIELDS = ["is_active", "active", "enabled"] as const;
 
-  const normalized = normalizeCode(code);
+function readFlag(row: Record<string, unknown>, names: readonly string[]): boolean | undefined {
+  for (const name of names) {
+    if (!(name in row)) continue;
+    const value = row[name];
+    if (value === null || value === undefined) return undefined;
+    if (typeof value === "boolean") return value;
+    if (typeof value === "number") return value === 1 ? true : value === 0 ? false : undefined;
+    if (typeof value === "string") {
+      const flag = value.trim().toLowerCase();
+      if (flag === "true" || flag === "t" || flag === "1") return true;
+      if (flag === "false" || flag === "f" || flag === "0") return false;
+      return undefined;
+    }
+    return undefined;
+  }
+  return undefined;
+}
+
+function storedCode(row: Record<string, unknown>): string | undefined {
+  for (const name of CODE_FIELDS) {
+    const value = row[name];
+    if (typeof value === "string" && value.trim()) return value;
+  }
+  return undefined;
+}
+
+// A row verifies only when its own code matches exactly (so an ILIKE wildcard
+// in user input cannot borrow another code) and it is not flagged as used. An
+// unreadable flag stays permissive; a readable `used` never does.
+function matchesActiveCode(raw: unknown, normalized: string): boolean {
+  if (!raw || typeof raw !== "object") return false;
+  const row = raw as Record<string, unknown>;
+  const stored = storedCode(row);
+  if (!stored || normalizeCode(stored) !== normalized) return false;
+  if (readFlag(row, USED_FIELDS) === true) return false;
+  if (readFlag(row, ACTIVE_FIELDS) === false) return false;
+  return true;
+}
+
+type RowsResult = { ok: true; rows: unknown[] } | { ok: false; network: boolean };
+
+async function fetchCodeRows(base: string, key: string, select: string, params: [string, string][]): Promise<RowsResult> {
   const url = new URL(`${base.replace(/\/+$/, "")}/rest/v1/drop_codes`);
-  url.searchParams.set("select", "code,is_active,used");
-  url.searchParams.set("code", `ilike.${normalized}`);
-  url.searchParams.set("is_active", "eq.true");
-  url.searchParams.set("used", "eq.false");
+  url.searchParams.set("select", select);
   url.searchParams.set("limit", "10");
+  for (const [name, value] of params) url.searchParams.set(name, value);
 
   try {
     const response = await fetch(url.toString(), {
@@ -53,18 +91,60 @@ async function queryActiveCode(code: string): Promise<"valid" | "absent" | "erro
       headers: { apikey: key, Authorization: `Bearer ${key}` },
     });
     if (!response.ok) {
-      console.warn("[drop] Active-code lookup failed", response.status);
-      return "error";
+      // Rejected usually means a column was renamed or is not granted here.
+      console.warn("[drop] Active-code lookup rejected", response.status, select);
+      return { ok: false, network: false };
     }
-    const rows: unknown = await response.json();
-    if (!Array.isArray(rows)) return "error";
-    return rows.some((row) => typeof row?.code === "string" &&
-      normalizeCode(row.code) === normalized && row.is_active === true && row.used === false)
-      ? "valid" : "absent";
+    const body: unknown = await response.json().catch(() => null);
+    return { ok: true, rows: Array.isArray(body) ? body : [] };
   } catch (error) {
     console.warn("[drop] Active-code lookup unavailable", error);
+    return { ok: false, network: true };
+  }
+}
+
+// Independent read-only check for deployments with an outdated/missing RPC.
+// Reads `drop_codes` by `code` and requires `used = false`; when a query is
+// rejected (renamed/ungranted column) it narrows the select and retries with
+// the common alternative column names so verification keeps working.
+async function queryActiveCode(code: string): Promise<"valid" | "absent" | "error"> {
+  const base = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
+  if (!base || !key) return "error";
+
+  const normalized = normalizeCode(code);
+  if (!normalized) return "absent";
+  const byCode: [string, string] = ["code", `ilike.${normalized}`];
+  const verdict = (rows: unknown[]) => (rows.some((row) => matchesActiveCode(row, normalized)) ? "valid" : "absent");
+
+  // 1. Canonical read: the schema's own active + unused rows.
+  const canonical = await fetchCodeRows(base, key, "code,is_active,used", [byCode, ["is_active", "eq.true"], ["used", "eq.false"]]);
+  if (canonical.ok) {
+    if (canonical.rows.length > 0) return verdict(canonical.rows);
+    // 2. Nothing matched the strict filters: read the same code without them
+    //    so a text-typed flag or an unexpected default is interpreted, not
+    //    mistaken for a missing code.
+    const permissive = await fetchCodeRows(base, key, "code,used,is_active", [byCode]);
+    if (permissive.ok) return verdict(permissive.rows);
+    if (permissive.network) return "error";
+  } else if (canonical.network) {
     return "error";
   }
+
+  // 3. The canonical columns were rejected: try narrower selects and the usual
+  //    alternative names until one of them answers.
+  const fallbacks: { select: string; param: [string, string] }[] = [
+    { select: "code,used", param: byCode },
+    { select: "code", param: byCode },
+    { select: "drop_code,used,is_active", param: ["drop_code", `ilike.${normalized}`] },
+    { select: "drop_code", param: ["drop_code", `ilike.${normalized}`] },
+  ];
+  for (const step of fallbacks) {
+    const result = await fetchCodeRows(base, key, step.select, [step.param]);
+    if (result.ok) return verdict(result.rows);
+    if (result.network) return "error";
+  }
+  return "error";
 }
 
 function localCheck(code: string): VerifyResult {
@@ -116,7 +196,9 @@ async function call(code: string, rpc: "verify_drop_code" | "redeem_code" | "get
       cache: "no-store",
       signal: AbortSignal.timeout(8000),
       headers: { "Content-Type": "application/json", apikey: key, Authorization: `Bearer ${key}` },
-      body: JSON.stringify({ p_code: code.trim(), ...(prizeId ? { p_prize_id: prizeId } : {}) }),
+      // Every RPC receives the same trimmed, upper-cased form the verification
+      // screen uses, so pasted whitespace or lower case never reach the server.
+      body: JSON.stringify({ p_code: normalizeCode(code), ...(prizeId ? { p_prize_id: prizeId } : {}) }),
     });
     if (!res.ok) {
       const error = await res.json().catch(() => null) as { code?: string; message?: string } | null;

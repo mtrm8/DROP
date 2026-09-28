@@ -555,7 +555,10 @@ export default function DailyDrop() {
                         form="drop-code-form"
                         value={code}
                         onChange={(e) => {
-                          setCode(e.target.value);
+                          // Codes are case-insensitive: trim and upper-case as
+                          // they are typed so pasted spaces or lower case are
+                          // already normalized before any check runs.
+                          setCode(e.target.value.trim().toUpperCase());
                           setErrorKind(null);
                           setUnlocked(false);
                         }}
