@@ -1,8 +1,7 @@
 "use client";
 
 import { motion, useMotionValue, useSpring, useTransform } from "framer-motion";
-import Link from "next/link";
-import { Atom, ArrowLeft, BrainCircuit, ChevronDown, LockKeyhole, ShieldCheck, Sparkles } from "lucide-react";
+import { Atom, ArrowLeft, BrainCircuit, ChevronDown, ShieldCheck, Sparkles } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import CommunityFooter from "@/components/CommunityFooter";
 import AnalystBunker from "@/components/AnalystBunker";
@@ -281,9 +280,6 @@ export default function LandingPage() {
             בחרו את הקלפים שלכם
             <ArrowLeft size={20} className="transition-transform group-hover:-translate-x-1" />
           </a>
-          <Link href="/ai-bunker" className="mt-6 inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 transition hover:text-amber-200">
-             <LockKeyhole size={13} /> כניסת חברי באנקר AI · גישה בקוד · בפיתוח
-          </Link>
         </motion.div>
       </section>
 

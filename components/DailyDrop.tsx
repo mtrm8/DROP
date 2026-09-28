@@ -192,6 +192,32 @@ export default function DailyDrop() {
     return () => window.clearTimeout(timer);
   }, [unlocked, verificationStage]);
 
+  useEffect(() => {
+    if (unlocked || completed || stage !== "idle") return;
+    let frame = 0;
+    const showCodeEntry = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => {
+        const input = document.getElementById("daily-drop-code");
+        if (!input) return;
+        // Leave room for the sticky header and the verification button below.
+        const offset = Math.max(150, Math.min(window.innerHeight * 0.38, 280));
+        const top = input.getBoundingClientRect().top + window.scrollY - offset;
+        window.scrollTo({
+          top: Math.max(0, top),
+          behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+        });
+      });
+    };
+    showCodeEntry();
+    // useFreshPageView resets bfcache scroll on pageshow; reposition afterward.
+    window.addEventListener("pageshow", showCodeEntry);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("pageshow", showCodeEntry);
+    };
+  }, [unlocked, completed, stage]);
+
   const rememberActive = (value: string, won: BoxItem) => {
     try {
       const previous = JSON.parse(window.localStorage.getItem(ACTIVE_KEY) || "null");
