@@ -193,7 +193,7 @@ export default function LandingPage() {
               className="group relative inline-flex items-center justify-center gap-2.5 rounded-2xl px-8 py-4 text-lg font-black text-slate-950 outline-none transition focus-visible:ring-2 focus-visible:ring-amber-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#05060a] bg-gradient-to-br from-amber-300 via-amber-400 to-amber-500 shadow-[0_0_45px_rgba(245,158,11,0.4)] hover:brightness-110 active:scale-[0.99]"
             >
               <Sparkles size={22} className="transition-transform group-hover:rotate-12" />
-              פתחו את ההדרוף
+              פתחו את ההדרופ
               <ArrowLeft size={20} className="transition-transform group-hover:-translate-x-1" />
             </a>
             <p className="text-[11px] text-slate-500">
@@ -219,14 +219,14 @@ export default function LandingPage() {
             transition={{ duration: 0.6, ease: "easeOut" }}
             className="text-center text-2xl font-black text-white sm:text-3xl"
           >
-            הדרוף עובד בשלושה צעדים
+             הדרופ עובד בשלושה צעדים
           </motion.h2>
 
           <div className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-3">
             {[
               { n: "01", t: "בחרו 5 קלפים", d: "עשרה קלפים על השולחן, כל אחד מסתיר פרס אמיתי. הבחירה נעולה — קלף שנבחר לא ניתן לביטול." },
               { n: "02", t: "ריפל של דילר", d: "המכונה טורפת את החפיסה באיטיות ובתצוגה מלאה — ריפל כפול של דילר מקצועי, רגע לפני ההכרעה." },
-              { n: "03", t: "הפרס מתגלה", d: "קלף הזוכה נחשף, והפרס יופיע בהפקדה הבאה בלבד. קוד אחד לכל חבר — פעם אחת." },
+               { n: "03", t: "הפרס מתגלה", d: "קלף הזוכה נחשף, תצלמו שקיבלתם ותקבלו את הפרס בהפקדה הבאה. — כול קוד פעם אחד." },
             ].map((s, i) => (
               <motion.div
                 key={s.n}
@@ -251,8 +251,8 @@ export default function LandingPage() {
           scroll continues from the drop straight into the human picks. */}
        <section aria-label="באנקר האנליסט" className="cv-auto relative w-full border-t border-white/[0.06] bg-[#060a0f] px-4 pt-10 sm:px-6">
         <div className="mx-auto max-w-6xl">
-          <p className="text-center text-[10px] font-black tracking-widest text-emerald-200">EINSTEIN DROP · המשך ישיר מההדרוף</p>
-          <p className="mt-2 text-center text-xs text-slate-500">ההדרוף ננעל? גללו לבחירות האנליסט האנושי של היום.</p>
+           <p className="text-center text-[10px] font-black tracking-widest text-emerald-200">EINSTEIN DROP · המשך ישיר מההדרופ</p>
+           <p className="mt-2 text-center text-xs text-slate-500">ההדרופ ננעל? גללו לבחירות האנליסט האנושי של היום.</p>
         </div>
         <AnalystBunker embedded />
       </section>
@@ -271,7 +271,7 @@ export default function LandingPage() {
             <Atom className="mb-1 inline text-cyan-300" size={24} /> מקום אחד <span className="bg-gradient-to-l from-cyan-200 via-cyan-400 to-lime-300 bg-clip-text text-transparent">למזל שלכם</span>
           </h2>
           <p className="mx-auto mt-3 max-w-sm text-xs text-slate-400 sm:text-sm">
-            ההדרוף פתוח לחברי הקהילה בלבד. הזינו את הקוד האישי שלכם והתחילו לסבב.
+             ההדרופ פתוח לחברי הקהילה בלבד. הזינו את הקוד האישי שלכם והתחילו לסבב.
           </p>
           <a
             href={DROP_URL}

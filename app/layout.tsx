@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
-const previewDescription = "דרופים קהילתיים, בחירות אנליסט ידניות.";
+const previewDescription = "דרופים קהילתיים, בחירות אנליסט ידניות ובאנקר AI בפיתוח";
 
 export const metadata: Metadata = {
   title: "Einstein Drop | אינשטיין דרופ",
