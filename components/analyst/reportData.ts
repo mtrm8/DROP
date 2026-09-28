@@ -27,3 +27,9 @@ export type AnalystReport = { analyst: string; asOf: string | null; slip: Analys
 // populated from the AI/API report or treated as synthetic demonstration data.
 const report = analyzeAnalystInput(input) as AnalystReport;
 export default report;
+
+// "Published" means the analyst actually shipped a report: a timestamped entry
+// that carries picks or a slip. An empty/unset report keeps the bunker closed.
+export function isBunkerPublished(value: AnalystReport): boolean {
+  return value.asOf !== null && (value.picks.length > 0 || value.slip !== null);
+}

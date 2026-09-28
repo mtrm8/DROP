@@ -7,6 +7,7 @@ import { Activity, Atom, BarChart3, CalendarClock, ClipboardList, Info, LockKeyh
 import Navbar from "./Navbar";
 import CommunityFooter from "./CommunityFooter";
 import report from "./analyst/reportData";
+import { isBunkerPublished } from "./analyst/reportData";
 import type { AnalystPick, AnalystSlip, VenueStats } from "./analyst/reportData";
 import { isDropVerified } from "./drop/session";
 
@@ -146,20 +147,23 @@ export default function AnalystBunker({ embedded = false }: { embedded?: boolean
   const router = useRouter();
   const reduced = Boolean(useReducedMotion());
   const [now, setNow] = useState<number | null>(null);
+  // The analyst ships the report file with the site: while it is empty the
+  // bunker is not published at all, so access stays disabled for everyone.
+  const published = isBunkerPublished(report);
   // Both the standalone route and the embedded landing-page section are
-  // session-gated: only visitors who passed the drop code flow in this tab may
+  // session-gated: only visitors who completed the drop flow in this tab may
   // see the report. Bookmarks, shared URLs and direct links get a locked
   // teaser (route visits are sent back to the drop flow itself).
   const [allowed, setAllowed] = useState<boolean | null>(null);
   useEffect(() => {
-    if (allowed !== null) return;
+    if (!published || allowed !== null) return;
     if (isDropVerified()) {
       setAllowed(true);
       return;
     }
     setAllowed(false);
     if (!embedded) router.replace("/drop");
-  }, [allowed, embedded, router]);
+  }, [published, allowed, embedded, router]);
   useEffect(() => {
     const check = () => setNow(Date.now());
     check();
@@ -177,6 +181,10 @@ export default function AnalystBunker({ embedded = false }: { embedded?: boolean
            <Heading className="mt-5 text-3xl font-black text-white sm:text-5xl">באנקר האנליסט</Heading>
           <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-300">הבחירות, הנתונים והנימוקים כאן נכתבים ומוזנים ידנית על ידי {report.analyst}. דוח זה נפרד ממנוע ה־AI האוטומטי.</p>
           <p className="mt-3 text-xs text-emerald-200/80">{report.asOf ? `נערך לאחרונה: ${formatDate(report.asOf)}` : "ממתינים לפרסום בחירות אנליסט מאומתות."}</p>
+          <p className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-amber-300/25 bg-amber-300/[0.06] px-3.5 py-2.5 text-[11px] font-black text-amber-100" role="note">
+            <LockKeyhole size={14} className="shrink-0" />
+            הבאנקר ננעל אוטומטית לאחר ריפרש או עדכון אתר
+          </p>
         </div>
       </header>
 
@@ -196,10 +204,31 @@ export default function AnalystBunker({ embedded = false }: { embedded?: boolean
       <div className="rounded-[1.7rem] border border-emerald-300/15 bg-slate-950/80 p-7 text-center sm:p-10">
         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-emerald-300/25 bg-emerald-300/[0.07] text-emerald-200"><LockKeyhole size={24} /></div>
          <Heading className="mt-4 text-2xl font-black text-white sm:text-3xl">באנקר האנליסט נעול</Heading>
-        <p className="mx-auto mt-3 max-w-xl text-sm leading-7 text-slate-400">הבחירות הידניות, הטיפס המשולב ונתוני האנליסט זמינים לאחר השלמת קוד הדרופ. השלימו את הקוד כדי לצפות בדוח המלא.</p>
+        <p className="mx-auto mt-3 max-w-xl text-sm leading-7 text-slate-400">הבחירות הידניות, הטיפס המשולב ונתוני האנליסט זמינים לאחר השלמת הדרופ. השלימו את הדרופ כדי לצפות בדוח המלא.</p>
         <button type="button" onClick={() => router.push("/drop")} className="mt-5 inline-flex items-center gap-2 rounded-xl bg-gradient-to-l from-emerald-300 to-cyan-300 px-6 py-3 text-sm font-black text-slate-950 transition hover:brightness-110">מעבר לעמוד הדרופ</button>
       </div>
     </section>;
+
+  // No report yet: the entry is visibly disabled for everyone, published or
+  // not, so an empty bunker is never presented as if it were live.
+  const unpublished = <section className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-8 sm:py-12" role="status">
+      <div className="rounded-[1.7rem] border border-emerald-300/15 bg-slate-950/80 p-7 text-center sm:p-10">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-emerald-300/25 bg-emerald-300/[0.07] text-emerald-200"><LockKeyhole size={24} /></div>
+        <Heading className="mt-4 text-2xl font-black text-white sm:text-3xl">באנקר האנליסט</Heading>
+        <p className="mx-auto mt-3 max-w-xl text-base font-black leading-7 text-slate-200">האנליסט עדיין לא פירסם באנקר</p>
+        <p className="mx-auto mt-2 max-w-xl text-sm leading-7 text-slate-400">כשיפורסמו בחירות אנליסט ידניות, הדוח המלא יופיע כאן. עד אז הגישה לבאנקר סגורה.</p>
+        <button type="button" disabled aria-disabled="true" className="mt-5 inline-flex cursor-not-allowed items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-6 py-3 text-sm font-black text-slate-500">פתיחת באנקר האנליסט</button>
+      </div>
+    </section>;
+
+  if (!published) {
+    if (embedded) return unpublished;
+    return <main className="min-h-screen overflow-x-clip">
+      <Navbar />
+      {unpublished}
+      <CommunityFooter />
+    </main>;
+  }
 
   // Embedded variant drops the page chrome so the section can sit directly in
   // the landing page's scroll flow beneath the Community Drops block. Without

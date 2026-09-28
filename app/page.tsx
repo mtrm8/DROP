@@ -252,7 +252,6 @@ export default function LandingPage() {
        <section aria-label="באנקר האנליסט" className="cv-auto relative w-full border-t border-white/[0.06] bg-[#060a0f] px-4 pt-10 sm:px-6">
         <div className="mx-auto max-w-6xl">
            <p className="text-center text-[10px] font-black tracking-widest text-emerald-200">EINSTEIN DROP · המשך ישיר מההדרופ</p>
-           <p className="mt-2 text-center text-xs text-slate-500">ההדרופ ננעל? גללו לבחירות האנליסט האנושי של היום.</p>
         </div>
         <AnalystBunker embedded />
       </section>
@@ -271,7 +270,7 @@ export default function LandingPage() {
             <Atom className="mb-1 inline text-cyan-300" size={24} /> מקום אחד <span className="bg-gradient-to-l from-cyan-200 via-cyan-400 to-lime-300 bg-clip-text text-transparent">למזל שלכם</span>
           </h2>
           <p className="mx-auto mt-3 max-w-sm text-xs text-slate-400 sm:text-sm">
-             ההדרופ פתוח לחברי הקהילה בלבד. הזינו את הקוד האישי שלכם והתחילו לסבב.
+             הדרופ פתוח לחברי הקהילה אינשטיין בלבד. הזינו את הקוד שקיבלתם והתחילו לסבב.
           </p>
           <a
             href={DROP_URL}

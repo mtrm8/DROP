@@ -231,7 +231,6 @@ export default function DailyDrop() {
 
   const enterDrop = (value: string, drop: VerifiedDrop, wasResumed: boolean) => {
     rememberActive(value, drop.prize);
-    markDropVerified();
     setPrize(drop.prize);
     setContent(drop.content);
     setProvisional(drop.provisional === true);
@@ -253,7 +252,6 @@ export default function DailyDrop() {
     setErrorKind(null);
     const open = (drop: VerifiedDrop) => {
       rememberActive(code, drop.prize);
-      markDropVerified();
       setPrize(drop.prize);
       setContent(drop.content);
       setProvisional(drop.provisional === true);
@@ -299,6 +297,9 @@ export default function DailyDrop() {
     } catch {
       // ignore private-mode / storage errors
     }
+    // Access to the analyst bunker is granted only once a drop actually
+    // finished — verifying a code alone never unlocks it.
+    markDropVerified();
     setCompleted(record);
     setStage("idle");
     finishGuard.current = false;
