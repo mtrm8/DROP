@@ -5,6 +5,7 @@ begin;
 create table if not exists public.drop_codes (
   id uuid primary key default gen_random_uuid(),
   code text not null unique,
+  is_active boolean not null default true,
   used boolean not null default false,
   used_at timestamptz,
   created_at timestamptz not null default now(),
@@ -18,6 +19,7 @@ create table if not exists public.drop_codes (
 -- The functions below do not depend on the type (or presence) of that id.
 alter table public.drop_codes add column if not exists id uuid default gen_random_uuid();
 alter table public.drop_codes add column if not exists code text;
+alter table public.drop_codes add column if not exists is_active boolean default true;
 alter table public.drop_codes add column if not exists used boolean;
 alter table public.drop_codes add column if not exists used_at timestamptz;
 alter table public.drop_codes add column if not exists created_at timestamptz default now();
@@ -29,10 +31,13 @@ alter table public.drop_codes add column if not exists drop_content jsonb not nu
 update public.drop_codes
    set used = (used_at is not null or prize_id is not null)
  where used is null;
+update public.drop_codes set is_active = true where is_active is null;
 update public.drop_codes set created_at = now() where created_at is null;
 update public.drop_codes set drop_content = '{}'::jsonb where drop_content is null;
 alter table public.drop_codes alter column used set default false;
 alter table public.drop_codes alter column used set not null;
+alter table public.drop_codes alter column is_active set default true;
+alter table public.drop_codes alter column is_active set not null;
 alter table public.drop_codes alter column created_at set default now();
 alter table public.drop_codes alter column drop_content set default '{}'::jsonb;
 
@@ -139,8 +144,10 @@ set search_path = public
 as $$
   select json_build_object('status', case
     when nullif(trim(p_code), '') is null then 'invalid'
-    when exists (select 1 from public.drop_codes where lower(code) = lower(trim(p_code)) and used = false) then 'valid'
-    when exists (select 1 from public.drop_codes where lower(code) = lower(trim(p_code))) then 'already_used'
+    when exists (select 1 from public.drop_codes
+                  where lower(trim(code)) = lower(trim(p_code)) and is_active is true and used is false) then 'valid'
+    when exists (select 1 from public.drop_codes
+                  where lower(trim(code)) = lower(trim(p_code)) and is_active is true and used is true) then 'already_used'
     else 'invalid'
   end);
 $$;
@@ -159,16 +166,18 @@ begin
     return json_build_object('success', false, 'error', 'not_found');
   end if;
 
-  select c.ctid as row_tid, c.code, c.used, c.drop_content into v_row
+  select c.ctid as row_tid, c.code, c.drop_content into v_row
     from public.drop_codes c
-   where lower(c.code) = lower(trim(p_code))
-   order by c.used asc, c.created_at asc, c.ctid asc
+   where lower(trim(c.code)) = lower(trim(p_code))
+     and c.is_active is true and c.used is false
+   order by c.created_at asc, c.ctid asc
    limit 1 for update;
   if not found then
+    if exists (select 1 from public.drop_codes
+                where lower(trim(code)) = lower(trim(p_code)) and is_active is true and used is true) then
+      return json_build_object('success', false, 'error', 'already_redeemed');
+    end if;
     return json_build_object('success', false, 'error', 'not_found');
-  end if;
-  if v_row.used then
-    return json_build_object('success', false, 'error', 'already_redeemed');
   end if;
 
   select * into v_prize from public.drop_prizes
@@ -182,7 +191,7 @@ begin
   update public.drop_codes
      set used = true, used_at = now(),
          prize_id = v_prize.id, prize_rolled_at = now()
-   where ctid = v_row.row_tid and used = false;
+   where ctid = v_row.row_tid and is_active is true and used is false;
   if not found then
     return json_build_object('success', false, 'error', 'already_redeemed');
   end if;

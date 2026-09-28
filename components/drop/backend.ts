@@ -52,7 +52,10 @@ function toDrop(row: DropRow): VerifiedDrop | null {
 async function call(code: string, rpc: "verify_drop_code" | "redeem_code" | "get_drop"): Promise<VerifyResult | RedeemResult> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
-  if (!url || !key) return { status: "error" };
+  if (!url || !key) {
+    console.warn("[drop] Supabase public URL or anon key is missing from the site build");
+    return { status: "error" };
+  }
 
   try {
     const res = await fetch(`${url.replace(/\/+$/, "")}/rest/v1/rpc/${rpc}`, {
@@ -62,7 +65,11 @@ async function call(code: string, rpc: "verify_drop_code" | "redeem_code" | "get
       headers: { "Content-Type": "application/json", apikey: key, Authorization: `Bearer ${key}` },
       body: JSON.stringify({ p_code: code.trim() }),
     });
-    if (!res.ok) return { status: "error" };
+    if (!res.ok) {
+      const error = await res.json().catch(() => null) as { code?: string; message?: string } | null;
+      console.warn("[drop] Supabase RPC failed", rpc, res.status, error?.code, error?.message);
+      return { status: "error" };
+    }
     let raw: unknown = await res.json();
     // PostgREST JSON RPCs are usually objects, but older deployments may
     // return a JSON-encoded string. Normalize either before interpreting it.
@@ -81,7 +88,8 @@ async function call(code: string, rpc: "verify_drop_code" | "redeem_code" | "get
     if (rpc === "get_drop" && !row) return { status: "invalid" };
     const drop = row && toDrop(row);
     return drop ? { status: "ok", drop } : { status: "error" };
-  } catch {
+  } catch (error) {
+    console.warn("[drop] Supabase request failed", rpc, error);
     return { status: "error" };
   }
 }

@@ -1,7 +1,5 @@
--- Apply after 20260927_atomic_drop_content.sql on existing Supabase projects.
--- Code entry is read-only; activation atomically assigns a prize and uses the
--- code in the same transaction. This also replaces legacy redeem_code RPCs
--- that returned only {"success":true} after consuming a code.
+-- Apply after 20260927_atomic_drop_content.sql (and 20260928 / 20260929
+-- when applicable). No code is consumed by the validation RPC.
 begin;
 
 alter table public.drop_codes add column if not exists is_active boolean default true;
@@ -9,6 +7,8 @@ update public.drop_codes set is_active = true where is_active is null;
 alter table public.drop_codes alter column is_active set default true;
 alter table public.drop_codes alter column is_active set not null;
 
+-- SECURITY DEFINER allows an anonymous visitor to check exactly one code
+-- without granting SELECT access to the private drop_codes table.
 create or replace function public.verify_drop_code(p_code text)
 returns json
 language sql
@@ -25,6 +25,8 @@ as $$
   end);
 $$;
 
+-- Repeat the same active/unused check under a row lock on activation. Assign
+-- the prize before committing used=true, so any failure leaves the code unused.
 create or replace function public.redeem_code(p_code text)
 returns json
 language plpgsql
@@ -79,30 +81,9 @@ begin
 end;
 $$;
 
-create or replace function public.get_drop(p_code text)
-returns json
-language sql
-security definer
-set search_path = public
-as $$
-  select json_build_object(
-    'prize_id', p.id, 'prize_name', p.name, 'amount', p.amount,
-    'chance', public.drop_prize_chance(p.id), 'rarity', p.rarity,
-    'icon', p.icon, 'drop_content', c.drop_content
-  )
-    from public.drop_codes c
-    join public.drop_prizes p on p.id = c.prize_id and p.amount >= 50
-   where lower(c.code) = lower(trim(p_code)) and c.used = true
-     and c.prize_rolled_at >= c.used_at
-   order by c.used_at desc nulls last
-   limit 1;
-$$;
-
 revoke all on function public.verify_drop_code(text) from public;
 revoke all on function public.redeem_code(text) from public;
-revoke all on function public.get_drop(text) from public;
 grant execute on function public.verify_drop_code(text) to anon, authenticated, service_role;
 grant execute on function public.redeem_code(text) to anon, authenticated, service_role;
-grant execute on function public.get_drop(text) to anon, authenticated, service_role;
 
 commit;

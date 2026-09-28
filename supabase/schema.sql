@@ -18,12 +18,17 @@
 create table if not exists public.drop_codes (
   id uuid primary key default gen_random_uuid(),
   code text not null unique,
+  is_active boolean not null default true,
   used boolean not null default false,
   used_at timestamptz,
   created_at timestamptz not null default now()
 );
 
 alter table public.drop_codes enable row level security;
+alter table public.drop_codes add column if not exists is_active boolean default true;
+update public.drop_codes set is_active = true where is_active is null;
+alter table public.drop_codes alter column is_active set default true;
+alter table public.drop_codes alter column is_active set not null;
 
 drop policy if exists "Allow anon and authenticated select on drop_codes" on public.drop_codes;
 drop policy if exists "Allow anon and authenticated insert on drop_codes" on public.drop_codes;
@@ -160,52 +165,6 @@ begin
 end;
 $$;
 
-create or replace function public.redeem_code(p_code text)
-returns json
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  v_row public.drop_codes%rowtype;
-  v_trimmed text;
-begin
-  v_trimmed := trim(p_code);
-  if v_trimmed = '' then
-    return json_build_object('success', false, 'error', 'not_found');
-  end if;
-
-  select * into v_row
-    from public.drop_codes
-   where lower(code) = lower(v_trimmed)
-   order by used asc nulls first, created_at asc, id asc
-   limit 1
-   for update;
-
-  if not found then
-    return json_build_object('success', false, 'error', 'not_found');
-  end if;
-
-  if v_row.used then
-    return json_build_object('success', false, 'error', 'already_redeemed');
-  end if;
-
-  update public.drop_codes
-     set used = true, used_at = now()
-   where id = v_row.id
-     and used = false;
-
-  if not found then
-    return json_build_object('success', false, 'error', 'already_redeemed');
-  end if;
-
-  return json_build_object('success', true);
-end;
-$$;
-
-revoke all on function public.redeem_code from public;
-grant execute on function public.redeem_code to anon;
-
 -- Server-authoritative weighted cash roll. Requires a redeemed (used = true)
 -- code, picks a prize with the exponential-race trick
 -- (order by -ln(random()) / weight), and PERSISTS it on the code row, so the
@@ -299,8 +258,10 @@ set search_path = public
 as $$
   select json_build_object('status', case
     when nullif(trim(p_code), '') is null then 'invalid'
-    when exists (select 1 from public.drop_codes where lower(code) = lower(trim(p_code)) and used = false) then 'valid'
-    when exists (select 1 from public.drop_codes where lower(code) = lower(trim(p_code))) then 'already_used'
+    when exists (select 1 from public.drop_codes
+                  where lower(trim(code)) = lower(trim(p_code)) and is_active is true and used is false) then 'valid'
+    when exists (select 1 from public.drop_codes
+                  where lower(trim(code)) = lower(trim(p_code)) and is_active is true and used is true) then 'already_used'
     else 'invalid'
   end);
 $$;
@@ -320,17 +281,19 @@ begin
   end if;
 
   select * into v_row from public.drop_codes
-   where lower(code) = lower(trim(p_code))
+   where lower(trim(code)) = lower(trim(p_code))
+     and is_active is true and used is false
    limit 1 for update;
   if not found then
+    if exists (select 1 from public.drop_codes
+                where lower(trim(code)) = lower(trim(p_code)) and is_active is true and used is true) then
+      return json_build_object('success', false, 'error', 'already_redeemed');
+    end if;
     return json_build_object('success', false, 'error', 'not_found');
-  end if;
-  if v_row.used then
-    return json_build_object('success', false, 'error', 'already_redeemed');
   end if;
 
   update public.drop_codes set used = true, used_at = now()
-   where id = v_row.id and used = false;
+   where id = v_row.id and is_active is true and used is false;
   select * into v_prize from public.roll_prize(v_row.code);
   if v_prize.prize_id is null then
     raise exception 'prize_pool_empty';
