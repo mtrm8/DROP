@@ -138,6 +138,13 @@ function CardFront({ item, compact = false }: { item: BoxItem; compact?: boolean
   );
 }
 
+function SelectedCardFace() {
+  return <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-amber-300/60 bg-gradient-to-br from-slate-800 via-slate-950 to-black text-amber-200 shadow-[0_0_28px_rgba(245,158,11,0.25)]">
+    <Sparkles size={28} aria-hidden="true" />
+    <span className="text-sm font-black">קלף נבחר</span>
+  </div>;
+}
+
 // Selection only shows decoys. The server-assigned prize stays hidden until
 // the winning card flips in the final reveal phase.
 function decoyItems(prize: BoxItem): BoxItem[] {
@@ -204,13 +211,14 @@ export function CardRevealAnimation({ onFinished, prize, provisional = false }: 
         const restored = saved.cards.map((card: DealCard, index: number) => ({
           id: index,
           selected: card?.id === index && card.selected === true,
-          item: BOX_ITEMS.find((item) => item.id === card?.item?.id),
+          item: card?.item?.id === prize.id ? prize : BOX_ITEMS.find((item) => item.id === card?.item?.id),
         }));
-        if (restored.every((card: { item?: BoxItem }, index: number) => card.item &&
+        if (restored.every((card: { item?: BoxItem; selected: boolean }, index: number) => card.item &&
           saved.cards[index]?.id === index && typeof saved.cards[index]?.selected === "boolean" &&
-          card.item.id !== prize.id && card.item.amount !== prize.amount) &&
+          (card.item.id === prize.id ? card.selected : card.item.amount !== prize.amount)) &&
           restored.filter((card: { selected: boolean }) => card.selected).length <= SELECT_COUNT) {
           const validCards = restored as DealCard[];
+          if (validCards.filter((card) => card.item.id === prize.id).length === 1) return validCards;
           if (hasBalancedValues(validCards, prize)) return validCards;
           // Keep the player's locked choices, but replace an older all-50 deck.
           return buildDeck(prize).map((card, index) => ({ ...card, selected: validCards[index].selected }));
@@ -227,13 +235,13 @@ export function CardRevealAnimation({ onFinished, prize, provisional = false }: 
   // ref) so the guard, the button and the timeline can never disagree, and a
   // dropped click cannot start a second run on top of the first.
   const [machine, setMachine] = useState<"idle" | "running">("idle");
+  const [claiming, setClaiming] = useState(false);
   const startedAt = useRef(0);
   const finished = useRef(false);
 
   const selectedCount = cards.filter((c) => c.selected).length;
   const prizeRevealed = phase === "reveal" || phase === "done";
-  const selectedCards = cards.filter((c) => c.selected).map((c) =>
-    prizeRevealed && c.id === winnerId ? { ...c, item: prize } : c);
+  const selectedCards = cards.filter((c) => c.selected);
   const winnerCard = prizeRevealed ? selectedCards.find((c) => c.id === winnerId) ?? null : null;
   const isComplete = selectedCount === SELECT_COUNT;
 
@@ -288,11 +296,14 @@ export function CardRevealAnimation({ onFinished, prize, provisional = false }: 
 
   const startMachine = () => {
     if (machine !== "idle" || !isComplete) return;
-    // Choose a visual slot now; only render its assigned prize at the reveal.
-    const chosen = pickWinner(cards);
+    // Commit the already-assigned server prize to a chosen, still-hidden card
+    // BEFORE any selected values appear in the machine. Its value never swaps
+    // after the selection reveal or changes during the shuffle.
+    const chosen = cards.find((card) => card.selected && card.item.id === prize.id)?.id ?? pickWinner(cards);
     if (chosen < 0) return;
     startedAt.current = Date.now();
     setWinnerId(chosen);
+    setCards((previous) => previous.map((card) => card.id === chosen ? { ...card, item: prize } : card));
     setMachine("running");
     setPhase("collect");
   };
@@ -300,6 +311,7 @@ export function CardRevealAnimation({ onFinished, prize, provisional = false }: 
   const collectPrize = (item: BoxItem) => {
     if (finished.current) return;
     finished.current = true;
+    setClaiming(true);
     onFinished(item);
   };
 
@@ -411,7 +423,7 @@ export function CardRevealAnimation({ onFinished, prize, provisional = false }: 
                           <CardBackFace compact />
                         </div>
                         <div className="absolute inset-0 [backface-visibility:hidden]" style={{ transform: "rotateY(180deg)" }}>
-                          <CardFront item={c.item} compact />
+                              <SelectedCardFace />
                         </div>
                       </motion.div>
                       {picked && (
@@ -688,14 +700,14 @@ export function CardRevealAnimation({ onFinished, prize, provisional = false }: 
                     <button
                       type="button"
                       onClick={() => collectPrize(winnerCard.item)}
-                      disabled={!ready}
+                       disabled={!ready || claiming}
                       className={`mt-3 flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-base font-black transition outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0c13] ${
                         ready
                           ? "bg-gradient-to-br from-amber-300 via-amber-400 to-amber-500 text-slate-950 shadow-[0_0_32px_rgba(245,158,11,0.4)] hover:brightness-110 active:scale-[0.99]"
                           : "cursor-not-allowed border border-white/10 bg-white/[0.04] text-slate-500"
                       }`}
                     >
-                      {ready ? (
+                       {claiming ? "מאמת זכייה..." : ready ? (
                         <>
                           <Check size={18} strokeWidth={3} />
                           איסוף

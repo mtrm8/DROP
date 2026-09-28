@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Camera, KeyRound, Lock, Sparkles } from "lucide-react";
 import { CardRevealAnimation } from "./CardRevealAnimation";
-import { getRolledPrize, provisionalDrop, redeemCode, verifyCode } from "./drop/backend";
+import { completeDrop, getRolledPrize, provisionalDrop, redeemCode, verifyCode } from "./drop/backend";
 import type { DropContent, VerifiedDrop } from "./drop/backend";
 import { ItemIcon, RARITIES } from "./drop/boxItems";
 import type { BoxItem } from "./drop/boxItems";
@@ -172,6 +172,7 @@ export default function DailyDrop() {
   const [verificationStage, setVerificationStage] = useState<"confirming" | "ready">("ready");
   // Guards against repeated submissions or activations for the same code.
   const submitGuard = useRef(false);
+  const finishGuard = useRef(false);
 
   // An unfinished drop retains its locked deck, but code entry is required
   // again after every refresh before that deck can be resumed.
@@ -244,8 +245,27 @@ export default function DailyDrop() {
     }
   };
 
-  const finishDrop = (winner: BoxItem) => {
-    const record: CompletedRecord = { code, item: winner, content, provisional };
+  const finishDrop = async (winner: BoxItem) => {
+    if (finishGuard.current) return;
+    finishGuard.current = true;
+    let confirmed: VerifiedDrop | null = null;
+    if (!provisional) {
+      try {
+        let result = await completeDrop(code, winner.id);
+        // Completing again is safe if the first request committed but its
+        // response was lost: the RPC returns the same persisted prize.
+        if (result.status === "error") result = await completeDrop(code, winner.id);
+        if (result.status === "ok" && result.drop.prize.id === winner.id &&
+          result.drop.prize.amount === winner.amount) confirmed = result.drop;
+      } catch (error) {
+        console.warn("[drop] prize completion failed:", error);
+      }
+    }
+    const record: CompletedRecord = {
+      code, item: confirmed?.prize ?? winner,
+      content: confirmed?.content ?? content,
+      provisional: !confirmed,
+    };
     try {
       window.localStorage.removeItem(ACTIVE_KEY);
     } catch {
@@ -253,6 +273,7 @@ export default function DailyDrop() {
     }
     setCompleted(record);
     setStage("idle");
+    finishGuard.current = false;
   };
 
   const handleDropFinished = (winner: BoxItem) => {
@@ -261,6 +282,7 @@ export default function DailyDrop() {
 
   const handleStartNew = () => {
     setStage("idle");
+    finishGuard.current = false;
     clearDropVerified();
     try {
       window.localStorage.removeItem(ACTIVE_KEY);

@@ -103,7 +103,7 @@ function toDrop(row: DropRow): VerifiedDrop | null {
   };
 }
 
-async function call(code: string, rpc: "verify_drop_code" | "redeem_code" | "get_drop"): Promise<VerifyResult | RedeemResult> {
+async function call(code: string, rpc: "verify_drop_code" | "redeem_code" | "get_drop" | "complete_drop", prizeId?: string): Promise<VerifyResult | RedeemResult> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
   if (!url || !key) {
@@ -117,7 +117,7 @@ async function call(code: string, rpc: "verify_drop_code" | "redeem_code" | "get
       cache: "no-store",
       signal: AbortSignal.timeout(8000),
       headers: { "Content-Type": "application/json", apikey: key, Authorization: `Bearer ${key}` },
-      body: JSON.stringify({ p_code: code.trim() }),
+      body: JSON.stringify({ p_code: code.trim(), ...(prizeId ? { p_prize_id: prizeId } : {}) }),
     });
     if (!res.ok) {
       const error = await res.json().catch(() => null) as { code?: string; message?: string } | null;
@@ -192,4 +192,12 @@ export async function getRolledPrize(code: string): Promise<RedeemResult> {
   }
   const local = rememberedDrop(code);
   return local ? { status: "ok", drop: local } : result;
+}
+
+// The winning card's ID must equal the stored prize. Supabase records used and
+// used_at only when the player actually collects the finished drop.
+export async function completeDrop(code: string, prizeId: string): Promise<RedeemResult> {
+  const result = await call(code, "complete_drop", prizeId) as RedeemResult;
+  if (result.status === "ok") rememberDrop(code, result.drop);
+  return result;
 }

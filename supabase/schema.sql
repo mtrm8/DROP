@@ -274,7 +274,7 @@ set search_path = public
 as $$
 declare
   v_row public.drop_codes%rowtype;
-  v_prize record;
+  v_prize public.drop_prizes%rowtype;
 begin
   if nullif(trim(p_code), '') is null then
     return json_build_object('success', false, 'error', 'not_found');
@@ -292,16 +292,26 @@ begin
     return json_build_object('success', false, 'error', 'not_found');
   end if;
 
-  update public.drop_codes set used = true, used_at = now()
-   where id = v_row.id and is_active is true and used is false;
-  select * into v_prize from public.roll_prize(v_row.code);
-  if v_prize.prize_id is null then
-    raise exception 'prize_pool_empty';
+  if v_row.prize_id is not null then
+    select * into v_prize from public.drop_prizes
+     where id = v_row.prize_id and amount >= 50;
+  end if;
+  if v_prize.id is null then
+    select * into v_prize from public.drop_prizes
+     where id is not null and name is not null and amount >= 50 and weight > 0
+     order by -ln(greatest(random(), 1e-12)) / weight::double precision
+     limit 1;
+    if not found then raise exception 'prize_pool_empty'; end if;
+    update public.drop_codes
+       set prize_id = v_prize.id, prize_rolled_at = now()
+     where id = v_row.id and is_active is true and used is false;
+    if not found then raise exception 'code_not_available'; end if;
   end if;
   return json_build_object(
-    'success', true, 'prize_id', v_prize.prize_id,
-    'prize_name', v_prize.prize_name, 'amount', v_prize.amount,
-    'chance', v_prize.chance, 'rarity', v_prize.rarity, 'icon', v_prize.icon,
+    'success', true, 'prize_id', v_prize.id,
+    'prize_name', v_prize.name, 'amount', v_prize.amount,
+    'chance', public.drop_prize_chance(v_prize.id),
+    'rarity', v_prize.rarity, 'icon', v_prize.icon,
     'drop_content', v_row.drop_content
   );
 end;
@@ -321,10 +331,56 @@ as $$
   )
     from public.drop_codes c
     join public.drop_prizes p on p.id = c.prize_id and p.amount >= 50
-   where lower(c.code) = lower(trim(p_code)) and c.used = true
-     and c.prize_rolled_at >= c.used_at
-   limit 1;
+    where lower(trim(c.code)) = lower(trim(p_code)) and c.is_active is true
+      and c.prize_rolled_at is not null
+      and (c.used is false or c.prize_rolled_at >= c.used_at)
+    order by c.used asc, c.created_at asc
+    limit 1;
+ $$;
+
+create or replace function public.complete_drop(p_code text, p_prize_id text)
+returns json
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_row public.drop_codes%rowtype;
+  v_prize public.drop_prizes%rowtype;
+begin
+  if nullif(trim(p_code), '') is null or nullif(trim(p_prize_id), '') is null then
+    return json_build_object('success', false, 'error', 'not_found');
+  end if;
+  select * into v_row from public.drop_codes
+   where lower(trim(code)) = lower(trim(p_code)) and is_active is true
+   order by used asc, created_at asc, id asc
+   limit 1 for update;
+  if not found then return json_build_object('success', false, 'error', 'not_found'); end if;
+  if v_row.prize_id is distinct from p_prize_id or v_row.prize_rolled_at is null then
+    return json_build_object('success', false, 'error', 'prize_mismatch');
+  end if;
+  if v_row.used and (v_row.used_at is null or v_row.prize_rolled_at < v_row.used_at) then
+    return json_build_object('success', false, 'error', 'already_redeemed');
+  end if;
+  select * into v_prize from public.drop_prizes
+   where id = v_row.prize_id and amount >= 50;
+  if not found then raise exception 'prize_not_available'; end if;
+  if not v_row.used then
+    update public.drop_codes
+       set used = true, used_at = now(), prize_rolled_at = now()
+     where id = v_row.id and is_active is true and used is false and prize_id = p_prize_id;
+    if not found then raise exception 'code_not_available'; end if;
+  end if;
+  return json_build_object(
+    'success', true, 'prize_id', v_prize.id, 'prize_name', v_prize.name,
+    'amount', v_prize.amount, 'chance', public.drop_prize_chance(v_prize.id),
+    'rarity', v_prize.rarity, 'icon', v_prize.icon, 'drop_content', v_row.drop_content
+  );
+end;
 $$;
+
+revoke all on function public.complete_drop(text, text) from public;
+grant execute on function public.complete_drop(text, text) to anon, authenticated, service_role;
 
 revoke all on function public.get_drop(text) from public;
 grant execute on function public.get_drop(text) to anon, authenticated, service_role;
@@ -369,16 +425,11 @@ revoke all on function public.code_status(text) from public;
 grant execute on function public.code_status(text) to anon, authenticated, service_role;
 
 drop policy if exists "Public can view active drop codes" on public.drop_codes;
-drop policy if exists "Public can consume active drop codes" on public.drop_codes;
 create policy "Public can view active drop codes" on public.drop_codes
   for select to anon, authenticated using (is_active is true);
-create policy "Public can consume active drop codes" on public.drop_codes
-  for update to anon, authenticated
-  using (is_active is true and used is false)
-  with check (is_active is true and used is true);
+drop policy if exists "Public can consume active drop codes" on public.drop_codes;
 revoke all on public.drop_codes from public, anon, authenticated;
 grant select (code, is_active, used) on public.drop_codes to anon, authenticated;
-grant update (used) on public.drop_codes to anon, authenticated;
 grant select, insert, update on public.drop_codes to service_role;
 grant select on public.drop_prizes to anon, authenticated, service_role;
 grant select on public.drop_prize_odds to anon, authenticated, service_role;
