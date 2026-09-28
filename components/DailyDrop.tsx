@@ -162,7 +162,7 @@ export default function DailyDrop() {
   const [unlocked, setUnlocked] = useState(false);
   const [stage, setStage] = useState<"idle" | "cinematic">("idle");
   const [code, setCode] = useState("");
-  const [errorKind, setErrorKind] = useState<null | "invalid" | "already_used" | "server_error">(null);
+  const [errorKind, setErrorKind] = useState<null | "invalid" | "already_used" | "expired" | "server_error">(null);
   const [unlocking, setUnlocking] = useState(false);
   const [completed, setCompleted] = useState<CompletedRecord | null>(null);
   const [prize, setPrize] = useState<BoxItem | null>(null);
@@ -375,7 +375,9 @@ export default function DailyDrop() {
           return;
         }
       }
-      setErrorKind(result.status === "already_used" ? "already_used" : result.status === "invalid" ? "invalid" : "server_error");
+      setErrorKind(result.status === "already_used" ? "already_used"
+        : result.status === "expired" ? "expired"
+          : result.status === "invalid" ? "invalid" : "server_error");
       settle();
     } catch (err) {
       console.warn("[drop] code validation failed:", err);
@@ -515,8 +517,9 @@ export default function DailyDrop() {
                           </button>
                           {errorKind && <p role="alert" className="mt-3 text-sm font-bold text-red-400">
                             {errorKind === "already_used" ? "הקוד הופעל ממכשיר אחר — לא ניתן להשתמש בו שוב"
-                              : errorKind === "invalid" ? "הקוד כבר אינו זמין — הזינו קוד אחר"
-                                : "לא ניתן להשלים את ההפעלה כרגע — נסו שוב עם אותו קוד"}
+                              : errorKind === "expired" ? "הקוד פג תוקף — הזינו קוד חדש"
+                                : errorKind === "invalid" ? "הקוד כבר אינו זמין — הזינו קוד אחר"
+                                  : "לא ניתן להשלים את ההפעלה כרגע — נסו שוב עם אותו קוד"}
                           </p>}
                           <p className="mt-3 text-[11px] text-slate-500">הפרס יופיע בהפקדה הבאה בלבד</p>
                         </motion.div>
@@ -596,9 +599,11 @@ export default function DailyDrop() {
                           <p className="text-[11px] font-bold text-red-400">
                             {errorKind === "already_used"
                               ? "הקוד כבר נוצל — הקוד הזה כבר הופעל בעבר ולא ניתן להשתמש בו שוב"
-                              : errorKind === "server_error"
-                                ? "לא ניתן לאמת את הקוד כרגע — נסו שוב בעוד רגע"
-                                : "קוד שגוי – נא לבדוק את הקוד שהתקבל"}
+                              : errorKind === "expired"
+                                ? "הקוד פג תוקף — הזינו קוד חדש"
+                                : errorKind === "server_error"
+                                  ? "לא ניתן לאמת את הקוד כרגע — נסו שוב בעוד רגע"
+                                  : "קוד שגוי – נא לבדוק את הקוד שהתקבל"}
                           </p>
                         </div>
                       )}

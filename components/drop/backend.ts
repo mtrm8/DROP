@@ -8,7 +8,7 @@ export type RedeemResult =
   | { status: "already_used" }
   | { status: "invalid" }
   | { status: "error" };
-export type VerifyResult = { status: "valid" | "already_used" | "invalid" | "error" };
+export type VerifyResult = { status: "valid" | "already_used" | "expired" | "invalid" | "error" };
 
 type DropRow = {
   success?: boolean;
@@ -36,6 +36,7 @@ const normalizeCode = (code: string) => code.trim().toUpperCase();
 const CODE_FIELDS = ["code", "drop_code", "access_code", "dropCode"] as const;
 const USED_FIELDS = ["used", "is_used", "redeemed", "consumed"] as const;
 const ACTIVE_FIELDS = ["is_active", "active", "enabled"] as const;
+const EXPIRY_FIELDS = ["expires_at", "expire_at", "expiry", "valid_until", "expires"] as const;
 
 function readFlag(row: Record<string, unknown>, names: readonly string[]): boolean | undefined {
   for (const name of names) {
@@ -63,23 +64,62 @@ function storedCode(row: Record<string, unknown>): string | undefined {
   return undefined;
 }
 
-// A row verifies only when its own code matches exactly (so an ILIKE wildcard
-// in user input cannot borrow another code) and it is not flagged as used. An
-// unreadable flag stays permissive; a readable `used` never does.
-function matchesActiveCode(raw: unknown, normalized: string): boolean {
-  if (!raw || typeof raw !== "object") return false;
+// Expiry may be a full timestamp or a plain date; a date-only value stays
+// valid through the end of that day. A missing or unreadable value never
+// expires a code on its own — only a readable past moment does.
+function isExpired(row: Record<string, unknown>): boolean {
+  const now = Date.now();
+  for (const name of EXPIRY_FIELDS) {
+    if (!(name in row)) continue;
+    const value = row[name];
+    if (value === null || value === undefined) return false;
+    if (typeof value === "number") return Number.isFinite(value) && value <= now;
+    const text = String(value).trim();
+    if (!text) return false;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
+      const endOfDay = Date.parse(`${text}T23:59:59.999Z`);
+      return Number.isFinite(endOfDay) && endOfDay <= now;
+    }
+    const time = Date.parse(text);
+    return Number.isFinite(time) ? time <= now : false;
+  }
+  return false;
+}
+
+type RowVerdict = "valid" | "used" | "expired" | "inactive" | null;
+
+// Classifies one returned row against the requested code. `null` means the row
+// is not that code at all, so an ILIKE wildcard in user input can never borrow
+// somebody else's row.
+function evaluateCodeRow(raw: unknown, normalized: string): RowVerdict {
+  if (!raw || typeof raw !== "object") return null;
   const row = raw as Record<string, unknown>;
   const stored = storedCode(row);
-  if (!stored || normalizeCode(stored) !== normalized) return false;
-  if (readFlag(row, USED_FIELDS) === true) return false;
-  if (readFlag(row, ACTIVE_FIELDS) === false) return false;
-  return true;
+  if (!stored || normalizeCode(stored) !== normalized) return null;
+  if (readFlag(row, ACTIVE_FIELDS) === false) return "inactive";
+  if (isExpired(row)) return "expired";
+  if (readFlag(row, USED_FIELDS) === true) return "used";
+  return "valid";
+}
+
+// Picks the verdict for the requested code. A valid row always wins, so a
+// deactivated duplicate can never mask an active one with the same code.
+function promoVerdict(rows: unknown[], normalized: string): "valid" | "already_used" | "expired" | "invalid" | null {
+  let firstProblem: "already_used" | "expired" | "invalid" | null = null;
+  for (const row of rows) {
+    const verdict = evaluateCodeRow(row, normalized);
+    if (verdict === "valid") return "valid";
+    if (verdict === null) continue;
+    const problem = verdict === "used" ? "already_used" : verdict === "expired" ? "expired" : "invalid";
+    if (!firstProblem) firstProblem = problem;
+  }
+  return firstProblem;
 }
 
 type RowsResult = { ok: true; rows: unknown[] } | { ok: false; network: boolean };
 
-async function fetchCodeRows(base: string, key: string, select: string, params: [string, string][]): Promise<RowsResult> {
-  const url = new URL(`${base.replace(/\/+$/, "")}/rest/v1/drop_codes`);
+async function fetchRows(base: string, key: string, table: string, select: string, params: [string, string][]): Promise<RowsResult> {
+  const url = new URL(`${base.replace(/\/+$/, "")}/rest/v1/${table}`);
   url.searchParams.set("select", select);
   url.searchParams.set("limit", "10");
   for (const [name, value] of params) url.searchParams.set(name, value);
@@ -92,21 +132,74 @@ async function fetchCodeRows(base: string, key: string, select: string, params: 
     });
     if (!response.ok) {
       // Rejected usually means a column was renamed or is not granted here.
-      console.warn("[drop] Active-code lookup rejected", response.status, select);
+      console.warn(`[drop] ${table} lookup rejected`, response.status, select);
       return { ok: false, network: false };
     }
     const body: unknown = await response.json().catch(() => null);
     return { ok: true, rows: Array.isArray(body) ? body : [] };
   } catch (error) {
-    console.warn("[drop] Active-code lookup unavailable", error);
+    console.warn(`[drop] ${table} lookup unavailable`, error);
     return { ok: false, network: true };
   }
 }
 
-// Independent read-only check for deployments with an outdated/missing RPC.
-// Reads `drop_codes` by `code` and requires `used = false`; when a query is
-// rejected (renamed/ungranted column) it narrows the select and retries with
-// the common alternative column names so verification keeps working.
+export type PromoVerdict = "valid" | "already_used" | "expired" | "invalid" | "absent" | "error" | "unreachable";
+
+// Current source of truth: the read-only `promo_codes` lookup. It never
+// consumes a code; a row verifies only when it is active, has not expired and
+// is not flagged as used. Queries start from the canonical schema and narrow
+// when one is rejected, so a renamed column degrades instead of failing.
+async function queryPromoCode(code: string): Promise<PromoVerdict> {
+  const base = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
+  if (!base || !key) return "error";
+
+  const normalized = normalizeCode(code);
+  if (!normalized) return "absent";
+
+  const byCode: [string, string] = ["code", `ilike.${normalized}`];
+  const active: [string, string] = ["is_active", "eq.true"];
+  // Server-side expiry window: no expiry, or one still in the future. A row
+  // excluded here is read again below so an expired code is reported as such.
+  const live: [string, string] = ["or", `(expires_at.is.null,expires_at.gt.${new Date().toISOString()})`];
+  const read = (select: string, params: [string, string][]) => fetchRows(base, key, "promo_codes", select, params);
+
+  let select = "code,is_active,expires_at,used";
+  let result = await read(select, [byCode, active, live]);
+  if (!result.ok && result.network) return "unreachable";
+  if (!result.ok) {
+    // A column in the select was renamed or is not granted here.
+    select = "code,is_active,expires_at";
+    result = await read(select, [byCode, active, live]);
+    if (!result.ok && result.network) return "unreachable";
+  }
+  if (result.ok && result.rows.length > 0) return promoVerdict(result.rows, normalized) ?? "absent";
+
+  // 2. Read the same code without the active/expiry filters so an expired or
+  //    deactivated row is classified instead of looking like a typo.
+  const loose = result.ok ? await read(select, [byCode]) : await read("code", [byCode]);
+  if (loose.ok) return promoVerdict(loose.rows, normalized) ?? "absent";
+  if (loose.network) return "unreachable";
+
+  // 3. The columns themselves were rejected: fall back to the usual
+  //    alternative name for the code column.
+  const byDropCode: [string, string] = ["drop_code", `ilike.${normalized}`];
+  for (const attempt of [
+    { select: "drop_code,is_active,expires_at,used", params: [byDropCode, active, live] },
+    { select: "drop_code,is_active,expires_at", params: [byDropCode, active, live] },
+    { select: "drop_code", params: [byDropCode] },
+  ]) {
+    const step = await read(attempt.select, attempt.params);
+    if (step.ok) return promoVerdict(step.rows, normalized) ?? "absent";
+    if (step.network) return "unreachable";
+  }
+  return "error";
+}
+
+// Legacy read-only check for deployments whose codes still live in
+// `drop_codes` with an outdated/missing RPC. Reads by `code` and requires
+// `used = false`; when a query is rejected (renamed/ungranted column) it
+// narrows the select and retries with the common alternative column names.
 async function queryActiveCode(code: string): Promise<"valid" | "absent" | "error"> {
   const base = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
@@ -115,16 +208,16 @@ async function queryActiveCode(code: string): Promise<"valid" | "absent" | "erro
   const normalized = normalizeCode(code);
   if (!normalized) return "absent";
   const byCode: [string, string] = ["code", `ilike.${normalized}`];
-  const verdict = (rows: unknown[]) => (rows.some((row) => matchesActiveCode(row, normalized)) ? "valid" : "absent");
+  const verdict = (rows: unknown[]) => (rows.some((row) => evaluateCodeRow(row, normalized) === "valid") ? "valid" : "absent");
 
   // 1. Canonical read: the schema's own active + unused rows.
-  const canonical = await fetchCodeRows(base, key, "code,is_active,used", [byCode, ["is_active", "eq.true"], ["used", "eq.false"]]);
+  const canonical = await fetchRows(base, key, "drop_codes", "code,is_active,used", [byCode, ["is_active", "eq.true"], ["used", "eq.false"]]);
   if (canonical.ok) {
     if (canonical.rows.length > 0) return verdict(canonical.rows);
     // 2. Nothing matched the strict filters: read the same code without them
     //    so a text-typed flag or an unexpected default is interpreted, not
     //    mistaken for a missing code.
-    const permissive = await fetchCodeRows(base, key, "code,used,is_active", [byCode]);
+    const permissive = await fetchRows(base, key, "drop_codes", "code,used,is_active", [byCode]);
     if (permissive.ok) return verdict(permissive.rows);
     if (permissive.network) return "error";
   } else if (canonical.network) {
@@ -140,7 +233,7 @@ async function queryActiveCode(code: string): Promise<"valid" | "absent" | "erro
     { select: "drop_code", param: ["drop_code", `ilike.${normalized}`] },
   ];
   for (const step of fallbacks) {
-    const result = await fetchCodeRows(base, key, step.select, [step.param]);
+    const result = await fetchRows(base, key, "drop_codes", step.select, [step.param]);
     if (result.ok) return verdict(result.rows);
     if (result.network) return "error";
   }
@@ -234,6 +327,19 @@ async function call(code: string, rpc: "verify_drop_code" | "redeem_code" | "get
 export async function verifyCode(code: string): Promise<VerifyResult> {
   const normalized = normalizeCode(code);
   if (!normalized) return { status: "invalid" };
+
+  // 1. promo_codes decides first: trimmed, case-insensitive input checked
+  //    against active rows that have not expired. This path is read-only.
+  const promo = await queryPromoCode(normalized);
+  if (promo === "valid") return { status: "valid" };
+  if (promo === "already_used") return { status: "already_used" };
+  if (promo === "expired") return { status: "expired" };
+  if (promo === "invalid") return { status: "invalid" };
+  // The host did not answer at all: retrying the same host through other
+  // endpoints would only stall the player on a dead connection.
+  if (promo === "unreachable") return { status: "error" };
+
+  // 2. Deployments whose codes still live in drop_codes answer via their RPC.
   const result = await call(normalized, "verify_drop_code") as VerifyResult;
   if (result.status === "valid") return result;
   // Do not wait for a second failing network request for known fallback codes.
