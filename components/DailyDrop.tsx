@@ -576,7 +576,7 @@ export default function DailyDrop() {
 
                       <p className="flex items-center justify-center gap-1.5 text-[11px] text-slate-500 mt-3">
                         <Lock size={12} className="text-amber-500/70" />
-                        קוד הגישה ניתן בקבוצת הוואטסאפ של הקהילה
+                        קוד הגישה ניתן בקבוצת הוואטסאפ של קהילת אינשטיין
                       </p>
                     </form>
                   </motion.div>
