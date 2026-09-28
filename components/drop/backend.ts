@@ -106,7 +106,7 @@ async function call(code: string, rpc: "redeem_code" | "get_drop" | "complete_dr
   }
 }
 
-// Read active codes only; matching happens directly in JavaScript.
+// Read codes from drops and compare normalized values in JavaScript.
 export async function verifyCode(code: string): Promise<VerifyResult> {
   const normalized = normalizeCode(code);
   if (!normalized) return { status: "invalid" };
@@ -116,19 +116,21 @@ export async function verifyCode(code: string): Promise<VerifyResult> {
   if (!base || !key) return { status: "error" };
 
   try {
-    // SELECT code FROM drop_codes WHERE is_active = true
-    const response = await fetch(`${base.replace(/\/+$/, "")}/rest/v1/drop_codes?select=code&is_active=eq.true`, {
+    const response = await fetch(`${base.replace(/\/+$/, "")}/rest/v1/drops?select=code`, {
       cache: "no-store",
       signal: AbortSignal.timeout(5000),
       headers: { apikey: key, Authorization: `Bearer ${key}` },
     });
-    if (!response.ok) return { status: "error" };
+    if (!response.ok) {
+      console.warn("[drop] code lookup failed:", response.status);
+      return { status: "error" };
+    }
     const rows: unknown = await response.json();
     if (!Array.isArray(rows)) return { status: "error" };
     const matches = rows.some((row) => typeof row?.code === "string" && normalizeCode(row.code) === normalized);
     return { status: matches ? "valid" : "invalid" };
   } catch (error) {
-    console.warn("[drop] active code lookup failed:", error);
+    console.warn("[drop] code lookup failed:", error);
     return { status: "error" };
   }
 }

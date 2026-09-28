@@ -171,6 +171,7 @@ export default function DailyDrop() {
   // Guards against repeated submissions or activations for the same code.
   const submitGuard = useRef(false);
   const finishGuard = useRef(false);
+  const codeInput = useRef("");
 
   // Require code entry again after every refresh.
   useEffect(() => {
@@ -302,6 +303,7 @@ export default function DailyDrop() {
     setCompleted(null);
     setUnlocked(false);
     setCode("");
+    codeInput.current = "";
     setErrorKind(null);
     setPrize(null);
     setContent({});
@@ -319,8 +321,9 @@ export default function DailyDrop() {
     clearDropVerified();
     try {
       const result = await verifyCode(value);
+      if (codeInput.current !== value) return;
       if (result.status === "valid") {
-        // Start fresh as soon as the input matches an active code.
+        // Start fresh as soon as the input matches a code in drops.
         try { window.localStorage.removeItem(ACTIVE_KEY); } catch { /* storage unavailable */ }
         setCode(value);
         setPrize(null);
@@ -333,7 +336,7 @@ export default function DailyDrop() {
       setErrorKind(result.status === "invalid" ? "invalid" : "server_error");
     } catch (err) {
       console.warn("[drop] code validation failed:", err);
-      setErrorKind("server_error");
+      if (codeInput.current === value) setErrorKind("server_error");
     } finally {
       submitGuard.current = false;
       setUnlocking(false);
@@ -495,11 +498,13 @@ export default function DailyDrop() {
                         id="daily-drop-code"
                         form="drop-code-form"
                         value={code}
-                        onChange={(e) => {
+                         onChange={(e) => {
                           // Codes are case-insensitive: trim and upper-case as
                           // they are typed so pasted spaces or lower case are
                           // already normalized before any check runs.
-                          setCode(e.target.value.trim().toUpperCase());
+                           const nextCode = e.target.value.trim().toUpperCase();
+                           codeInput.current = nextCode;
+                           setCode(nextCode);
                           setErrorKind(null);
                           setUnlocked(false);
                         }}
