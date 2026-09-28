@@ -74,7 +74,7 @@ function CompletedView({ record, onStartNew }: { record: CompletedRecord; onStar
 
         <div className="relative flex flex-col items-center px-4 py-8 text-center sm:px-10 sm:py-12 lg:py-16">
           <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-emerald-400/[0.1] text-emerald-400 border border-emerald-400/25 uppercase tracking-[0.22em]">
-            הדרופ הושלם
+            {record.provisional ? "הזכייה ממתינה לאימות" : "הדרופ הושלם"}
           </span>
 
           <motion.div
@@ -102,7 +102,9 @@ function CompletedView({ record, onStartNew }: { record: CompletedRecord; onStar
             </div>
           </motion.div>
 
-          <h2 className="mt-5 text-xl sm:text-2xl font-black text-white tracking-tight">הדרופ הושלם — מזל טוב!</h2>
+          <h2 className="mt-5 text-xl sm:text-2xl font-black text-white tracking-tight">
+            {record.provisional ? "הדרופ הושלם — ממתינים לאימות" : "הדרופ הושלם — מזל טוב!"}
+          </h2>
 
           <motion.p
             className="mt-2 text-[11px] font-bold uppercase tracking-[0.18em]"
@@ -125,7 +127,7 @@ function CompletedView({ record, onStartNew }: { record: CompletedRecord; onStar
 
           <p className="text-xs text-slate-400 mt-4 max-w-sm leading-relaxed">
             {record.provisional
-              ? "הדרופ הופעל במצב לא מקוון. הזכייה זמנית עד לאימות מול צוות הקהילה."
+              ? "הזכייה ממתינה לאישור צוות הקהילה לפני מימוש."
               : "הפרס הכספי תקבלו בהפקדה הבאה. שמרו את פרטי הקהילה לידכם."}
           </p>
           <p className="flex items-center justify-center gap-1.5 text-[11px] text-slate-500 mt-4">
@@ -138,7 +140,7 @@ function CompletedView({ record, onStartNew }: { record: CompletedRecord; onStar
             <Camera size={26} aria-hidden="true" />
             <p className="mt-2 text-base font-black">צלמו עכשיו צילום מסך של הזכייה והקוד.</p>
             <p className="mt-1 text-sm leading-6">{record.provisional
-              ? "זהו תיעוד זמני בלבד — הציגו אותו לצוות הקהילה לאימות לפני מימוש."
+              ? "שמרו את הצילום והציגו אותו לצוות הקהילה לאימות לפני מימוש."
               : "שמרו את הצילום והציגו אותו לצוות הקהילה כדי לממש בהפקדה הבאה."}</p>
           </div>
           <DropDetails content={record.content} />

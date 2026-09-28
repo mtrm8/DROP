@@ -138,15 +138,8 @@ function CardFront({ item, compact = false }: { item: BoxItem; compact?: boolean
   );
 }
 
-function SelectedCardFace() {
-  return <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-amber-300/60 bg-gradient-to-br from-slate-800 via-slate-950 to-black text-amber-200 shadow-[0_0_28px_rgba(245,158,11,0.25)]">
-    <Sparkles size={28} aria-hidden="true" />
-    <span className="text-sm font-black">קלף נבחר</span>
-  </div>;
-}
-
-// Selection only shows decoys. The server-assigned prize stays hidden until
-// the winning card flips in the final reveal phase.
+// The ten hidden slots start with cosmetic values; one selected slot receives
+// the persisted prize BEFORE that slot is flipped, never afterward.
 function decoyItems(prize: BoxItem): BoxItem[] {
   return BOX_ITEMS.filter((item) => item.id !== prize.id && item.amount !== prize.amount);
 }
@@ -186,12 +179,6 @@ function hasBalancedValues(cards: DealCard[], prize: BoxItem): boolean {
   return counts.size === tiers;
 }
 
-// The winning slot is cosmetic; the server has already assigned the prize.
-function pickWinner(cards: DealCard[]): number {
-  const selected = cards.filter((card) => card.selected);
-  return selected[Math.floor(Math.random() * selected.length)]?.id ?? -1;
-}
-
 // Resolve the phase from elapsed time alone, so the machine state can always be
 // recovered from the clock instead of depending on a chain of timers landing.
 function phaseAt(elapsed: number): Phase {
@@ -219,6 +206,9 @@ export function CardRevealAnimation({ onFinished, prize, provisional = false }: 
           restored.filter((card: { selected: boolean }) => card.selected).length <= SELECT_COUNT) {
           const validCards = restored as DealCard[];
           if (validCards.filter((card) => card.item.id === prize.id).length === 1) return validCards;
+          // An old saved five-card selection had placeholders but no winning
+          // card. Redeal rather than changing an already revealed value.
+          if (validCards.filter((card) => card.selected).length === SELECT_COUNT) return buildDeck(prize);
           if (hasBalancedValues(validCards, prize)) return validCards;
           // Keep the player's locked choices, but replace an older all-50 deck.
           return buildDeck(prize).map((card, index) => ({ ...card, selected: validCards[index].selected }));
@@ -228,6 +218,22 @@ export function CardRevealAnimation({ onFinished, prize, provisional = false }: 
       // Private browsing may disable storage; generate a fresh in-memory deck.
     }
     return buildDeck(prize);
+  });
+  const [winningPickIndex] = useState(() => {
+    try {
+      const saved = JSON.parse(window.localStorage.getItem(ACTIVE_KEY) || "null");
+      if (saved?.prize?.id === prize.id) {
+        const selected = Array.isArray(saved.cards) ? saved.cards.filter((card: DealCard) => card?.selected).length : 0;
+        const prizeAlreadyChosen = saved.cards?.some((card: DealCard) => card?.selected && card.item?.id === prize.id);
+        if (Number.isInteger(saved.winningPickIndex) && saved.winningPickIndex >= 0 && saved.winningPickIndex < SELECT_COUNT &&
+          (prizeAlreadyChosen || saved.winningPickIndex >= selected)) {
+          return saved.winningPickIndex as number;
+        }
+        const remaining = Math.min(selected, SELECT_COUNT - 1);
+        return remaining + Math.floor(Math.random() * (SELECT_COUNT - remaining));
+      }
+    } catch { /* Storage may be unavailable. */ }
+    return Math.floor(Math.random() * SELECT_COUNT);
   });
   const [winnerId, setWinnerId] = useState<number | null>(null);
   const [phase, setPhase] = useState<Phase>("grid");
@@ -249,12 +255,12 @@ export function CardRevealAnimation({ onFinished, prize, provisional = false }: 
     try {
       const saved = JSON.parse(window.localStorage.getItem(ACTIVE_KEY) || "null");
       if (saved?.prize?.id === prize.id) {
-        window.localStorage.setItem(ACTIVE_KEY, JSON.stringify({ ...saved, cards }));
+        window.localStorage.setItem(ACTIVE_KEY, JSON.stringify({ ...saved, cards, winningPickIndex }));
       }
     } catch {
       // The game remains playable if storage is unavailable.
     }
-  }, [cards, prize.id]);
+  }, [cards, prize.id, winningPickIndex]);
 
   // Keep the machine's animation envelope inside the viewport. Card selection
   // uses a full-width scrollable grid below, without any viewport scaling.
@@ -290,20 +296,23 @@ export function CardRevealAnimation({ onFinished, prize, provisional = false }: 
       const target = prev.find((c) => c.id === id);
       if (!target || target.selected) return prev;
       if (prev.filter((c) => c.selected).length >= SELECT_COUNT) return prev;
-      return prev.map((c) => (c.id === id ? { ...c, selected: true } : c));
+      const pickNumber = prev.filter((c) => c.selected).length;
+      const winnerAlreadyChosen = prev.some((c) => c.selected && c.item.id === prize.id);
+      return prev.map((c) => c.id === id ? {
+        ...c,
+        selected: true,
+        item: !winnerAlreadyChosen && pickNumber === winningPickIndex ? prize : c.item,
+      } : c);
     });
   };
 
   const startMachine = () => {
     if (machine !== "idle" || !isComplete) return;
-    // Commit the already-assigned server prize to a chosen, still-hidden card
-    // BEFORE any selected values appear in the machine. Its value never swaps
-    // after the selection reveal or changes during the shuffle.
-    const chosen = cards.find((card) => card.selected && card.item.id === prize.id)?.id ?? pickWinner(cards);
+    // All five cards have already shown their actual, immutable values.
+    const chosen = cards.find((card) => card.selected && card.item.id === prize.id)?.id ?? -1;
     if (chosen < 0) return;
     startedAt.current = Date.now();
     setWinnerId(chosen);
-    setCards((previous) => previous.map((card) => card.id === chosen ? { ...card, item: prize } : card));
     setMachine("running");
     setPhase("collect");
   };
@@ -423,7 +432,7 @@ export function CardRevealAnimation({ onFinished, prize, provisional = false }: 
                           <CardBackFace compact />
                         </div>
                         <div className="absolute inset-0 [backface-visibility:hidden]" style={{ transform: "rotateY(180deg)" }}>
-                              <SelectedCardFace />
+                              <CardFront item={c.item} compact />
                         </div>
                       </motion.div>
                       {picked && (
@@ -691,8 +700,8 @@ export function CardRevealAnimation({ onFinished, prize, provisional = false }: 
                       <ItemIcon icon={winnerCard.item.icon} size={30} className="text-amber-300" />
                     </div>
                      <h3 className="mt-2 text-lg font-black text-white leading-snug">{winnerCard.item.name}</h3>
-                     <p className="mt-2 text-xs font-bold leading-5 text-amber-100">{provisional
-                       ? "תוצאה זמנית — שמרו צילום מסך לאימות מול צוות הקהילה."
+                      <p className="mt-2 text-xs font-bold leading-5 text-amber-100">{provisional
+                        ? "שמרו צילום מסך והציגו אותו לצוות הקהילה לאימות."
                        : "צלמו מסך של הזכייה ושמרו אותו כדי לממש את הפרס."}</p>
                     <p className="mt-1 text-[11px] text-slate-500">
                        {rarity.label} • {winnerCard.item.chance} • {provisional ? "ממתין לאימות" : "מימוש בהפקדה הבאה"}
