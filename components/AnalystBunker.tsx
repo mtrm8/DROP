@@ -109,7 +109,7 @@ function PickCard({ pick, index, reduced }: { pick: AnalystPick; index: number; 
               <motion.div className={`h-full rounded-full ${bar.color}`} initial={reduced ? false : { width: 0 }} whileInView={{ width: `${bar.value * 100}%` }} viewport={{ once: true }} transition={{ duration: reduced ? 0 : 0.8 }} />
             </div>
           </div>)}
-          <p className="text-[10px] leading-5 text-slate-400">הסתברות אנושית שהוזנה ידנית, לא פלט של מודל AI. סף האיזון הוא 1 חלקי היחס.</p>
+          <p className="text-[10px] leading-5 text-slate-400">הסתברות אנושית שהוזנה ידנית. סף האיזון הוא 1 חלקי היחס.</p>
         </div> : <p className="mt-3 text-xs leading-6 text-slate-400">האנליסט לא סיפק הסתברות מספרית. סף האיזון לפי היחס הוא {percent(pick.breakEven)}; אין כאן תחזית ממוחשבת.</p>}
       </div>
     </div>
@@ -179,7 +179,7 @@ export default function AnalystBunker({ embedded = false }: { embedded?: boolean
         <div className="relative">
           <span className="inline-flex items-center gap-2 rounded-full border border-emerald-300/25 bg-emerald-300/[0.08] px-3 py-1.5 text-[10px] font-black text-emerald-100"><ClipboardList size={14} /> דוח אנליסט אנושי · בחירות ידניות</span>
            <Heading className="mt-5 text-3xl font-black text-white sm:text-5xl">באנקר האנליסט</Heading>
-          <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-300">הבחירות, הנתונים והנימוקים כאן נכתבים ומוזנים ידנית על ידי {report.analyst}. דוח זה נפרד ממנוע ה־AI האוטומטי.</p>
+          <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-300">הבחירות, הנתונים והנימוקים כאן נכתבים ומוזנים ידנית על ידי {report.analyst}.</p>
           <p className="mt-3 text-xs text-emerald-200/80">{report.asOf ? `נערך לאחרונה: ${formatDate(report.asOf)}` : "ממתינים לפרסום בחירות אנליסט מאומתות."}</p>
           <p className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-amber-300/25 bg-amber-300/[0.06] px-3.5 py-2.5 text-[11px] font-black text-amber-100" role="note">
             <LockKeyhole size={14} className="shrink-0" />
@@ -194,7 +194,7 @@ export default function AnalystBunker({ embedded = false }: { embedded?: boolean
         <section className="rounded-[1.7rem] border border-emerald-300/15 bg-slate-950/80 p-7 text-center sm:p-10" role="status">
           <ClipboardList size={30} className="mx-auto text-emerald-300/70" />
           <h2 className="mt-4 text-xl font-black text-white">{report.slip ? "הטיפס המשולב מוצג למעלה" : report.picks.length ? "כל הבחירות שפורסמו כבר יצאו לדרך" : "בחירות האנליסט טרם פורסמו"}</h2>
-          <p className="mx-auto mt-3 max-w-xl text-sm leading-7 text-slate-400">{report.slip ? "לטיפס הפעיל אין עדיין ניתוח מלא בעמוד. לאחר סקירה ידנית יפורסמו כאן היחסים, נתוני הכושר, הנימוקים והגרפים לכל משחק. אין כאן בחירות ממנוע ה־AI." : report.picks.length ? "כשיועלו בחירות ידניות חדשות, הניתוח המלא יופיע כאן לאחר פרסום האתר." : "הצוות יעלה לכאן בחירות שנבדקו ידנית, כולל יחסים, נתוני כושר, הסברים וגרפים. אין כאן בחירות ממנוע ה־AI."}</p>
+          <p className="mx-auto mt-3 max-w-xl text-sm leading-7 text-slate-400">{report.slip ? "לטיפס הפעיל אין עדיין ניתוח מלא בעמוד. לאחר סקירה ידנית יפורסמו כאן היחסים, נתוני הכושר, הנימוקים והגרפים לכל משחק." : report.picks.length ? "כשיועלו בחירות ידניות חדשות, הניתוח המלא יופיע כאן לאחר פרסום האתר." : "הצוות יעלה לכאן בחירות שנבדקו ידנית, כולל יחסים, נתוני כושר, הסברים וגרפים."}</p>
         </section>}
     </div>;
 
