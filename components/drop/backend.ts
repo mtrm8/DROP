@@ -30,6 +30,43 @@ const FALLBACK_CODES = new Set([
 ]);
 const normalizeCode = (code: string) => code.trim().toUpperCase();
 
+// Independent read-only check for deployments with an outdated/missing RPC.
+// Query only active, unused rows; compare the returned code exactly after
+// normalizing so an ILIKE wildcard in user input cannot validate another code.
+async function queryActiveCode(code: string): Promise<"valid" | "absent" | "error"> {
+  const base = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
+  if (!base || !key) return "error";
+
+  const normalized = normalizeCode(code);
+  const url = new URL(`${base.replace(/\/+$/, "")}/rest/v1/drop_codes`);
+  url.searchParams.set("select", "code,is_active,used");
+  url.searchParams.set("code", `ilike.${normalized}`);
+  url.searchParams.set("is_active", "eq.true");
+  url.searchParams.set("used", "eq.false");
+  url.searchParams.set("limit", "10");
+
+  try {
+    const response = await fetch(url.toString(), {
+      cache: "no-store",
+      signal: AbortSignal.timeout(5000),
+      headers: { apikey: key, Authorization: `Bearer ${key}` },
+    });
+    if (!response.ok) {
+      console.warn("[drop] Active-code lookup failed", response.status);
+      return "error";
+    }
+    const rows: unknown = await response.json();
+    if (!Array.isArray(rows)) return "error";
+    return rows.some((row) => typeof row?.code === "string" &&
+      normalizeCode(row.code) === normalized && row.is_active === true && row.used === false)
+      ? "valid" : "absent";
+  } catch (error) {
+    console.warn("[drop] Active-code lookup unavailable", error);
+    return "error";
+  }
+}
+
 function localCheck(code: string): VerifyResult {
   return { status: FALLBACK_CODES.has(normalizeCode(code)) ? "valid" : "invalid" };
 }
@@ -113,8 +150,18 @@ async function call(code: string, rpc: "verify_drop_code" | "redeem_code" | "get
 // Validation must not consume a code. The browser redeems only when the player
 // activates the drop, after the checkmark screen has completed.
 export async function verifyCode(code: string): Promise<VerifyResult> {
-  const result = await call(code, "verify_drop_code") as VerifyResult;
-  return result.status === "error" ? localCheck(code) : result;
+  const normalized = normalizeCode(code);
+  if (!normalized) return { status: "invalid" };
+  const result = await call(normalized, "verify_drop_code") as VerifyResult;
+  if (result.status === "valid") return result;
+
+  const table = await queryActiveCode(normalized);
+  if (table === "valid") return { status: "valid" };
+  if (table === "absent" && (result.status === "already_used" || result.status === "invalid")) return result;
+  if (result.status === "already_used") return result;
+  // An unreachable RPC and an inaccessible table cannot establish that an
+  // unfamiliar code is wrong; bundled codes can still enter provisionally.
+  return localCheck(normalized).status === "valid" ? { status: "valid" } : { status: "error" };
 }
 
 // redeem_code validates the row, assigns its prize and returns its content in
