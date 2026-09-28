@@ -4,8 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Camera, KeyRound, Lock, Sparkles } from "lucide-react";
 import { CardRevealAnimation } from "./CardRevealAnimation";
-import { getRolledPrize, redeemCode } from "./drop/backend";
-import type { DropContent } from "./drop/backend";
+import { getRolledPrize, redeemCode, verifyCode } from "./drop/backend";
+import type { DropContent, VerifiedDrop } from "./drop/backend";
 import { ItemIcon, RARITIES } from "./drop/boxItems";
 import type { BoxItem } from "./drop/boxItems";
 import { DROP_COMMUNITY, DROP_TITLE } from "./drop/copy";
@@ -163,8 +163,7 @@ export default function DailyDrop() {
   const [content, setContent] = useState<DropContent>({});
   const [resumed, setResumed] = useState(false);
   const [verificationStage, setVerificationStage] = useState<"confirming" | "ready">("ready");
-  // Guards against a double-click / Enter+click firing two redeems for the same
-  // code, which would burn it and then report a bogus "already used".
+  // Guards against repeated submissions or activations for the same code.
   const submitGuard = useRef(false);
 
   // An unfinished drop retains its locked deck, but code entry is required
@@ -184,11 +183,6 @@ export default function DailyDrop() {
     return () => window.clearTimeout(timer);
   }, [unlocked, verificationStage]);
 
-  const startOpening = () => {
-    if (!prize || verificationStage !== "ready") return;
-    setStage("cinematic");
-  };
-
   const rememberActive = (value: string, won: BoxItem) => {
     try {
       const previous = JSON.parse(window.localStorage.getItem(ACTIVE_KEY) || "null");
@@ -196,6 +190,59 @@ export default function DailyDrop() {
       window.localStorage.setItem(ACTIVE_KEY, JSON.stringify({ code: value, prize: won, cards }));
     } catch {
       // Browser storage may be disabled; the in-memory flow still works.
+    }
+  };
+
+  const enterDrop = (value: string, drop: VerifiedDrop, wasResumed: boolean) => {
+    rememberActive(value, drop.prize);
+    markDropVerified();
+    setPrize(drop.prize);
+    setContent(drop.content);
+    setVerificationStage("confirming");
+    setUnlocked(true);
+    setResumed(wasResumed);
+    setCode(value);
+  };
+
+  const startOpening = async () => {
+    if (verificationStage !== "ready" || submitGuard.current) return;
+    if (prize) {
+      setStage("cinematic");
+      return;
+    }
+
+    submitGuard.current = true;
+    setUnlocking(true);
+    setErrorKind(null);
+    try {
+      // Keep a local resume marker in case the response is lost after the
+      // database commits. The marker itself never grants access to a prize.
+      try { window.localStorage.setItem(ACTIVE_KEY, JSON.stringify({ code })); } catch { /* storage unavailable */ }
+      let result = await redeemCode(code);
+      if (result.status === "error") {
+        const saved = await getRolledPrize(code);
+        if (saved.status === "ok") result = saved;
+      }
+      if (result.status === "ok") {
+        rememberActive(code, result.drop.prize);
+        markDropVerified();
+        setPrize(result.drop.prize);
+        setContent(result.drop.content);
+        setStage("cinematic");
+      } else {
+        setErrorKind(result.status === "already_used" ? "already_used" : result.status === "invalid" ? "invalid" : "server_error");
+        if (result.status === "already_used" || result.status === "invalid") {
+          // Another device may have claimed this code since verification.
+          // Never keep an unowned local resume marker in that case.
+          try { window.localStorage.removeItem(ACTIVE_KEY); } catch { /* storage unavailable */ }
+          setUnlocked(false);
+        }
+      }
+    } catch {
+      setErrorKind("server_error");
+    } finally {
+      submitGuard.current = false;
+      setUnlocking(false);
     }
   };
 
@@ -245,18 +292,6 @@ export default function DailyDrop() {
       submitGuard.current = false;
       setUnlocking(false);
     };
-    const enter = (drop: { prize: BoxItem; content: DropContent }, resumed: boolean) => {
-      rememberActive(value, drop.prize);
-      markDropVerified();
-      setPrize(drop.prize);
-      setContent(drop.content);
-      setVerificationStage("confirming");
-      setUnlocked(true);
-      setResumed(resumed);
-      setCode(value);
-      settle();
-    };
-
     try {
       let pending: { code?: string } | null = null;
       try {
@@ -267,7 +302,8 @@ export default function DailyDrop() {
       if (pending?.code === value) {
         const existing = await getRolledPrize(value);
         if (existing.status === "ok") {
-          enter(existing.drop, true);
+          enterDrop(value, existing.drop, true);
+          settle();
           return;
         }
         if (existing.status === "error") {
@@ -277,13 +313,19 @@ export default function DailyDrop() {
         }
       }
 
-      const result = await redeemCode(value);
-      if (result.status !== "ok") {
+      const result = await verifyCode(value);
+      if (result.status !== "valid") {
         setErrorKind(result.status === "already_used" ? "already_used" : result.status === "invalid" ? "invalid" : "server_error");
         settle();
         return;
       }
-      enter(result.drop, false);
+      setCode(value);
+      setPrize(null);
+      setContent({});
+      setResumed(false);
+      setVerificationStage("confirming");
+      setUnlocked(true);
+      settle();
     } catch (err) {
       console.warn("[drop] code validation failed:", err);
       setErrorKind("server_error");
@@ -414,11 +456,17 @@ export default function DailyDrop() {
                         <motion.div key="activate" className="w-full" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.35 }}>
                           <button
                             onClick={startOpening}
+                            disabled={unlocking}
                             className="group relative mt-6 flex min-h-14 w-full items-center justify-center gap-2.5 rounded-2xl bg-gradient-to-br from-amber-300 via-amber-400 to-amber-500 py-4 text-lg font-black text-slate-950 shadow-[0_0_35px_rgba(245,158,11,0.35)] transition hover:brightness-110 active:scale-[0.99] focus-visible:ring-2 focus-visible:ring-amber-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0c13] sm:text-xl"
                           >
                             <Sparkles size={21} className="transition-transform group-hover:rotate-12" />
-                            הפעל את הדרופ
+                            {unlocking ? "מפעיל את הדרופ..." : "הפעל את הדרופ"}
                           </button>
+                          {errorKind && <p role="alert" className="mt-3 text-sm font-bold text-red-400">
+                            {errorKind === "already_used" ? "הקוד הופעל ממכשיר אחר — לא ניתן להשתמש בו שוב"
+                              : errorKind === "invalid" ? "הקוד כבר אינו זמין — הזינו קוד אחר"
+                                : "לא ניתן להשלים את ההפעלה כרגע — נסו שוב עם אותו קוד"}
+                          </p>}
                           <p className="mt-3 text-[11px] text-slate-500">הפרס יופיע בהפקדה הבאה בלבד</p>
                         </motion.div>
                       )}

@@ -291,6 +291,20 @@ as $$
 
 -- Redeem and assign a prize atomically. A failed roll aborts the transaction,
 -- leaving the code unused. Content is stored per code, not in a static bundle.
+create or replace function public.verify_drop_code(p_code text)
+returns json
+language sql
+security definer
+set search_path = public
+as $$
+  select json_build_object('status', case
+    when nullif(trim(p_code), '') is null then 'invalid'
+    when exists (select 1 from public.drop_codes where lower(code) = lower(trim(p_code)) and used = false) then 'valid'
+    when exists (select 1 from public.drop_codes where lower(code) = lower(trim(p_code))) then 'already_used'
+    else 'invalid'
+  end);
+$$;
+
 create or replace function public.redeem_code(p_code text)
 returns json
 language plpgsql
@@ -351,6 +365,8 @@ $$;
 
 revoke all on function public.get_drop(text) from public;
 grant execute on function public.get_drop(text) to anon, authenticated, service_role;
+revoke all on function public.verify_drop_code(text) from public;
+grant execute on function public.verify_drop_code(text) to anon, authenticated, service_role;
 
 -- Read-only diagnostics: exact stored state of a code (never burns anything),
 -- so a reset can be verified without redeeming. Returns the row as stored, the

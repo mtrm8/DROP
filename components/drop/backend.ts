@@ -8,6 +8,7 @@ export type RedeemResult =
   | { status: "already_used" }
   | { status: "invalid" }
   | { status: "error" };
+export type VerifyResult = { status: "valid" | "already_used" | "invalid" | "error" };
 
 type DropRow = {
   success?: boolean;
@@ -48,7 +49,7 @@ function toDrop(row: DropRow): VerifiedDrop | null {
   };
 }
 
-async function call(code: string, rpc: "redeem_code" | "get_drop"): Promise<RedeemResult> {
+async function call(code: string, rpc: "verify_drop_code" | "redeem_code" | "get_drop"): Promise<VerifyResult | RedeemResult> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
   if (!url || !key) return { status: "error" };
@@ -62,10 +63,22 @@ async function call(code: string, rpc: "redeem_code" | "get_drop"): Promise<Rede
       body: JSON.stringify({ p_code: code.trim() }),
     });
     if (!res.ok) return { status: "error" };
-    const raw: unknown = await res.json();
-    const row = (Array.isArray(raw) ? raw[0] : raw) as DropRow | undefined;
+    let raw: unknown = await res.json();
+    // PostgREST JSON RPCs are usually objects, but older deployments may
+    // return a JSON-encoded string. Normalize either before interpreting it.
+    if (typeof raw === "string") {
+      try { raw = JSON.parse(raw); } catch { return { status: "error" }; }
+    }
+    const row = (Array.isArray(raw) ? raw[0] : raw) as (DropRow & { status?: string }) | undefined;
+    if (rpc === "verify_drop_code") {
+      if (row?.status === "valid" || row?.status === "already_used" || row?.status === "invalid") {
+        return { status: row.status };
+      }
+      return { status: "error" };
+    }
     if (row?.error === "already_redeemed") return { status: "already_used" };
     if (row?.error === "not_found") return { status: "invalid" };
+    if (rpc === "get_drop" && !row) return { status: "invalid" };
     const drop = row && toDrop(row);
     return drop ? { status: "ok", drop } : { status: "error" };
   } catch {
@@ -73,13 +86,19 @@ async function call(code: string, rpc: "redeem_code" | "get_drop"): Promise<Rede
   }
 }
 
+// Validation must not consume a code. The browser redeems only when the player
+// activates the drop, after the checkmark screen has completed.
+export function verifyCode(code: string): Promise<VerifyResult> {
+  return call(code, "verify_drop_code") as Promise<VerifyResult>;
+}
+
 // redeem_code validates the row, assigns its prize and returns its content in
 // one database transaction. A failed assignment rolls back the redemption.
 export function redeemCode(code: string): Promise<RedeemResult> {
-  return call(code, "redeem_code");
+  return call(code, "redeem_code") as Promise<RedeemResult>;
 }
 
 // Only used to resume a code already redeemed in this browser's active session.
 export function getRolledPrize(code: string): Promise<RedeemResult> {
-  return call(code, "get_drop");
+  return call(code, "get_drop") as Promise<RedeemResult>;
 }

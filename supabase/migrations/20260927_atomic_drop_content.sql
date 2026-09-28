@@ -131,6 +131,20 @@ update public.drop_prizes
 
 -- The row lock serializes competing redeems. The prize and code update commit
 -- together; an empty pool or any other SQL error rolls the whole attempt back.
+create or replace function public.verify_drop_code(p_code text)
+returns json
+language sql
+security definer
+set search_path = public
+as $$
+  select json_build_object('status', case
+    when nullif(trim(p_code), '') is null then 'invalid'
+    when exists (select 1 from public.drop_codes where lower(code) = lower(trim(p_code)) and used = false) then 'valid'
+    when exists (select 1 from public.drop_codes where lower(code) = lower(trim(p_code))) then 'already_used'
+    else 'invalid'
+  end);
+$$;
+
 create or replace function public.redeem_code(p_code text)
 returns json
 language plpgsql
@@ -221,7 +235,9 @@ grant select, insert, update on public.drop_codes to service_role;
 grant select, insert, update on public.drop_prizes to service_role;
 revoke all on function public.redeem_code(text) from public;
 revoke all on function public.get_drop(text) from public;
+revoke all on function public.verify_drop_code(text) from public;
 grant execute on function public.redeem_code(text) to anon, authenticated, service_role;
 grant execute on function public.get_drop(text) to anon, authenticated, service_role;
+grant execute on function public.verify_drop_code(text) to anon, authenticated, service_role;
 
 commit;
