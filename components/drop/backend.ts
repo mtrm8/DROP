@@ -106,7 +106,7 @@ async function call(code: string, rpc: "redeem_code" | "get_drop" | "complete_dr
   }
 }
 
-// Read codes from drops and compare normalized values in JavaScript.
+// Read active codes from drop_codes and compare normalized values in JavaScript.
 export async function verifyCode(code: string): Promise<VerifyResult> {
   const normalized = normalizeCode(code);
   if (!normalized) return { status: "invalid" };
@@ -116,7 +116,7 @@ export async function verifyCode(code: string): Promise<VerifyResult> {
   if (!base || !key) return { status: "error" };
 
   try {
-    const response = await fetch(`${base.replace(/\/+$/, "")}/rest/v1/drops?select=code`, {
+    const response = await fetch(`${base.replace(/\/+$/, "")}/rest/v1/drop_codes?select=code&is_active=eq.true`, {
       cache: "no-store",
       signal: AbortSignal.timeout(5000),
       headers: { apikey: key, Authorization: `Bearer ${key}` },

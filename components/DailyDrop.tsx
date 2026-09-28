@@ -323,7 +323,7 @@ export default function DailyDrop() {
       const result = await verifyCode(value);
       if (codeInput.current !== value) return;
       if (result.status === "valid") {
-        // Start fresh as soon as the input matches a code in drops.
+        // Start fresh as soon as the input matches an active drop code.
         try { window.localStorage.removeItem(ACTIVE_KEY); } catch { /* storage unavailable */ }
         setCode(value);
         setPrize(null);
