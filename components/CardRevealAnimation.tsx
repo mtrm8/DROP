@@ -36,6 +36,7 @@ interface DealCard {
 
 interface CardRevealProps {
   onFinished: (winner: BoxItem) => void;
+  provisional?: boolean;
   // The cash prize the SERVER already rolled for this code. The machine only
   // decides which slot visually shows it — the amount can never be influenced,
   // re-rolled or forged by the client.
@@ -195,7 +196,7 @@ function phaseAt(elapsed: number): Phase {
   return current;
 }
 
-export function CardRevealAnimation({ onFinished, prize }: CardRevealProps) {
+export function CardRevealAnimation({ onFinished, prize, provisional = false }: CardRevealProps) {
   const [cards, setCards] = useState<DealCard[]>(() => {
     try {
       const saved = JSON.parse(window.localStorage.getItem(ACTIVE_KEY) || "null");
@@ -678,9 +679,11 @@ export function CardRevealAnimation({ onFinished, prize }: CardRevealProps) {
                       <ItemIcon icon={winnerCard.item.icon} size={30} className="text-amber-300" />
                     </div>
                      <h3 className="mt-2 text-lg font-black text-white leading-snug">{winnerCard.item.name}</h3>
-                     <p className="mt-2 text-xs font-bold leading-5 text-amber-100">צלמו מסך של הזכייה ושמרו אותו כדי לממש את הפרס.</p>
+                     <p className="mt-2 text-xs font-bold leading-5 text-amber-100">{provisional
+                       ? "תוצאה זמנית — שמרו צילום מסך לאימות מול צוות הקהילה."
+                       : "צלמו מסך של הזכייה ושמרו אותו כדי לממש את הפרס."}</p>
                     <p className="mt-1 text-[11px] text-slate-500">
-                      {rarity.label} • {winnerCard.item.chance} • מימוש בהפקדה הבאה
+                       {rarity.label} • {winnerCard.item.chance} • {provisional ? "ממתין לאימות" : "מימוש בהפקדה הבאה"}
                     </p>
                     <button
                       type="button"

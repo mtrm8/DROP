@@ -44,6 +44,7 @@ type CompletedRecord = {
   code: string;
   item: BoxItem;
   content: DropContent;
+  provisional: boolean;
 };
 
 const COMPLETED_KEY = "drop-completed";
@@ -123,17 +124,22 @@ function CompletedView({ record, onStartNew }: { record: CompletedRecord; onStar
           </motion.h3>
 
           <p className="text-xs text-slate-400 mt-4 max-w-sm leading-relaxed">
-            הפרס הכספי תקבלו בהפקדה הבאה. שמרו את פרטי הקהילה לידכם.
+            {record.provisional
+              ? "הדרופ הופעל במצב לא מקוון. הזכייה זמנית עד לאימות מול צוות הקהילה."
+              : "הפרס הכספי תקבלו בהפקדה הבאה. שמרו את פרטי הקהילה לידכם."}
           </p>
           <p className="flex items-center justify-center gap-1.5 text-[11px] text-slate-500 mt-4">
             <Lock size={12} className="text-red-400/80" />
-            הקוד <span dir="ltr" className="font-mono font-bold text-slate-400">{record.code}</span> נוצל — לא ניתן להפעילו שנית
+            הקוד <span dir="ltr" className="font-mono font-bold text-slate-400">{record.code}</span>
+            {record.provisional ? " נשמר במכשיר זה עד לאימות" : " נוצל — לא ניתן להפעילו שנית"}
           </p>
 
           <div className="mt-5 flex w-full max-w-2xl flex-col items-center rounded-2xl border border-amber-300/40 bg-amber-300/[0.08] px-5 py-4 text-amber-100" role="note">
             <Camera size={26} aria-hidden="true" />
             <p className="mt-2 text-base font-black">צלמו עכשיו צילום מסך של הזכייה והקוד.</p>
-            <p className="mt-1 text-sm leading-6">שמרו את הצילום והציגו אותו לצוות הקהילה כדי לממש בהפקדה הבאה.</p>
+            <p className="mt-1 text-sm leading-6">{record.provisional
+              ? "זהו תיעוד זמני בלבד — הציגו אותו לצוות הקהילה לאימות לפני מימוש."
+              : "שמרו את הצילום והציגו אותו לצוות הקהילה כדי לממש בהפקדה הבאה."}</p>
           </div>
           <DropDetails content={record.content} />
 
@@ -161,6 +167,7 @@ export default function DailyDrop() {
   const [completed, setCompleted] = useState<CompletedRecord | null>(null);
   const [prize, setPrize] = useState<BoxItem | null>(null);
   const [content, setContent] = useState<DropContent>({});
+  const [provisional, setProvisional] = useState(false);
   const [resumed, setResumed] = useState(false);
   const [verificationStage, setVerificationStage] = useState<"confirming" | "ready">("ready");
   // Guards against repeated submissions or activations for the same code.
@@ -198,6 +205,7 @@ export default function DailyDrop() {
     markDropVerified();
     setPrize(drop.prize);
     setContent(drop.content);
+    setProvisional(drop.provisional === true);
     setVerificationStage("confirming");
     setUnlocked(true);
     setResumed(wasResumed);
@@ -228,6 +236,7 @@ export default function DailyDrop() {
         markDropVerified();
         setPrize(result.drop.prize);
         setContent(result.drop.content);
+        setProvisional(result.drop.provisional === true);
         setStage("cinematic");
       } else {
         setErrorKind(result.status === "already_used" ? "already_used" : result.status === "invalid" ? "invalid" : "server_error");
@@ -247,7 +256,7 @@ export default function DailyDrop() {
   };
 
   const finishDrop = (winner: BoxItem) => {
-    const record: CompletedRecord = { code, item: winner, content };
+    const record: CompletedRecord = { code, item: winner, content, provisional };
     try {
       window.localStorage.removeItem(ACTIVE_KEY);
     } catch {
@@ -276,6 +285,7 @@ export default function DailyDrop() {
     setErrorKind(null);
     setPrize(null);
     setContent({});
+    setProvisional(false);
     setResumed(false);
     setVerificationStage("ready");
   };
@@ -322,6 +332,7 @@ export default function DailyDrop() {
       setCode(value);
       setPrize(null);
       setContent({});
+      setProvisional(false);
       setResumed(false);
       setVerificationStage("confirming");
       setUnlocked(true);
@@ -574,6 +585,7 @@ export default function DailyDrop() {
           >
             <CardRevealAnimation
               prize={prize}
+              provisional={provisional}
               onFinished={handleDropFinished}
             />
           </motion.div>

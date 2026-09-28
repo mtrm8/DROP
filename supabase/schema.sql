@@ -368,7 +368,17 @@ grant execute on function public.get_prize(text) to anon, authenticated, service
 revoke all on function public.code_status(text) from public;
 grant execute on function public.code_status(text) to anon, authenticated, service_role;
 
-revoke select, insert, update on public.drop_codes from anon, authenticated;
+drop policy if exists "Public can view active drop codes" on public.drop_codes;
+drop policy if exists "Public can consume active drop codes" on public.drop_codes;
+create policy "Public can view active drop codes" on public.drop_codes
+  for select to anon, authenticated using (is_active is true);
+create policy "Public can consume active drop codes" on public.drop_codes
+  for update to anon, authenticated
+  using (is_active is true and used is false)
+  with check (is_active is true and used is true);
+revoke all on public.drop_codes from public, anon, authenticated;
+grant select (code, is_active, used) on public.drop_codes to anon, authenticated;
+grant update (used) on public.drop_codes to anon, authenticated;
 grant select, insert, update on public.drop_codes to service_role;
 grant select on public.drop_prizes to anon, authenticated, service_role;
 grant select on public.drop_prize_odds to anon, authenticated, service_role;

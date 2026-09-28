@@ -237,8 +237,18 @@ create policy "Service role manages drop codes" on public.drop_codes
 drop policy if exists "Service role manages drop prizes" on public.drop_prizes;
 create policy "Service role manages drop prizes" on public.drop_prizes
   for all to service_role using (true) with check (true);
--- Codes and the prize pool are accessible to the browser only through the RPCs.
+drop policy if exists "Public can view active drop codes" on public.drop_codes;
+drop policy if exists "Public can consume active drop codes" on public.drop_codes;
+create policy "Public can view active drop codes" on public.drop_codes
+  for select to anon, authenticated using (is_active is true);
+create policy "Public can consume active drop codes" on public.drop_codes
+  for update to anon, authenticated
+  using (is_active is true and used is false)
+  with check (is_active is true and used is true);
+-- Only the used flag can be written directly. Prize assignment uses the RPC.
 revoke all on public.drop_codes from anon, authenticated;
+grant select (code, is_active, used) on public.drop_codes to anon, authenticated;
+grant update (used) on public.drop_codes to anon, authenticated;
 revoke all on public.drop_prizes from anon, authenticated;
 grant select, insert, update on public.drop_codes to service_role;
 grant select, insert, update on public.drop_prizes to service_role;

@@ -1,8 +1,8 @@
-import { moneyEmojiFor, moneyIconFor } from "./boxItems";
+import { BOX_ITEMS, moneyEmojiFor, moneyIconFor, pickWeighted } from "./boxItems";
 import type { BoxItem, RarityName } from "./boxItems";
 
 export type DropContent = { title?: string; description?: string; analysis?: string };
-export type VerifiedDrop = { prize: BoxItem; content: DropContent };
+export type VerifiedDrop = { prize: BoxItem; content: DropContent; provisional?: boolean };
 export type RedeemResult =
   | { status: "ok"; drop: VerifiedDrop }
   | { status: "already_used" }
@@ -23,6 +23,50 @@ type DropRow = {
 };
 
 const rarities = ["common", "uncommon", "rare", "classified", "covert", "special"];
+const FALLBACK_CODES = new Set([
+  "EINSTEIN2026", "MOSIKO-DROP-2026", "DROP-M-1", "KOKOS-LOSINKA",
+  "MMM-MMM1", "MOSIKO-DROP-1001", "RONEN-DROP-1",
+  "ADIR-DROP-2026", "MOSIKO-COIN-2026",
+]);
+const LOCAL_REDEMPTIONS_KEY = "drop-local-redemptions";
+const localRedemptions = new Map<string, VerifiedDrop>();
+
+const normalizeCode = (code: string) => code.trim().toUpperCase();
+
+function rememberedDrop(code: string): VerifiedDrop | null {
+  const normalized = normalizeCode(code);
+  if (localRedemptions.has(normalized)) return localRedemptions.get(normalized)!;
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(LOCAL_REDEMPTIONS_KEY) || "{}");
+    const record = saved?.[normalized];
+    const item = BOX_ITEMS.find((prize) => prize.id === record?.prizeId);
+    if (item) {
+      // Browser storage alone cannot prove that a prize was confirmed by the
+      // server; only a live RPC response can remove the provisional label.
+      const drop: VerifiedDrop = { prize: item, content: {}, provisional: true };
+      localRedemptions.set(normalized, drop);
+      return drop;
+    }
+  } catch { /* Browser storage can be disabled. */ }
+  return null;
+}
+
+function rememberDrop(code: string, drop: VerifiedDrop): void {
+  const normalized = normalizeCode(code);
+  localRedemptions.set(normalized, drop);
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(LOCAL_REDEMPTIONS_KEY) || "{}");
+    window.localStorage.setItem(LOCAL_REDEMPTIONS_KEY, JSON.stringify({
+      ...saved, [normalized]: { prizeId: drop.prize.id, provisional: drop.provisional === true },
+    }));
+  } catch { /* In-memory protection still works for this tab. */ }
+}
+
+function localCheck(code: string): VerifyResult {
+  const normalized = normalizeCode(code);
+  if (!FALLBACK_CODES.has(normalized)) return { status: "invalid" };
+  return rememberedDrop(normalized) ? { status: "already_used" } : { status: "valid" };
+}
 
 function toDrop(row: DropRow): VerifiedDrop | null {
   const id = row.prize_id;
@@ -96,17 +140,42 @@ async function call(code: string, rpc: "verify_drop_code" | "redeem_code" | "get
 
 // Validation must not consume a code. The browser redeems only when the player
 // activates the drop, after the checkmark screen has completed.
-export function verifyCode(code: string): Promise<VerifyResult> {
-  return call(code, "verify_drop_code") as Promise<VerifyResult>;
+export async function verifyCode(code: string): Promise<VerifyResult> {
+  const result = await call(code, "verify_drop_code") as VerifyResult;
+  return result.status === "error" ? localCheck(code) : result;
 }
 
 // redeem_code validates the row, assigns its prize and returns its content in
 // one database transaction. A failed assignment rolls back the redemption.
-export function redeemCode(code: string): Promise<RedeemResult> {
-  return call(code, "redeem_code") as Promise<RedeemResult>;
+export async function redeemCode(code: string): Promise<RedeemResult> {
+  let result = await call(code, "redeem_code") as RedeemResult;
+  if (result.status === "error") {
+    // The server might have committed despite a lost response. Prefer its
+    // persisted result before drawing a provisional local prize.
+    const saved = await call(code, "get_drop") as RedeemResult;
+    if (saved.status === "ok") result = saved;
+    else {
+      const local = localCheck(code);
+      if (local.status === "valid") {
+        result = { status: "ok", drop: { prize: pickWeighted(BOX_ITEMS), content: {}, provisional: true } };
+      } else if (local.status === "already_used") {
+        result = { status: "already_used" };
+      } else {
+        result = { status: "invalid" };
+      }
+    }
+  }
+  if (result.status === "ok") rememberDrop(code, result.drop);
+  return result;
 }
 
 // Only used to resume a code already redeemed in this browser's active session.
-export function getRolledPrize(code: string): Promise<RedeemResult> {
-  return call(code, "get_drop") as Promise<RedeemResult>;
+export async function getRolledPrize(code: string): Promise<RedeemResult> {
+  const result = await call(code, "get_drop") as RedeemResult;
+  if (result.status === "ok") {
+    rememberDrop(code, result.drop);
+    return result;
+  }
+  const local = rememberedDrop(code);
+  return local ? { status: "ok", drop: local } : result;
 }
