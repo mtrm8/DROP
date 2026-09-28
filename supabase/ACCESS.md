@@ -1,23 +1,80 @@
-# Drop code enforcement
+# Reusable drop codes
 
-Run `migrations/20260927_atomic_drop_content.sql` in the Supabase SQL editor for either a new or an existing project. It creates or upgrades the tables, default prize pool and example codes, then installs the functions and permissions. Existing integer/serial code IDs are left intact; redemption locks and updates the matching row without assuming a UUID ID. Re-running it preserves existing redemptions, content and prize assignments. Provision additional legitimate codes through a privileged administrative connection.
+## Installation and upgrades
 
-For projects that already applied the previous version of that migration, run `migrations/20260928_minimum_prize_50.sql` before publishing the updated UI. It removes prizes below 50₪ from the server pool and upgrades existing low-tier assignments to 50₪ so used codes keep a claimable prize. New installations using the current 20260927 script already include this minimum.
+- New projects: run `schema.sql` in the Supabase SQL editor.
+- Existing projects with the prize/content RPCs installed: run
+  `migrations/20261005_reusable_drop_codes.sql` **after all earlier migrations and
+  before deploying the updated frontend**. It replaces the single-use RPCs and
+  restores anonymous SELECT access to active codes. Re-running it is safe.
+- Earlier migrations describe historical single-use behavior. Do not reapply them
+  after the reusable-code migration without running the reusable migration again.
 
-For projects running an older `redeem_code` that marks a code used but returns only a success flag, apply `migrations/20260929_verify_before_redeem.sql` before publishing the frontend. The `verify_drop_code` RPC checks availability without consuming the code; `redeem_code` consumes it only when the user activates the drop and returns the persisted prize and content atomically. If a response is lost after the database commits, `get_drop` can recover the prize for an in-progress session. Already-used codes without a persisted prize from an older deployment require an administrator to resolve them.
+The migration does not reset or delete existing codes. Previously used codes are
+immediately eligible again if `is_active = true`; `used` and `used_at` are legacy
+metadata and no longer restrict verification, redemption, collection, or resume.
+Codes that administrators disabled remain disabled.
 
-For existing installations, also run `migrations/20260930_active_drop_codes.sql` to align both RPCs with the `is_active` column. Validation reads `public.drop_codes` through the granted SECURITY DEFINER RPC, matching `lower(trim(code)) = lower(trim(p_code))` and requiring `is_active = true` and `used = false`; it does not change the row. Activation repeats that check under a row lock before atomically assigning the prize and setting `used = true`. In the SQL editor, `select public.verify_drop_code('EINSTEIN2026');` should return `{"status":"valid"}` for an active, unused code. If it does but the browser still shows a connection error, confirm that the published GitHub Pages build received `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` and check the browser console for the RPC HTTP status.
+## Verification
 
-Apply `migrations/20261001_public_drop_code_access.sql` to older projects that still need public SELECT of active code/status columns. The subsequent 20261002 migration removes public UPDATE of `used`: the browser uses server RPCs for confirmed prize preparation and completion. If verification cannot contact Supabase, the frontend accepts only its bundled fallback-code list; if activation fails after a successful check, it still opens a provisional, device-local drop. A local result cannot verify the server's `used` flag or be treated as a confirmed prize; the UI directs the player to the community team for verification.
+The frontend trims and uppercases input with `.trim().toUpperCase()`, then makes
+one read-only request equivalent to:
 
-Apply `migrations/20261002_complete_drop_on_collect.sql` before deploying the card-selection update. Activation now persists the code's prize without consuming the code; the winning card contains that same prize from the first machine reveal. The `complete_drop` RPC sets `used = true` and `used_at` only when the player collects the finished drop, and retries with the same prize are idempotent. Locally generated provisional drops do not consume a Supabase code or become confirmed claims.
+```sql
+select code from public.drop_codes where is_active = true;
+```
 
-Apply `migrations/20261003_sync_promo_codes.sql` once `public.promo_codes` exists (re-run it if the table is created later — the file is repeatable). It imports every promo code into `drop_codes` and then keeps the two tables in step with triggers: a promo insert or update mirrors `is_active`, `used` and any content or prize columns it provides, and a collected drop writes `used = true` back to `promo_codes` so validation stops accepting it. A consumed code is never unconsumed and an already prepared prize is never cleared, so re-enabling a code means resetting it in `drop_codes`, which the reverse trigger copies back. Columns present on only one side — or stored with a different type — are read the same tolerant way the browser reads them, so the migration degrades instead of failing. It also grants `anon` and `authenticated` read-only access to `code`, `is_active`, `expires_at` and `used` on `promo_codes`, adding a select policy when that table already has row security, because that read is exactly what browser validation performs; every other column stays private. Expiry itself lives only in `promo_codes`, where the browser enforces it on each check — flipping `is_active = false` there is the server-side way to retire a code, and that flag is what the mirror publishes to `drop_codes`.
+It compares normalized codes directly in JavaScript. Verification never calls a
+redemption RPC, changes a row, or accepts a hard-coded fallback code. Missing
+matches are invalid; network/database failures are reported as connection errors.
+The compatibility `verify_drop_code` RPC uses the same active-only eligibility.
 
-Validation first reads the read-only `public.promo_codes` table: the submitted code is trimmed and upper-cased and sent once as `code=ilike.<normalized>` with `is_active=eq.true` and a server-side expiry window (`expires_at` null or still in the future), so pasted whitespace, lower case, a deactivated row and an expired row are all handled by that one query. A returned row is then compared exactly after normalization — an ILIKE wildcard in user input can never borrow another code — and is classified as valid, already used, expired or unavailable (`is_active = false` reports unavailable rather than a connection problem). Flags are read only when present, so a row without `used` still verifies, a row without `expires_at` never expires on its own, and a date-only expiry stays valid until the end of that day. If the canonical select is rejected — a renamed, differently typed or ungranted column — the lookup narrows the select, then re-reads the same code without the active/expiry filters (so an expired or deactivated row is reported as such instead of looking like a typo), and finally tries the usual alternative column name `drop_code`. The 20261003 migration grants that read to `anon` and `authenticated`; without it the lookup degrades to the legacy path instead of failing the check.
+RLS allows `anon` and `authenticated` to read active rows. The migration grants
+SELECT on `code` and `is_active`, and removes the old public consume policy and
+direct `used` update grant. Public clients cannot consume or delete a code.
 
-Deployments that still keep codes in `drop_codes` keep the previous behaviour: when `promo_codes` has no answer, the browser calls `verify_drop_code` (matching `lower(trim(code)) = lower(trim(p_code))` with `is_active = true` and `used = false`) and, if that fails or reports the code unavailable, performs a read-only `drop_codes` lookup keyed on `code` with the same required flags; this needs the public SELECT policy from 20261001 (which 20261002 retains). `redeem_code` and `complete_drop` still read `drop_codes`, and the sync from 20261003 is what gives a promo-only code a row to activate: a deployment that skips that migration will verify a promo-only code and then fail to activate it, falling back to a provisional, device-local drop. A matching table row takes precedence over a stale RPC answer. If neither Supabase endpoint is accessible, unfamiliar codes are reported as a connection problem rather than incorrectly marked invalid; an unreachable host stops after the first failed request instead of stalling the player.
+## Prize preparation and collection
 
-`redeem_code` checks `drop_codes`, stores one prize from `drop_prizes`, and returns it with the code's `drop_content` without setting `used`. A failed preparation rolls back the transaction. `complete_drop` locks the same code, confirms the selected winning card matches its stored prize, and atomically records `used = true` and `used_at`. Set `drop_content` to a JSON object with optional `title`, `description`, and `analysis` strings for per-code content. For example: `update public.drop_codes set drop_content = '{"title":"Your drop","analysis":"Your analysis"}'::jsonb where code = 'YOUR-CODE';`. The UI displays the prize even when no optional content is set. `get_drop` reads an already prepared prize for a resumed local session.
+`redeem_code` checks that the code is active and prepares its prize atomically.
+It may set `prize_id` and `prize_rolled_at` when no valid prize is assigned. It
+never changes `used`, `used_at`, or `is_active`, and never deletes the code.
+The assigned prize is **per code**: repeat redemptions and concurrent users
+receive the same stored prize. This preserves retry behavior and prize validation.
 
-Set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` at build time for confirmed server redemptions. Without both variables, only bundled codes can pass initial verification and all locally generated results are provisional. The static GitHub Pages build can require a code in the UI, but its HTML and JavaScript remain publicly downloadable; confidential content requires an authenticated server endpoint.
+`complete_drop` is read-only. It verifies that the code is still active and that
+the selected winning card matches its stored prize, then returns that prize and
+content. Repeated collection leaves every code field unchanged. `get_drop`,
+`get_prize`, and the legacy `roll_prize` endpoint also accept active codes
+regardless of old usage flags.
+
+An active code can be verified, opened, and collected indefinitely. Administrators
+can retire it by explicitly setting `is_active = false`. The frontend rejects an
+explicit inactive/missing response at activation; a transport failure after
+successful verification may still show a clearly provisional, device-local prize.
+
+Optional `drop_content` fields are `title`, `description`, and `analysis`.
+The historical promo sync migration is optional; the frontend reads only
+`drop_codes`. Collection no longer changes `used`, so it does not trigger the
+old reverse used-flag sync to `promo_codes`. Administrative promo edits may still
+mirror fields into `drop_codes` if that integration is installed.
+
+## Supabase configuration
+
+Provide `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` at build
+time; `.github/workflows/bunker.yml` reads them from repository secrets. Both
+values must belong to the same live project. After changing them, rebuild and
+deploy the static site. Missing configuration prevents verification.
+
+To check public access, run the active-code SELECT as `anon` or request
+`/rest/v1/drop_codes?select=code&is_active=eq.true` with the project's public key.
+A `42501` permission error requires both the column grants and RLS policy from
+the reusable-code migration.
+
+## Regression checks
+
+Run `npm run drop:test` for frontend verification/redemption request checks.
+
+Run `tests/reusable_drop_codes.sql` in a test database after installing the schema
+or applying the migration. It exercises repeated redemption/collection, historical
+used codes, invalid and inactive codes, prize mismatches, anonymous visibility,
+and unchanged code state. Fixtures are rolled back at the end.

@@ -5,7 +5,6 @@ export type DropContent = { title?: string; description?: string; analysis?: str
 export type VerifiedDrop = { prize: BoxItem; content: DropContent; provisional?: boolean };
 export type RedeemResult =
   | { status: "ok"; drop: VerifiedDrop }
-  | { status: "already_used" }
   | { status: "invalid" }
   | { status: "error" };
 export type VerifyResult = { status: "valid" | "invalid" | "error" };
@@ -23,16 +22,7 @@ type DropRow = {
 };
 
 const rarities = ["common", "uncommon", "rare", "classified", "covert", "special"];
-const FALLBACK_CODES = new Set([
-  "VIP-2026-DROP", "EINSTEIN2026", "MOSIKO-DROP-2026", "DROP-M-1", "KOKOS-LOSINKA",
-  "MMM-MMM1", "MOSIKO-DROP-1001", "RONEN-DROP-1",
-  "ADIR-DROP-2026", "MOSIKO-COIN-2026",
-]);
 const normalizeCode = (code: string) => code.trim().toUpperCase();
-
-function localCheck(code: string): VerifyResult {
-  return { status: FALLBACK_CODES.has(normalizeCode(code)) ? "valid" : "invalid" };
-}
 
 // Only call after a code has passed the verification screen. This provides a
 // clearly provisional animation if the confirmation RPC cannot be completed.
@@ -95,8 +85,8 @@ async function call(code: string, rpc: "redeem_code" | "get_drop" | "complete_dr
       try { raw = JSON.parse(raw); } catch { return { status: "error" }; }
     }
     const row = (Array.isArray(raw) ? raw[0] : raw) as (DropRow & { status?: string }) | undefined;
-    if (row?.error === "already_redeemed") return { status: "already_used" };
     if (row?.error === "not_found") return { status: "invalid" };
+    if (row?.error) return { status: "error" };
     if (rpc === "get_drop" && !row) return { status: "invalid" };
     const drop = row && toDrop(row);
     return drop ? { status: "ok", drop } : { status: "error" };
@@ -135,9 +125,13 @@ export async function verifyCode(code: string): Promise<VerifyResult> {
   }
 }
 
-// redeem_code validates the row, assigns its prize and returns its content in
-// one database transaction. A failed assignment rolls back the redemption.
+// Prepare the reusable code's prize; eligibility depends only on is_active.
+// Verification itself is always a read-only active-code lookup.
 export async function redeemCode(code: string, verified = false): Promise<RedeemResult> {
+  if (!verified) {
+    const verification = await verifyCode(code);
+    if (verification.status !== "valid") return { status: verification.status };
+  }
   let result = await call(code, "redeem_code") as RedeemResult;
   if (result.status === "error") {
     // The server might have committed despite a lost response. Prefer its
@@ -145,17 +139,8 @@ export async function redeemCode(code: string, verified = false): Promise<Redeem
     const saved = await call(code, "get_drop") as RedeemResult;
     if (saved.status === "ok") result = saved;
   }
-  if (result.status !== "ok") {
-    if (verified) {
-      result = { status: "ok", drop: provisionalDrop() };
-    } else if (result.status === "error") {
-      const local = localCheck(code);
-      if (local.status === "valid") {
-        result = { status: "ok", drop: provisionalDrop() };
-      } else {
-        result = { status: "invalid" };
-      }
-    }
+  if (result.status === "error") {
+    result = { status: "ok", drop: provisionalDrop() };
   }
   return result;
 }
@@ -165,8 +150,8 @@ export async function getRolledPrize(code: string): Promise<RedeemResult> {
   return call(code, "get_drop") as Promise<RedeemResult>;
 }
 
-// The winning card's ID must equal the stored prize. Supabase records used and
-// used_at only when the player actually collects the finished drop.
+// Read-only confirmation of the winning card against the active code's prize.
+// The reusable-code migration makes this RPC leave all code fields unchanged.
 export async function completeDrop(code: string, prizeId: string): Promise<RedeemResult> {
   return call(code, "complete_drop", prizeId) as Promise<RedeemResult>;
 }

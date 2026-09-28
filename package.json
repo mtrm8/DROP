@@ -7,6 +7,7 @@
     "build": "npm run build:static",
     "build:static": "node scripts/clean-public-next.mjs && next build && node scripts/postbuild-pages.mjs",
     "bunker:test": "node --test scripts/analyst-model.test.mjs scripts/bunker-model.test.mjs scripts/fetch-live-bunker.test.mjs scripts/report-status.test.mjs scripts/syntax.test.mjs",
+    "drop:test": "node --test scripts/drop-backend.test.mjs",
     "start": "next start",
     "lint": "next lint"
   },

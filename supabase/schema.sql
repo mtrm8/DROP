@@ -1,19 +1,15 @@
--- Supabase setup for true one-time MOSHA DROP codes.
+-- Supabase setup for reusable MOSHA DROP codes.
 -- Run this once in the Supabase SQL editor, then set these env vars:
 --   NEXT_PUBLIC_SUPABASE_URL
 --   NEXT_PUBLIC_SUPABASE_ANON_KEY
--- The RPCs are sealed with SECURITY DEFINER + RLS so anonymous clients can
--- redeem or resume by code (never list codes or read other rows). Atomic single-use
--- is enforced by the UPDATE ... WHERE used = false guard inside a transaction
--- (the WHERE clause makes concurrent redeems safe: exactly one wins).
+-- Public clients may read active codes. Prize RPCs use SECURITY DEFINER + RLS;
+-- preparation stores a prize once, while verification and collection are read-only.
+-- Codes remain reusable while is_active is true, regardless of legacy used flags.
 --
 -- IMPORTANT: if roll_prize / get_prize already exist with a DIFFERENT return
 -- type, `create or replace` cannot change it — drop them first:
 --   drop function if exists public.roll_prize(text);
 --   drop function if exists public.get_prize(text);
--- (Those functions must accept a redeemed code: by the time a prize is rolled
--- the code is already used=true — that is the entire point of a single-use code.
--- A version that rejects used codes burns the code and then fails the roll.)
 
 create table if not exists public.drop_codes (
   id uuid primary key default gen_random_uuid(),
@@ -34,7 +30,7 @@ drop policy if exists "Allow anon and authenticated select on drop_codes" on pub
 drop policy if exists "Allow anon and authenticated insert on drop_codes" on public.drop_codes;
 drop policy if exists "Allow anon and authenticated update on drop_codes" on public.drop_codes;
 
--- Codes are private; anon clients may only call SECURITY DEFINER RPCs.
+-- Anonymous clients can select active codes; prize assignment uses RPCs.
 
 -- Case-insensitive lookups mean 'ADIR-NEW-2026' and 'adir-new-2026' can both
 -- exist (the UNIQUE constraint is case-sensitive). Two rows for one code used
@@ -154,10 +150,11 @@ begin
   end if;
 
   select string_agg(format('%s claims %s but its real odds are %s',
-                          id, chance, public.drop_prize_chance(id)), '; ')
+                          p.id, p.chance, public.drop_prize_chance(p.id)), '; ')
     into v_bad
-    from public.drop_prize_odds
-   where chance <> public.drop_prize_chance(id);
+    from public.drop_prize_odds o
+    join public.drop_prizes p on p.id = o.id
+   where p.chance <> public.drop_prize_chance(p.id);
 
   if v_bad is not null then
     raise exception 'drop_prize_odds mismatch: %', v_bad;
@@ -165,12 +162,7 @@ begin
 end;
 $$;
 
--- Server-authoritative weighted cash roll. Requires a redeemed (used = true)
--- code, picks a prize with the exponential-race trick
--- (order by -ln(random()) / weight), and PERSISTS it on the code row, so the
--- amount is decided once on the server and can never be re-rolled or edited
--- by the client. Calling it again for the same code returns the same prize
--- (idempotent), which also makes retries after a network hiccup safe.
+-- Legacy prize endpoint: active codes can reuse their stored prize indefinitely.
 create or replace function public.roll_prize(p_code text)
 returns table (prize_id text, prize_name text, amount integer, chance text, rarity text, icon text)
 language plpgsql
@@ -178,94 +170,50 @@ security definer
 set search_path = public
 as $$
 declare
-  v_code public.drop_codes%rowtype;
-  v_prize public.drop_prizes%rowtype;
+  v_result json;
 begin
-  select * into v_code
-    from public.drop_codes
-   where lower(code) = lower(trim(p_code))
-   order by used asc nulls first, created_at asc, id asc
-   limit 1
-   for update;
-
-  if not found or not v_code.used then
-    raise exception 'code_not_redeemed';
+  v_result := public.redeem_code(p_code);
+  if not coalesce((v_result->>'success')::boolean, false) then
+    raise exception 'code_not_available';
   end if;
-
-  -- The stored prize counts only if it belongs to the CURRENT redemption. If a
-  -- code was reset (used_at bumped on the next redeem) and re-redeemed, the old
-  -- prize is stale and gets rolled fresh — so "reset the code" really resets
-  -- the whole drop instead of replaying the previous amount. A prize_id that no
-  -- longer exists in the pool is treated as stale too, so this can never
-  -- return a row of NULLs.
-  if v_code.prize_id is not null
-     and v_code.prize_rolled_at is not null
-     and v_code.used_at is not null
-     and v_code.prize_rolled_at >= v_code.used_at then
-    select * into v_prize
-      from public.drop_prizes
-      where id = v_code.prize_id and amount >= 50;
-  end if;
-
-  if v_prize.id is null then
-    select * into v_prize
-      from public.drop_prizes
-     where amount >= 50
-     order by -ln(random()) / greatest(weight::double precision, 0.0001)
-     limit 1;
-
-    if not found then
-      raise exception 'prize_pool_empty';
-    end if;
-
-    update public.drop_codes
-       set prize_id = v_prize.id,
-           prize_rolled_at = now()
-     where id = v_code.id;
-  end if;
-
-  return query
-    select v_prize.id, v_prize.name, v_prize.amount,
-           public.drop_prize_chance(v_prize.id), v_prize.rarity, v_prize.icon;
+  return query select v_result->>'prize_id', v_result->>'prize_name',
+    (v_result->>'amount')::integer, v_result->>'chance', v_result->>'rarity', v_result->>'icon';
 end;
 $$;
 
--- Read-only resume: returns a prize ONLY if it was already rolled for this
--- redeemed code. This lets a player continue an interrupted drop, without ever
--- allowing a fresh roll for an already-used code.
+-- Read-only access to an active code's existing prize.
 create or replace function public.get_prize(p_code text)
 returns table (prize_id text, prize_name text, amount integer, chance text, rarity text, icon text)
 language sql
+stable
 security definer
 set search_path = public
 as $$
   select p.id, p.name, p.amount, public.drop_prize_chance(p.id), p.rarity, p.icon
     from public.drop_codes c
      join public.drop_prizes p on p.id = c.prize_id and p.amount >= 50
-   where lower(c.code) = lower(trim(p_code))
-     and c.used = true
-   order by c.used_at desc nulls last, c.created_at asc
+   where lower(trim(c.code)) = lower(trim(p_code)) and c.is_active is true
+   order by c.created_at asc
    limit 1;
  $$;
 
--- Redeem and assign a prize atomically. A failed roll aborts the transaction,
--- leaving the code unused. Content is stored per code, not in a static bundle.
+-- Compatibility verification RPC is read-only; the frontend uses SELECT directly.
 create or replace function public.verify_drop_code(p_code text)
 returns json
 language sql
+stable
 security definer
 set search_path = public
 as $$
   select json_build_object('status', case
     when nullif(trim(p_code), '') is null then 'invalid'
     when exists (select 1 from public.drop_codes
-                  where lower(trim(code)) = lower(trim(p_code)) and is_active is true and used is false) then 'valid'
-    when exists (select 1 from public.drop_codes
-                  where lower(trim(code)) = lower(trim(p_code)) and is_active is true and used is true) then 'already_used'
+                  where lower(trim(code)) = lower(trim(p_code)) and is_active is true) then 'valid'
     else 'invalid'
   end);
 $$;
 
+-- Prepare a prize once without consuming or deactivating the reusable code.
 create or replace function public.redeem_code(p_code text)
 returns json
 language plpgsql
@@ -282,13 +230,9 @@ begin
 
   select * into v_row from public.drop_codes
    where lower(trim(code)) = lower(trim(p_code))
-     and is_active is true and used is false
+     and is_active is true
    limit 1 for update;
   if not found then
-    if exists (select 1 from public.drop_codes
-                where lower(trim(code)) = lower(trim(p_code)) and is_active is true and used is true) then
-      return json_build_object('success', false, 'error', 'already_redeemed');
-    end if;
     return json_build_object('success', false, 'error', 'not_found');
   end if;
 
@@ -304,7 +248,7 @@ begin
     if not found then raise exception 'prize_pool_empty'; end if;
     update public.drop_codes
        set prize_id = v_prize.id, prize_rolled_at = now()
-     where id = v_row.id and is_active is true and used is false;
+     where id = v_row.id and is_active is true;
     if not found then raise exception 'code_not_available'; end if;
   end if;
   return json_build_object(
@@ -321,6 +265,7 @@ $$;
 create or replace function public.get_drop(p_code text)
 returns json
 language sql
+stable
 security definer
 set search_path = public
 as $$
@@ -332,15 +277,15 @@ as $$
     from public.drop_codes c
     join public.drop_prizes p on p.id = c.prize_id and p.amount >= 50
     where lower(trim(c.code)) = lower(trim(p_code)) and c.is_active is true
-      and c.prize_rolled_at is not null
-      and (c.used is false or c.prize_rolled_at >= c.used_at)
-    order by c.used asc, c.created_at asc
-    limit 1;
+    order by c.created_at asc
+   limit 1;
  $$;
 
+-- Collection confirms the assigned prize without writing to drop_codes.
 create or replace function public.complete_drop(p_code text, p_prize_id text)
 returns json
 language plpgsql
+stable
 security definer
 set search_path = public
 as $$
@@ -353,24 +298,15 @@ begin
   end if;
   select * into v_row from public.drop_codes
    where lower(trim(code)) = lower(trim(p_code)) and is_active is true
-   order by used asc, created_at asc, id asc
-   limit 1 for update;
+   order by created_at asc, id asc
+    limit 1;
   if not found then return json_build_object('success', false, 'error', 'not_found'); end if;
-  if v_row.prize_id is distinct from p_prize_id or v_row.prize_rolled_at is null then
+  if v_row.prize_id is distinct from p_prize_id then
     return json_build_object('success', false, 'error', 'prize_mismatch');
-  end if;
-  if v_row.used and (v_row.used_at is null or v_row.prize_rolled_at < v_row.used_at) then
-    return json_build_object('success', false, 'error', 'already_redeemed');
   end if;
   select * into v_prize from public.drop_prizes
    where id = v_row.prize_id and amount >= 50;
   if not found then raise exception 'prize_not_available'; end if;
-  if not v_row.used then
-    update public.drop_codes
-       set used = true, used_at = now(), prize_rolled_at = now()
-     where id = v_row.id and is_active is true and used is false and prize_id = p_prize_id;
-    if not found then raise exception 'code_not_available'; end if;
-  end if;
   return json_build_object(
     'success', true, 'prize_id', v_prize.id, 'prize_name', v_prize.name,
     'amount', v_prize.amount, 'chance', public.drop_prize_chance(v_prize.id),
@@ -429,6 +365,8 @@ create policy "Public can view active drop codes" on public.drop_codes
   for select to anon, authenticated using (is_active is true);
 drop policy if exists "Public can consume active drop codes" on public.drop_codes;
 revoke all on public.drop_codes from public, anon, authenticated;
+revoke update (used) on public.drop_codes from public, anon, authenticated;
+grant usage on schema public to anon, authenticated;
 grant select (code, is_active, used) on public.drop_codes to anon, authenticated;
 grant select, insert, update on public.drop_codes to service_role;
 grant select on public.drop_prizes to anon, authenticated, service_role;
@@ -438,17 +376,7 @@ revoke all on function public.redeem_code(text) from public;
 grant execute on function public.redeem_code(text) to anon, authenticated, service_role;
 grant execute on function public.drop_prize_chance(text) to anon, authenticated, service_role;
 
--- Seed active codes (add any community codes here; each can be used once, ever).
+-- Seed reusable community codes. Administrators retire them via is_active=false.
 insert into public.drop_codes (code)
 values ('DROP-M-1'), ('KOKOS-LOSINKA'), ('MMM-MMM1'), ('MOSIKO-DROP-1001'), ('RONEN-DROP-1'), ('ADIR-DROP-2026'), ('MOSIKO-COIN-2026')
 on conflict (code) do nothing;
-
--- Reset/activate a specific code back to a fresh, unused state.
--- Safe to re-run as often as needed: inserts the row if missing, or clears the
--- used flag AND any previous prize if the code was already redeemed — so the
--- next test is a completely fresh drop. Point it at the code you want to hand
--- out or test right now.
-insert into public.drop_codes (code)
-values ('RONEN-DROP-1')
-on conflict (code) do update
-  set used = false, used_at = null, prize_id = null, prize_rolled_at = null;

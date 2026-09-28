@@ -168,7 +168,7 @@ export default function DailyDrop() {
   const [prize, setPrize] = useState<BoxItem | null>(null);
   const [content, setContent] = useState<DropContent>({});
   const [provisional, setProvisional] = useState(false);
-  // Guards against repeated submissions or activations for the same code.
+  // Prevent overlapping requests within this opening; codes remain reusable.
   const submitGuard = useRef(false);
   const finishGuard = useRef(false);
   const codeInput = useRef("");
@@ -243,6 +243,11 @@ export default function DailyDrop() {
       // database commits. The marker itself never grants access to a prize.
       try { window.localStorage.setItem(ACTIVE_KEY, JSON.stringify({ code })); } catch { /* storage unavailable */ }
       const result = await redeemCode(code, true);
+      if (result.status === "invalid") {
+        setUnlocked(false);
+        setErrorKind("invalid");
+        return;
+      }
       open(result.status === "ok" ? result.drop : provisionalDrop());
     } catch {
       open(provisionalDrop());
@@ -259,8 +264,7 @@ export default function DailyDrop() {
     if (!provisional) {
       try {
         let result = await completeDrop(code, winner.id);
-        // Completing again is safe if the first request committed but its
-        // response was lost: the RPC returns the same persisted prize.
+        // Completion only reads the assigned prize, so retrying is safe.
         if (result.status === "error") result = await completeDrop(code, winner.id);
         if (result.status === "ok" && result.drop.prize.id === winner.id &&
           result.drop.prize.amount === winner.amount) confirmed = result.drop;

@@ -1,5 +1,3 @@
-// The Supabase drop_codes table + redeem_code RPC are the single source of
-// truth for code validity and single-use. The client holds no local code list,
-// no test bypass and no burn registry — every attempt is verified server-side,
-// so no code can ever bypass the real backend check.
+// Active rows in Supabase drop_codes are the source of truth for access.
+// Verification is read-only and codes can be reused while is_active is true.
 export const WHATSAPP_URL = "https://chat.whatsapp.com/L4vkNyD9fOFIe1PN5Gp1aq";
